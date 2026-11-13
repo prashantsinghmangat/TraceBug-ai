@@ -98,6 +98,49 @@ ahead of everything else in this file.
 |---|---|---|---|---|
 | | | | | |
 
+## Site Audit trust metrics (added 2026-11-13, 1.12)
+
+Two numbers that say whether the audit is worth acting on. A higher finding
+count is **not** better: false positives and duplicates destroy trust faster
+than missed issues. **Neither is collected automatically**: TraceBug has no
+telemetry and the audit never leaves the user's machine. Both come only from
+sessions you watch, from users who share their before/after exports, or from
+your own runs on real projects. No baseline exists yet; don't write one in
+until the table below has rows.
+
+**1. Finding agreement rate** = findings a person confirms are real problems ÷
+findings that person reviewed.
+- *Numerator:* findings the reviewer agrees are genuine (they would fix it, or
+  it is a real defect they choose to accept). "Real but low priority" counts as
+  agreed; "not a problem" or "wrong element" counts against.
+- *Denominator:* findings the reviewer actually looked at, not the run's total.
+  Count each finding group (one rule, many elements) once, plus any element
+  inside it they reject separately.
+- *Collect:* in a watched session, go down the panel's list with the user and
+  tick agree / disagree / unsure; or ask a user to annotate an export. Log the
+  page, scan and TraceBug version.
+- *Limits:* small samples; reviewers differ (a designer and a developer judge
+  contrast differently); "unsure" is left out of both numbers and counted
+  separately; sites you choose yourself skew it upward.
+
+**2. Verified fix rate** = attempted fixes that are gone on a fresh audit ÷ fixes attempted.
+- *Numerator:* findings that `compare_audits` (or the panel's Re-scan diff)
+  lists as **fixed** on a fresh audit of the same page and scan, with no new
+  regression from that change.
+- *Denominator:* findings the agent or developer changed code for (the approved
+  change list), not every finding in the audit.
+- *Collect:* the before export + the after export of a Fix with AI run (from your
+  own projects or a user who shares both), then `compare_audits`.
+- *Limits:* only same-page, same-scan comparisons count; a category that didn't
+  run in both is excluded, not counted as fixed; a finding can disappear for the
+  wrong reason (element removed, content changed, scrolled out of reach), so
+  spot-check fixes before counting them; this measures "the check stopped
+  failing", not that the page is accessible.
+
+| Date | Source (who/what) | Page + scan | Reviewed | Agreed | Agreement | Fixes attempted | Verified fixed | Verified rate | Notes |
+|---|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | | |
+
 ## Evidence rules (in priority order — "feedback" is not the goal, evidence is)
 
 1. **Watching someone use it** — outranks everything below.

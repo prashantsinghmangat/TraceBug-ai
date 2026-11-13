@@ -8,6 +8,16 @@ fix from. New in **1.12.0**.
 The audit runs in the page you are on, in your browser. It is read-only: it
 clicks, types and changes nothing. Nothing is uploaded.
 
+**Free account after 3 audits (extension, from the release after 1.12.0).** The
+first 3 audits need nothing. After that, Site Audit asks for a free account:
+your email and a 6-digit code on an extension page, no password. Results you
+already have stay visible and exportable; only a new scan asks. Bug capture,
+exports, tickets, the MCP server, the npm SDK and the CLI never need an account.
+The account holds your email only — never your audits, pages or URLs. If sign-in
+can't be reached, the audit runs anyway. Sign in, sign out or delete the account
+from the person icon at the top of the popup (or Options → Site Audit account);
+the welcome page also offers an optional sign-in you can skip. Why: [ADR 009](adr/009-free-account-for-site-audit.md).
+
 ## Run it
 
 | Where | How |
@@ -110,24 +120,48 @@ Lighthouse's simulated slow network.
   **Found vs Required** values, **how to fix it**, and every element it was
   found on with **Locate** (scrolls to it and outlines it; the panel stays
   open) and **Copy selector**.
+- **Fix with AI**: downloads the whole audit and copies a one-line prompt for
+  an agent with the TraceBug MCP server (see below).
 - **Copy for AI**: tick findings and copy a ready prompt for your coding
   agent with the evidence, selectors, fix and page HTML.
+- **Open in Claude**: copies the same prompt and opens a new Claude chat with
+  it (prefilled when it fits in a link; otherwise paste it from the clipboard).
 - **Export report**: a self-contained `.html` file (opens offline, no remote
   loads) that the MCP server reads.
-- Run again after fixing: the panel shows what changed since the last run.
+- **Your last result is kept.** Opening the audit again on the same page (popup
+  or toolbar) shows the last result for that scan instead of scanning, with
+  when it ran. It's kept in the tab's session storage, so it survives a reload
+  and is gone when the tab closes.
+- **Re-scan** after fixing: the panel shows the old and new score side by side
+  (e.g. `56 → 100 +44`) and what is fixed, still there, new or regressed —
+  even after you reloaded the page.
 
 ## Fix it with your coding agent
 
-1. Run the audit, then **Export report**.
-2. Run `npx -y tracebug mcp` in your agent (Claude Code, Cursor, Windsurf,
-   VS Code). See [mcp.md](mcp.md).
-3. Ask it to fix the audit. It calls `get_audit` (score, checks that ran and
-   their limits, findings), then `get_finding` for each one (evidence, WCAG,
-   fix, codebase search hints).
-4. Re-run the audit on the fixed page and export again. `compare_audits`
-   tells the agent what is fixed, still present, new or regressed.
+One-time setup: add the TraceBug MCP server to your agent (Claude Code:
+`claude mcp add -s user tracebug -- npx -y tracebug mcp`; Cursor, Windsurf,
+VS Code: [mcp.md](mcp.md)).
 
-Or skip the export: tick findings and use **Copy for AI**, then paste.
+1. Run the audit, then click **Fix with AI**. It downloads the whole audit
+   (`tracebug-audit-<host>-<time>.html`) and copies one line:
+   *Fix the latest TraceBug site audit.* Keep the file in your Downloads
+   folder (or the project): that's where the MCP server looks, newest first.
+2. Paste the line into your agent, or in Claude Code run
+   `/tracebug:fix_site_audit`. The agent reads the audit (`get_audit`) and
+   each finding (`get_finding`: evidence, WCAG, fix, codebase search hints),
+   groups findings only where the evidence shows a shared cause, and proposes
+   one set of changes. **It asks before editing anything.**
+3. After the changes, reload the page and press **Re-scan**: the panel shows
+   the old and new score and what is fixed, still there, new or regressed. Export again (or Fix with AI)
+   and the agent compares the two runs with `compare_audits`. A fix only
+   counts as verified on a fresh audit, never because the code changed: the
+   agent can't run the audit itself.
+
+No MCP? Tick findings and use **Copy for AI**, then paste: the findings and
+their evidence go in the prompt itself.
+
+The panel can't tell whether your agent has the MCP server, so after Fix with
+AI it always offers "Agent not set up?" instead of claiming a connection.
 
 Text read from the audited page is marked untrusted in the MCP output, so
 the agent treats it as data, not instructions.

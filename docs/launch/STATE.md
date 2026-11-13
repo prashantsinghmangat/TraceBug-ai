@@ -1,19 +1,13 @@
 # Launch state — read this, not the archives
 
-Current facts only, verified against code and git. Last updated **2026-11-12** (audit score + docked panel, 1.12.0 prepared). **Keep this file under
+Current facts only, verified against code and git. Last updated **2026-11-13** (1.12.0 live; email built + committed, not deployed; audit saved results uncommitted). **Keep this file under
 ~80 lines: rewrite it, never append** — history goes in `PROGRESS.md` (append-only, never read whole).
 Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 
 ## Where things stand
 
-- **1.11.6 is npm-only** (`tracebug-sdk`, `tracebug`, MCP Registry, 2026-11-12). It will not go to the stores:
-  1.12.0 carries it there. `docs/release-sheets/1.11.6.md` is obsolete. Contents: CHANGELOG `[1.11.6]`
-  (evidence integrity, coral look, one setup command, theme tokens fixed, video + audio kept in exports).
-- **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y fixes, two SEO posts are live. Waiting on the
-  release merge: 1.11.6 SDK + setup pages, `try.html` recolour, `llms.txt`, the fixes our own audit found (local
-  audit 100/100), and the Site Audit docs/home tab/features cell.
-- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1226/81, ext:lint 0/22 (baseline 22),
-  84/84 report, 76/76 audit, 35/35 extension audit; all e2e green
+- **Gates** (2026-11-13, `develop` + uncommitted work): `check.mjs --full` green — 1233/82, ext:lint 0/22 (baseline 22),
+  84/84 report, 80/80 audit, 40/40 extension audit, 22/22 audit gate, 23/23 email ask; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
 - **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), committed
   through `f96db4d`; docs pass uncommitted. User guide `docs/site-audit.md`; agent brief `docs/AGENT-BRIEF.md` (update it
@@ -31,21 +25,47 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).
   Agent acceptance test passed; rerun `node e2e/audit-agent-loop.mjs setup|verify <dir>`.
-- **1.12.0 (the audit release) is half-released.** Live: npm `tracebug-sdk` + `tracebug`, MCP registry (`isLatest`),
-  2026-11-12; `develop` = `site-audit`, pushed. **Submitted to Chrome Web Store and AMO 2026-11-13, in review.** 1.11.6
-  skipped the stores (1.12.0 carries it). **After CWS approves:** release sheet §5 — merge `develop` → `main` with
-  `-X theirs` (12 website files conflict with themselves; safety check passed 2026-11-13: all "on develop", merged tree =
-  `develop`), push (Netlify deploys), tag `v1.12.0`, GitHub release (§6), checks (§7), then announce. Registry
-  description still says "bug reports" only — update `server.json` next version.
+- **1.12.0 (the audit release) is live everywhere** (2026-11-13, verified): npm `tracebug-sdk` + `tracebug` 1.12.0, MCP
+  registry `isLatest`, AMO 1.12.0 public, CWS approved (per owner; the CWS page can't be fetched by script), `main` =
+  `develop` = merge `10c7595`, tag `v1.12.0` pushed, tracebug.dev serves the new SDK (hash matches) with the audit pages
+  and `llms.txt`, `npx -y tracebug@1.12.0 mcp --help` works in an empty folder. 1.11.6 skipped the stores.
+- **On `develop`, not on `main` / not deployed** (checked 2026-11-13: tracebug.dev `/email`, `/api/confirm`, the new blog
+  post all 404). Committed: Fix with AI + MCP `fix_site_audit` (`c7a37fa`); popup **email ask** after the 2nd
+  saved ticket/export (audits counted, not triggering — the gate covers them) + sending via Resend free — double opt-in, `/api/confirm`, `/api/unsubscribe` (+ RFC 8058),
+  `/email`, `website/scripts/email.mjs` (`01df764`, `9a8674a`; `e2e/ext-email-ask.e2e.mjs` 21/21, not in `check.mjs`).
+  Owner setup done and tested locally end to end (Resend domain + DNS, migrations 0007/0008, Netlify env, Auth SMTP).
+  **Uncommitted:** audit **saved results** — last run per page + scan in `sessionStorage` (`src/audit/last-run.ts`,
+  own quota, never page `localStorage`); popup/toolbar Audit shows it instead of scanning ("Your last scan…"), Re-scan
+  compares against it even after a reload, with **old → new score** pills (`.tb-au-delta`); **Open in Claude** in the
+  panel footer (2×2 grid). Tests: `tests/audit-last-run.test.ts`, `ext-site-audit` 40/40.
+  **Also uncommitted — Site Audit sign-in gate** (ADR 009; `sign-in-gate-plan.md` "As built"): 3 free audits, then a
+  free email + code account on `signin.html`; audit only; fail open; separate unticked marketing box; website
+  `/api/ext/otp/start|verify`, `/api/keepalive` + `.github/workflows/keepalive.yml`. e2e `ext-audit-gate` 22/22.
+  `check.mjs --full` now also runs `e2e:audit-gate` and `e2e:email-ask`. Email card: audits no longer trigger it;
+  never shown when signed in for Site Audit. Popup header **account icon** (menu: who's signed in / free audits left,
+  Sign in / Sign out / Delete) + Audit card shows free audits left; welcome page **optional, skippable** sign-in card.
+  1.12.0 blog post in `website/lib/blog.ts` (no cover yet) + kit `docs-internal/marketing/posts-1.12.0.md`.
+  Follow-ups: drop the Chrome "New in 1.12.0" paragraph in a few weeks; registry description still says "bug reports"
+  only (`server.json`, next version); blog/announce posts (RELEASING §8).
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
 
 ## Open — needs a person
 
-1. Watch CWS/AMO review of 1.12.0; on CWS approval run release sheet §5–7 (merge to `main`, tag, GitHub release).
+1. Announce 1.12.0 (RELEASING §8: blog post, posts, dev.to); confirm the GitHub release for `v1.12.0` exists.
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
-4. Pricing rule vs. paid pilots (audit plan B4): decide before the sprint's paid-pilot step.
+4. Pricing (B4) decided 2026-11-13: `monetization-plan.md`; sign-in gate decided (ADR 009) and built.
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
+7. Sign-in gate go-live (owner): Supabase templates (code + link) and OTP length 6 **done**, local sign-in tested
+   2026-11-13; still: Auth email limit ~30/hour, deploy website first, live sign-in + delete test, run keep-alive once,
+   store/website copy at release — `sign-in-gate-plan.md` *Owner setup before release*.
+6. Email go-live (owner): merge `develop` → `main`; live test on tracebug.dev (sign up, confirm, unsubscribe);
+   send the backlog (`website`: `node --env-file=.env.local scripts/email.mjs confirm`, then `--send`); CWS data-use
+   answers at the next extension release; free Supabase **keep-alive** Action (required if the sign-in gate ships).
+   Link-scanner fix done (uncommitted): GET shows `/email` with a button, the button POSTs. Netlify env
+   `CONFIRM_DAILY_CAP=30`; Supabase Auth email limit ~30/hour.
+   Live test: the confirm link must start `https://tracebug.dev/api/confirm`; `scripts/email.mjs --send` now refuses
+   a localhost/non-https `NEXT_PUBLIC_SITE_URL` (a dev `.env.local` would otherwise mail localhost links to the list).
 
 ## Gotchas that are still true
 

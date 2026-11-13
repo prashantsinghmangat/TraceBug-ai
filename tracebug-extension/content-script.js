@@ -334,6 +334,37 @@ window.addEventListener("tracebug-request-axe", () => safeRun(() => {
   });
 }));
 
+// ── Success signal (email ask counter) ────────────────────────────────────
+// The SDK says "audit" / "ticket" / "export" after a real result. Only the
+// kind is forwarded; the worker counts them in chrome.storage.local so the
+// popup knows when it may show its one optional email ask. A page could fire
+// this event itself — worst case the ask shows a little early.
+const TB_SUCCESS_KINDS = new Set(["audit", "ticket", "export"]);
+window.addEventListener("tracebug-success", (e) => safeRun(() => {
+  const kind = e && e.detail && e.detail.kind;
+  if (!TB_SUCCESS_KINDS.has(kind)) return;
+  safeSendMessage({ type: "TB_SUCCESS", kind }, () => {});
+}));
+
+// ── Site Audit sign-in gate (ADR 009) ─────────────────────────────────────
+// Before each scan the panel asks whether it may run; the worker answers from
+// chrome.storage.local (free audits left / signed in). No answer = allowed:
+// the gate fails open. A page could fake the answer itself — it's a speed
+// bump for honest users, not enforcement (ADR 009).
+window.addEventListener("tracebug-audit-permit-request", () => safeRun(() => {
+  safeSendMessage({ type: "TB_AUDIT_PERMIT" }, (r) => {
+    const ok = r && typeof r.allowed === "boolean";
+    dispatchToPage("tracebug-ext-audit-permit", ok
+      ? { allowed: r.allowed, signedIn: !!r.signedIn, remaining: typeof r.remaining === "number" ? r.remaining : null, free: r.free }
+      : { allowed: true, signedIn: false, remaining: null });
+  });
+}));
+// The panel's "Sign in" button: sign-in happens on an extension page, never in
+// a form on the user's site (the site's scripts could read it).
+window.addEventListener("tracebug-open-signin", () => safeRun(() => {
+  safeSendMessage({ type: "TB_OPEN_SIGNIN" }, () => {});
+}));
+
 // ── Turn-off bridge ─────────────────────────────────────────────────────────
 // The floating toolbar's ✕ ("Turn off TraceBug") dispatches this; tell the
 // background to stop re-injecting on navigation for this tab.

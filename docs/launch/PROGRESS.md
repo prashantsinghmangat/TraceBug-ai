@@ -175,3 +175,38 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Verified: check.mjs --full green (1226/81, 76/76, 35/35), ext-sdk-isolation 17/17, zips + release sheet rebuilt. Merge to main: 8 website conflicts, all "keep ours".
 - 2026-11-12: decided 1.11.6 skips the stores; 1.11.6 highlights added to the Chrome New-in and AMO release notes; release sheet regenerated.
 - 2026-11-13: 1.12.0 live on npm + MCP registry; submitted to CWS and AMO. main-merge safety check passed (12 files, all on develop). Sheet marks the check as Git Bash only. Next: §5 after CWS approval.
+- 2026-11-13: 1.12.0 live everywhere — verified npm 1.12.0 (both), registry isLatest, AMO 1.12.0 public, main=develop=10c7595, tag v1.12.0 on origin, tracebug.dev SDK hash matches + /docs#audit, home audit tab, llms.txt live, MCP first run OK. CWS approval per owner (not scriptable).
+
+## 2026-11-13 — Audit-to-fix hand-off (Unreleased)
+- audit-panel.ts: Fix with AI (copy prompt first — clipboard needs the click's activation — then export; honest toast, beside the docked panel); Copy for AI unchanged but secondary. agent-workflow.ts: FIX_AUDIT_PROMPT + auditFixWorkflowSteps. mcp-server.ts: fix_site_audit prompt (prompts/get by name). METRICS.md: finding agreement + verified fix rate (definitions only).
+- Docs: site-audit.md, mcp.md, AGENT-BRIEF, CHANGELOG [Unreleased], website docs step. Tests: mcp-server prompt tests, e2e Fix with AI (download, clipboard via 127.0.0.1, toast). check.mjs --full green (1228/81, 80/80, 35/35).
+
+- 2026-11-13 — Monetization + email ask. `monetization-plan.md` approved (no licensing/Pro code until a Founder
+  pre-sale validates one feature). Built the popup email ask (src/success-signal.ts, content-script, background
+  `recordSuccess`, popup `initEmailAsk`, notify-me sources/usage, migration 0007, privacy page). 1.12.0 blog post +
+  posts kit. Verified: check.mjs --full green, ext-email-ask e2e 20/20, light/dark screenshots. Open: ESP, CWS answers.
+
+- **2026-11-13 email sending (uncommitted).** Resend free (100/day, checked live) via plain fetch: double opt-in in
+  `notify-me` + per-address/IP/daily caps, `/api/confirm`, `/api/unsubscribe` (GET + RFC 8058 POST), `/email` page,
+  migration 0008 + view `email_subscribers` (not applied), `website/scripts/email.mjs` (backlog confirms, resumable monthly send).
+  Copy aligned to "at most one email a month" + "check your inbox" (popup, SDK card, EmailCapture, pricing, blog); privacy, STORE-LISTINGS, plan.
+  Verified: `tsc -p website`, `check.mjs --full` green, `ext-email-ask` 20/20, mailer rendered with mocked fetch. Not run against live Supabase/Resend.
+- **2026-11-13 email live-tested locally (uncommitted).** Resend domain verified (Netlify DNS), migrations 0007/0008 applied, Auth SMTP via Resend works.
+  Local end to end: popup + website signup → confirm email → confirmed → monthly send → one-click unsubscribe → view empty. Fixes from testing:
+  popup fetch `credentials: "omit"` (was sending tracebug.dev cookies), notify-me returns `status` (`subscribed`|`pending`) so forms say
+  "already on the list" instead of a false "check your inbox", skip reasons logged, dry-run preview link labelled. e2e email-ask 21/21, `check.mjs --full` green.
+
+- 2026-11-13 — Audit saved results + Open in Claude (uncommitted): `src/audit/last-run.ts` (sessionStorage), panel
+  show-last / old→new score / 2×2 footer, SDK `showAuditPanel(scan, { showLast })`. Verified: audit-last-run 5/5,
+  ext-site-audit 40/40, screenshots. Email work checked: committed, not deployed (live URLs 404). Wrote
+  `sign-in-gate-plan.md` (3 free audits → email-code account; awaiting owner decisions + ADR 009).
+
+- 2026-11-13 — Site Audit sign-in gate (uncommitted): ADR 009; 3 free audits → email + code on signin.html (audit only,
+  fail open, unticked marketing box); worker `auditPermit`, panel gate/notes, `/api/ext/otp/start|verify` (+ delete),
+  keep-alive route + workflow. Verified: ext-audit-gate 22/22, screenshots. Owner: Supabase `{{ .Token }}` templates, deploy, live test.
+- 2026-11-13 — Email card: audits no longer trigger it, hidden when signed in. Confirm/unsubscribe GET now shows a
+  button page (POST acts; RFC 8058 kept); confirm cap default 30. Verified: curl + browser on local dev, gates.
+- 2026-11-13 — Sign-in UX: popup header account icon + menu (signed in / free audits left, sign in/out, delete),
+  Audit card shows free audits left; welcome page optional skippable sign-in card; signin.html footer spacing + copy
+  when audits remain; welcome chip "No account to capture". Files: popup.*, styles.css, signin.*, welcome.*. Verified:
+  check.mjs --full green, local sign-in with Supabase templates + OTP length 6. Not covered by e2e: menu + welcome card.

@@ -111,7 +111,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             <EmailCapture
               source="blog"
               heading="Get the next post (and launch-sized updates only)"
-              sub="A few emails a year — new capabilities, major releases. Written by the solo dev, not a marketing team."
+              sub="At most one email a month — new capabilities, major releases. Written by the solo dev, not a marketing team."
             />
           </div>
         </div>

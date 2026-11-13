@@ -88,7 +88,7 @@ const AUDIT_STEPS: ReactNode[] = [
   <>Open the page and choose <b>Audit this page</b>, the first card in the TraceBug popup. The arrow next to it picks one scan: Auto Review, Accessibility Audit, or Performance &amp; SEO.</>,
   <>The audit panel opens beside the page with a 0–100 score per check. Drag it by its header, or drop it at either edge.</>,
   <>Each finding names the element, the WCAG rule, what was found and what is required, and how to fix it. <b>Locate</b> scrolls to the element.</>,
-  <>Tick findings and click <b>Copy for AI</b>, or <b>Export report</b> and let your agent read it over MCP. Re-run after the fix to see what changed.</>,
+  <>Click <b>Fix with AI</b>: it downloads the audit and copies one line for your coding agent, which reads it over MCP and asks before changing anything. No MCP? Use <b>Copy for AI</b>. Re-scan after the fix to see what changed.</>,
 ];
 
 const AUDIT_ROWS: [string, string][] = [

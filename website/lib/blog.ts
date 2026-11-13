@@ -33,6 +33,80 @@ export interface BlogPost {
 
 const POSTS: BlogPost[] = [
   {
+    slug: "site-audit-for-ai-coding-agents",
+    title: "Audit any page, then let your AI agent fix what it found",
+    description:
+      "TraceBug 1.12 adds Site Audit: accessibility, layout, phone-width, performance and SEO checks on the page you're on, a 0–100 score, and a report Claude Code or Cursor can read over MCP — then re-run to see what was fixed.",
+    date: "2026-11-13",
+    readMinutes: 5,
+    tag: "Site Audit",
+    seoTitle: "Site Audit for AI coding agents — TraceBug 1.12",
+    seoDescription:
+      "Free browser audit for accessibility (axe-core, WCAG 2.2), layout, mobile, performance and SEO. Hand the findings to Claude Code or Cursor over MCP. No account.",
+    content: `
+Most audit tools end with a list. You read it, open your editor, and start translating "Elements must meet minimum color contrast ratio thresholds" into the one CSS rule you need to change. That last step is where the time goes — and it's exactly the step an AI coding agent is good at, if it gets the evidence.
+
+TraceBug 1.12 adds **Site Audit**: check the page you're on, get a score and one finding per real problem, then hand the findings to your agent and re-run to see what actually got fixed.
+
+## Run it
+
+Install the extension for [Chrome](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) or [Firefox](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) (free, no account), open any page, click the TraceBug icon and press **Audit this page**. The panel docks beside the page, so **Locate** scrolls to each element without closing the list.
+
+Four scans, pick one or run all:
+
+- **Auto Review** — broken layout and images, sideways scroll, errors, failed requests, dead and rage clicks.
+- **Accessibility** — axe-core 4.11 (WCAG 2.0–2.2, A and AA) plus a keyboard pass: removed focus outlines, focus hidden under a sticky header, positive \`tabindex\`.
+- **Performance & SEO** — this load's TTFB, LCP, CLS and main-thread blocking, heavy and render-blocking files, oversized images, title/description/canonical, social tags, JSON-LD, robots.txt and sitemap.
+- **Phone width** — a hidden 390 px frame of the same page, reporting only what breaks there and not at your width.
+
+## What a finding looks like
+
+Every finding is grouped by rule ("Low contrast · 15 elements") and says what's wrong, what was found vs. what's required, the WCAG criterion, and how to fix it. Contrast findings go one step further: they suggest the nearest text colour that passes, re-checked after rounding — \`#b45309\` → \`#ad5009\` on \`#f4eae4\`, not "make it darker".
+
+Each run gets a 0–100 score per category and overall. The formula is one click away in the panel; checks that didn't run are shown as "Not run" and never scored.
+
+## Hand it to your agent
+
+Two ways:
+
+1. **Copy for AI** — tick the findings you want, paste one prompt into any chat or agent. Rule, element, measured values and fix for each, with page text marked as data.
+2. **MCP** — click **Export report** and register the local server once:
+
+\`\`\`
+claude mcp add -s user tracebug -- npx -y tracebug mcp
+\`\`\`
+
+Your agent gets \`get_audit\`, \`get_finding\` (evidence plus search hints into your repo) and \`compare_audits\`. Fix, re-run the audit, export again, and \`compare_audits\` tells the agent what was fixed, what's still there, what's new and what regressed. That last part is the point: the agent verifies against the page, not against its own confidence.
+
+## Honest limits
+
+- **One page at a time.** It's not a crawler.
+- **Lab values.** Performance numbers come from this load in your browser, not real-user data.
+- **Automated checks can't prove accessibility.** The score is not a WCAG conformance grade, and the panel only states failures — never a "pass" automation can't back. What axe can't decide goes in "Needs a person to check", unscored.
+- **Phone width needs framing.** Sites that forbid being framed show "Not run" with the reason.
+
+## Why it's local
+
+The audit runs in your browser and is read-only — it clicks, types and changes nothing. The report is a file on your disk; the MCP server reads it from there. No account, no upload, MIT-licensed. The only requests the audit makes are to the site's own \`/robots.txt\` and sitemap.
+
+[Full Site Audit guide →](/docs#audit)
+`.trim(),
+    faq: [
+      {
+        q: "Is TraceBug Site Audit free?",
+        a: "Yes. It's part of the free Chrome and Firefox extension and needs no account. The audit runs in your browser and uploads nothing.",
+      },
+      {
+        q: "How is it different from Lighthouse?",
+        a: "Both use axe-core for accessibility. TraceBug adds a keyboard pass, a phone-width check, layout and runtime findings, suggested fixes per element, and a report your AI coding agent can read over MCP and re-check after a fix. Its accessibility score is stricter: the same rule failing on more elements costs more.",
+      },
+      {
+        q: "Can Claude Code or Cursor fix the findings?",
+        a: "Yes. Copy the findings as one prompt, or export the report and let the agent read it through the local TraceBug MCP server, fix the code, then compare the before and after audits.",
+      },
+    ],
+  },
+  {
     slug: "record-browser-tab-without-share-dialog",
     title: "Record a browser tab for a bug report, without Chrome's share dialog",
     description:

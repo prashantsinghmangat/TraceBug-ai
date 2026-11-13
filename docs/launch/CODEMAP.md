@@ -55,7 +55,8 @@ the same step.
 - **Audit core** `src/audit/` (pure, no DOM): `fingerprint.ts` `auditFingerprint`/`normalizeSelector` · `run.ts`
   `buildAuditRun` (caps, redaction, `MAX_*` limits) · `compare.ts` `compareAudits` (generic) · `types.ts` audit types,
   dependency-free because the CLI imports them (`src/types.ts` re-exports, `AuditRun = AuditRunOf<Issue>`).
-  `score.ts` (`scoreAudit`, `SCORE_EXPLANATION`; stored by run.ts) · `wcag.ts` (criteria names, `wcagFromAxeTags`) ·
+  `last-run.ts` (saved last run per page + scan, `sessionStorage` `tracebug_audit_last_v1`; `getLastAuditRun` falls back to it;
+  panel `showAuditPanel(root, scan, { showLast })`, `_scoreDelta` → `.tb-au-delta`) · `score.ts` (`scoreAudit`, `SCORE_EXPLANATION`; stored by run.ts) · `wcag.ts` (criteria names, `wcagFromAxeTags`) ·
   `contrast.ts` (`suggestTextColor`) · `fixes.ts` (`DEFAULT_FIXES`, applied in `buildAuditRun`) · `prompt.ts` · seo.ts also `socialTagFindings`, `structuredDataFindings`, `robotsAllows`, `detectCrawlFindings` (fetches /robots.txt, /sitemap.xml) · performance.ts `imageWeightFindings`; `detectors/mobile.ts` (phone width: hidden 390px iframe, `toMobileFindings`, `scrollableNotFocusable`; ui.ts checks take a `doc`);
   (`buildAuditFixPrompt`, the panel's Copy for AI). Noise filters: `evidence.ts` `isVisuallyHidden`, ui.ts overlap hit-test,
   keyboard.ts `detectOutlineRemoved` (cross-rule replacement), a11y.ts `labelInNameHolds`, index.ts `isDevHost`.
@@ -107,7 +108,13 @@ the same step.
 - **`chrome.storage.local`** (`tb_*`, extension-owned): `tb_record_opts` (Record options + `videoSetBy`) ·
   `tb_integrations_v1`, `tb_ai_config_v1` (**the secrets**) · `tb_llm_sites_v1`, `tb_llm_rates_v1` ·
   `tb_pending_sends_v1`, `tb_send*` (confirm-send) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
-  `tb_migration_notices` · `tracebug_cloud_endpoint`.
+  `tb_audit_gate_v1` (Site Audit gate, ADR 009: `audits`, `account`, `graceUntil`; `background.js` `auditPermit` ← `TB_AUDIT_PERMIT`
+  ← content-script `tracebug-audit-permit-request` ← panel `auditPermit()`; sign-in `signin.html`/`signin.js` → `/api/ext/otp/*`; popup account menu `popup.js` `initAccount`; welcome card
+  `welcome.js` `initAccountCard`, `tb_welcome_signin_skipped`) ·
+  `tb_migration_notices` · `tracebug_cloud_endpoint` · `tb_email_ask_v1` (email ask: `counts`, `state`, `source`;
+  `background.js` `recordSuccess` ← `TB_SUCCESS` ← content-script `tracebug-success` ← `src/success-signal.ts`; popup `initEmailAsk`).
+  Website side: `website/app/api/notify-me` → `lib/mailer.mjs` (Resend) → `/api/confirm`, `/api/unsubscribe`, `/email`;
+  view `email_subscribers` (migration 0008); hand-run `website/scripts/email.mjs confirm|send`.
   (`tb_host_perm_declined` removed in 1.11.2, T-13 — the popup's cross-site opt-in row is gone.)
 - **`chrome.storage.session`**: `tb_sw_state_v1` only — worker state, awaited via `_hydrated`.
 - **`chrome.storage.sync`**: `tracebug_redact` only — redaction rules.

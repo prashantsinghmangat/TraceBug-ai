@@ -350,7 +350,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // wireAccountButtons();
   // void refreshAccount();
 
-  void initWhatsNew();
+  void initWhatsNew().then(initEmailAsk).catch(() => {});
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -945,6 +945,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btnAuditRun")?.addEventListener("click", async () => {
     await runCombo("TB_RUN_AUDIT", "Checking this page…", { scan: "full" });
   });
+  void initAccount();
   const auditBtn = document.getElementById("btnAudit");
   const auditMenu = document.getElementById("auditMenu");
   const setAuditMenu = (open) => {
@@ -1385,6 +1386,104 @@ async function initWhatsNew() {
   card.style.display = "";
 }
 
+// ── Optional email ask (docs/launch/email-capture-plan.md) ────────────────
+// The worker counts real results (audit / ticket / export) and marks the ask
+// "due" after the 2nd. It's an ask, never a wall: every path leaves TraceBug
+// fully working. Showing it counts as a ✕ (so ignoring it never nags); "No
+// thanks" or a signup ends it for good. The only things ever sent are the
+// address the user types and, if they tick the box, the three counts shown.
+const EMAIL_ASK_KEY = "tb_email_ask_v1";
+
+async function setEmailAskState(state) {
+  try {
+    const st = (await chrome.storage.local.get(EMAIL_ASK_KEY))[EMAIL_ASK_KEY] || {};
+    await chrome.storage.local.set({ [EMAIL_ASK_KEY]: { ...st, state } });
+  } catch {}
+}
+
+async function initEmailAsk() {
+  const form = document.getElementById("emailAsk");
+  if (!form) return;
+  // One card at a time: a "What's new" card wins this open.
+  const wn = document.getElementById("whatsNew");
+  if (wn && wn.style.display !== "none") return;
+  let st, gate;
+  try {
+    const r = await chrome.storage.local.get([EMAIL_ASK_KEY, "tb_audit_gate_v1"]);
+    st = r[EMAIL_ASK_KEY];
+    gate = r.tb_audit_gate_v1;
+  } catch { return; }
+  if (!st || st.state !== "due") return;
+  // Signed in for Site Audit (ADR 009): we have the address, and the sign-in page
+  // already offered the news box. Never ask again; left "due" so a sign-out brings it back.
+  if (gate && gate.account && gate.account.email) return;
+
+  const retry = st.source === "ext-retry-10";
+  // Shown = as if closed with ✕: the first showing may come back once at the
+  // 10th result, the retry never does.
+  await setEmailAskState(retry ? "done" : "snoozed");
+
+  const counts = { audit: 0, ticket: 0, export: 0, ...(st.counts || {}) };
+  const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  document.getElementById("emailAskCounts").textContent =
+    `${plural(counts.audit, "audit")}, ${plural(counts.ticket, "saved ticket")}, ${plural(counts.export, "export")}`;
+
+  const msg = document.getElementById("emailAskMsg");
+  const hideSoon = (ms) => setTimeout(() => { form.style.display = "none"; }, ms);
+  document.getElementById("emailAskClose").addEventListener("click", () => { form.style.display = "none"; });
+  document.getElementById("emailAskNo").addEventListener("click", () => {
+    form.style.display = "none";
+    void setEmailAskState("done");
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("emailAskInput");
+    const btn = document.getElementById("emailAskSubmit");
+    const email = input.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msg.textContent = "That doesn't look like an email address.";
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Adding…";
+    msg.textContent = "";
+    const body = { email, source: st.source || "ext-audit-2" };
+    if (document.getElementById("emailAskUsage").checked) body.usage = counts;
+    await loadCloudEndpoint();
+    try {
+      const res = await fetch(`${cloudEndpoint}/api/notify-me`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        // Host permission would otherwise attach the user's tracebug.dev cookies;
+        // the signup needs nothing but the body.
+        credentials: "omit",
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const already = (await res.json().catch(() => ({})))?.status === "subscribed";
+      void setEmailAskState("done");
+      for (const el of form.querySelectorAll(".ea-text, .ea-row, .ea-usage, .ea-foot")) el.style.display = "none";
+      msg.textContent = already ? "✓ You're already on the list. Thanks!" : "✓ Almost done: check your inbox for a link to confirm.";
+      hideSoon(5000);
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "Get early access";
+      msg.textContent = "";
+      msg.append("Couldn't reach tracebug.dev. Try again, or sign up at ");
+      const a = document.createElement("a");
+      a.href = "https://tracebug.dev/#updates";
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "tracebug.dev";
+      msg.append(a, ".");
+    }
+  });
+
+  form.style.display = "";
+}
+
 // Cross-site opt-in row (initCrossSiteOptIn) removed, T-13
 // (docs/audit/product-review.md): granting <all_urls> bought only a
 // cosmetic toolbar-visibility convenience, not a capability worth a broad
@@ -1400,3 +1499,65 @@ async function initWhatsNew() {
 // The options-page version omits the page-classification field this popup
 // version had (diagPageState(), read from the tab the popup opened for):
 // options.html isn't tied to any one tab, so there is nothing to classify.
+
+// ── Site Audit account (ADR 009) ───────────────────────────────────────────
+// Header person icon: green dot when signed in. Its menu shows who is signed
+// in (or how many free audits are left) with Sign in / Sign out / Delete.
+// Sign-in and delete happen on signin.html (needs an emailed code); sign out
+// only forgets the account on this browser. The Audit card's subtitle shows
+// the free audits left, same wording as the panel.
+async function initAccount() {
+  const btn = document.getElementById("acctBtn");
+  const menu = document.getElementById("acctMenu");
+  if (!btn || !menu) return;
+  const $id = (id) => document.getElementById(id);
+  const auditSub = document.querySelector("#btnAuditRun .action-card-sub");
+  const defaultSub = auditSub ? auditSub.textContent : "";
+
+  async function render() {
+    let p = null;
+    let account = null;
+    try { p = await chrome.runtime.sendMessage({ type: "TB_AUDIT_PERMIT" }); } catch {}
+    try { account = ((await chrome.storage.local.get("tb_audit_gate_v1")).tb_audit_gate_v1 || {}).account || null; } catch {}
+    const signedIn = !!(account && account.email);
+    btn.querySelector(".hd-acct-dot").hidden = !signedIn;
+    btn.title = signedIn ? `Signed in as ${account.email}` : "Site Audit account: not signed in";
+    $id("acctTitle").textContent = signedIn ? account.email : "Not signed in";
+    const left = p && typeof p.remaining === "number" ? p.remaining : null;
+    $id("acctSub").textContent = signedIn ? "Site Audit unlocked"
+      : left === null ? "Site Audit: 3 free audits, then a free account"
+      : left > 0 ? `${left} of ${p.free} free audits left`
+      : "Free audits used: sign in to keep scanning";
+    $id("acctSignIn").hidden = signedIn;
+    $id("acctSignOut").hidden = !signedIn;
+    $id("acctDelete").hidden = !signedIn;
+    if (auditSub) {
+      auditSub.textContent = signedIn || left === null || left >= (p && p.free) ? defaultSub
+        : !p.allowed ? "Free audits used · sign in free to keep scanning"
+        : left === 0 ? defaultSub // the fail-open hour
+        : `${left} free audit${left === 1 ? "" : "s"} left · then a free account`;
+    }
+  }
+
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+  };
+  const openPage = (q) => {
+    try { chrome.tabs.create({ url: chrome.runtime.getURL(`signin.html${q || ""}`) }); } catch {}
+    window.close();
+  };
+  btn.addEventListener("click", (e) => { e.stopPropagation(); setOpen(menu.hidden); });
+  document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) setOpen(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) { setOpen(false); btn.focus(); } });
+  $id("acctSignIn").addEventListener("click", () => openPage(""));
+  $id("acctDelete").addEventListener("click", () => openPage("?mode=delete"));
+  $id("acctSignOut").addEventListener("click", async () => {
+    try {
+      const g = (await chrome.storage.local.get("tb_audit_gate_v1")).tb_audit_gate_v1 || {};
+      await chrome.storage.local.set({ tb_audit_gate_v1: { ...g, account: null } });
+    } catch {}
+    await render();
+  });
+  await render();
+}
