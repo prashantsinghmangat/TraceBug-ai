@@ -8,6 +8,16 @@ fix from. New in **1.12.0**.
 The audit runs in the page you are on, in your browser. It is read-only: it
 clicks, types and changes nothing. Nothing is uploaded.
 
+**Free account after 3 audits (extension, from the release after 1.12.0).** The
+first 3 audits need nothing. After that, Site Audit asks for a free account:
+your email and a 6-digit code on an extension page, no password. Results you
+already have stay visible and exportable; only a new scan asks. Bug capture,
+exports, tickets, the MCP server, the npm SDK and the CLI never need an account.
+The account holds your email only — never your audits, pages or URLs. If sign-in
+can't be reached, the audit runs anyway. Sign in, sign out or delete the account
+from the person icon at the top of the popup (or Options → Site Audit account);
+the welcome page also offers an optional sign-in you can skip. Why: [ADR 009](adr/009-free-account-for-site-audit.md).
+
 ## Run it
 
 | Where | How |
@@ -114,9 +124,17 @@ Lighthouse's simulated slow network.
   an agent with the TraceBug MCP server (see below).
 - **Copy for AI**: tick findings and copy a ready prompt for your coding
   agent with the evidence, selectors, fix and page HTML.
+- **Open in Claude**: copies the same prompt and opens a new Claude chat with
+  it (prefilled when it fits in a link; otherwise paste it from the clipboard).
 - **Export report**: a self-contained `.html` file (opens offline, no remote
   loads) that the MCP server reads.
-- Run again after fixing: the panel shows what changed since the last run.
+- **Your last result is kept.** Opening the audit again on the same page (popup
+  or toolbar) shows the last result for that scan instead of scanning, with
+  when it ran. It's kept in the tab's session storage, so it survives a reload
+  and is gone when the tab closes.
+- **Re-scan** after fixing: the panel shows the old and new score side by side
+  (e.g. `56 → 100 +44`) and what is fixed, still there, new or regressed —
+  even after you reloaded the page.
 
 ## Fix it with your coding agent
 
@@ -134,7 +152,7 @@ VS Code: [mcp.md](mcp.md)).
    groups findings only where the evidence shows a shared cause, and proposes
    one set of changes. **It asks before editing anything.**
 3. After the changes, reload the page and press **Re-scan**: the panel shows
-   what is fixed, still there, new or regressed. Export again (or Fix with AI)
+   the old and new score and what is fixed, still there, new or regressed. Export again (or Fix with AI)
    and the agent compares the two runs with `compare_audits`. A fix only
    counts as verified on a fresh audit, never because the code changed: the
    agent can't run the audit itself.

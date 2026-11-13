@@ -35194,6 +35194,69 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   });
 
+  // src/audit/last-run.ts
+  function auditPageKey(url) {
+    let page;
+    try {
+      const u2 = new URL(url);
+      page = `${u2.origin}${u2.pathname}${u2.search}`;
+    } catch (e2) {
+      page = url.split("#")[0];
+    }
+    let a2 = 2166136261, b = 16777619 ^ page.length;
+    for (let i2 = 0; i2 < page.length; i2++) {
+      const c2 = page.charCodeAt(i2);
+      a2 = Math.imul(a2 ^ c2, 16777619);
+      b = Math.imul(b ^ c2, 1540483477);
+    }
+    return (a2 >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+  }
+  function read() {
+    try {
+      const raw = sessionStorage.getItem(KEY2);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter((e2) => e2 && typeof e2.page === "string" && e2.run) : [];
+    } catch (e2) {
+      return [];
+    }
+  }
+  function saveAuditRun(run, pageUrl) {
+    var _a2;
+    try {
+      const page = auditPageKey(pageUrl);
+      const scan2 = (_a2 = run.scan) != null ? _a2 : "custom";
+      const entry = { page, scan: scan2, run };
+      const one = JSON.stringify(entry);
+      if (one.length > MAX_CHARS) return;
+      let list = [entry, ...read().filter((e2) => !(e2.page === page && e2.scan === scan2))].slice(0, MAX_ENTRIES);
+      while (list.length && JSON.stringify(list).length > MAX_CHARS) list = list.slice(0, -1);
+      for (; ; ) {
+        try {
+          sessionStorage.setItem(KEY2, JSON.stringify(list));
+          return;
+        } catch (e2) {
+          if (list.length <= 1) return;
+          list = list.slice(0, -1);
+        }
+      }
+    } catch (e2) {
+    }
+  }
+  function loadAuditRun(url, scan2) {
+    const page = auditPageKey(url);
+    const hit = read().find((e2) => e2.page === page && (scan2 === void 0 || e2.scan === scan2));
+    return hit ? hit.run : null;
+  }
+  var KEY2, MAX_ENTRIES, MAX_CHARS;
+  var init_last_run = __esm({
+    "src/audit/last-run.ts"() {
+      "use strict";
+      KEY2 = "tracebug_audit_last_v1";
+      MAX_ENTRIES = 8;
+      MAX_CHARS = 15e5;
+    }
+  });
+
   // src/scanner/helpers.ts
   function makeIssueId(detector) {
     _issueCounter += 1;
@@ -37565,7 +37628,12 @@ Response: ${match.response.slice(0, 160)}` : "";
     return h === "localhost" || h === "[::1]" || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /\.(local|localhost|test)$/.test(h) || h === "0.0.0.0";
   }
   function getLastAuditRun() {
-    return _lastRun;
+    if (_lastRun && _lastRunPage === auditPageKey(location.href)) return _lastRun;
+    return loadAuditRun(location.href);
+  }
+  function setLastAuditRun(run) {
+    _lastRun = run;
+    _lastRunPage = auditPageKey(location.href);
   }
   function pageColorScheme() {
     for (const el of [document.body, document.documentElement]) {
@@ -37725,6 +37793,8 @@ Response: ${match.response.slice(0, 160)}` : "";
         review
       });
       _lastRun = run;
+      _lastRunPage = auditPageKey(location.href);
+      saveAuditRun(run, location.href);
       return run;
     })();
     try {
@@ -37733,10 +37803,11 @@ Response: ${match.response.slice(0, 160)}` : "";
       _inFlight = null;
     }
   }
-  var CATEGORY_LIMITATIONS, _lastRun, _inFlight;
+  var CATEGORY_LIMITATIONS, _lastRun, _lastRunPage, _inFlight;
   var init_audit = __esm({
     "src/audit/index.ts"() {
       "use strict";
+      init_last_run();
       init_storage();
       init_session_data();
       init_mixed_content();
@@ -37755,6 +37826,7 @@ Response: ${match.response.slice(0, 160)}` : "";
         runtime: "Only what happened since TraceBug started capturing on this page: errors, failed requests, mixed content, and rage or dead clicks."
       };
       _lastRun = null;
+      _lastRunPage = "";
       _inFlight = null;
     }
   });
@@ -37972,6 +38044,41 @@ Response: ${match.response.slice(0, 160)}` : "";
     showAuditPanel: () => showAuditPanel,
     toggleAuditPanel: () => toggleAuditPanel
   });
+  function auditPermit() {
+    const yes = { allowed: true, signedIn: false, remaining: null };
+    if (!isExtensionMode()) return Promise.resolve(yes);
+    return new Promise((resolve) => {
+      const done = (e2) => {
+        window.removeEventListener("tracebug-ext-audit-permit", done);
+        clearTimeout(t2);
+        const d = e2 == null ? void 0 : e2.detail;
+        resolve(d && typeof d.allowed === "boolean" ? { allowed: d.allowed, signedIn: !!d.signedIn, remaining: typeof d.remaining === "number" ? d.remaining : null } : yes);
+      };
+      const t2 = setTimeout(done, 3e3);
+      window.addEventListener("tracebug-ext-audit-permit", done);
+      window.dispatchEvent(new CustomEvent("tracebug-audit-permit-request"));
+    });
+  }
+  function showGate(saved) {
+    _gated = true;
+    _showingSaved = !!saved;
+    _lastDiff = null;
+    _scoreDelta = null;
+    _freeLeft = null;
+    if (saved) {
+      setLastAuditRun(saved);
+      render(saved);
+    } else {
+      setBody(gateHtml());
+      setBusy(false);
+    }
+  }
+  function gateHtml() {
+    return `<div class="tb-au-gate" role="status">${ICON.info}<div><b>You've used your free audits.</b>
+    <div class="tb-au-muted">A free TraceBug account keeps Site Audit going \u2014 just your email and a 6-digit code, no password.
+    Bug capture, exports and everything else stay free without one.</div>
+    <button type="button" class="tb-au-btn tb-au-btn-solid tb-au-btn-sm" data-tb-au="signin">Sign in free</button></div></div>`;
+  }
   function isAuditPanelOpen() {
     return _open;
   }
@@ -38053,9 +38160,9 @@ Response: ${match.response.slice(0, 160)}` : "";
       closeAuditPanel();
       return;
     }
-    await showAuditPanel(root2);
+    await showAuditPanel(root2, void 0, { showLast: true });
   }
-  async function showAuditPanel(root2, scan2) {
+  async function showAuditPanel(root2, scan2, opts = {}) {
     var _a2, _b;
     if (isAuditScan(scan2)) _scan = scan2;
     _root2 = root2;
@@ -38063,9 +38170,31 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (!_open) mountShell(root2);
     setMinimized(false);
     markScan();
+    const saved = loadAuditRun(location.href, _scan);
+    if (opts.showLast && saved) {
+      setLastAuditRun(saved);
+      _gated = false;
+      _freeLeft = null;
+      _showingSaved = true;
+      _lastDiff = null;
+      _scoreDelta = null;
+      _expanded = /* @__PURE__ */ new Set();
+      _unselected = /* @__PURE__ */ new Set();
+      _sev = "all";
+      _cat = "all";
+      render(saved);
+      return saved;
+    }
     setBody(`<div class="tb-au-empty" role="status"><span class="tb-au-spin" aria-hidden="true"></span>${escapeHtml(_scan === "full" ? "Checking accessibility, layout, performance, SEO and errors\u2026" : `Running ${AUDIT_SCANS[_scan].label}\u2026`)}</div>`);
     setBusy(true);
-    const previous = getLastAuditRun();
+    const permit = await auditPermit();
+    if (!permit.allowed) {
+      showGate(saved != null ? saved : null);
+      return saved != null ? saved : null;
+    }
+    _gated = false;
+    _freeLeft = !permit.signedIn && permit.remaining != null ? Math.max(0, permit.remaining - 1) : null;
+    const previous = saved != null ? saved : getLastAuditRun();
     let run;
     try {
       if (AUDIT_SCANS[_scan].categories.includes("accessibility")) await ensureAxe();
@@ -38078,6 +38207,10 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     const diff2 = previous && ((_a2 = previous.scan) != null ? _a2 : "full") === ((_b = run.scan) != null ? _b : "full") ? compareAudits(previous, run) : null;
     _lastDiff = diff2 && diff2.comparable ? diff2 : null;
+    const before = _lastDiff && previous ? headlineScore(previous) : null;
+    const after = headlineScore(run);
+    _scoreDelta = before != null && after != null ? { from: before, to: after } : null;
+    _showingSaved = false;
     _expanded = /* @__PURE__ */ new Set();
     _unselected = /* @__PURE__ */ new Set();
     _sev = "all";
@@ -38175,6 +38308,21 @@ Response: ${match.response.slice(0, 160)}` : "";
       if (label) label.textContent = was;
     }, 2200);
   }
+  async function openClaude(btn) {
+    const run = getLastAuditRun();
+    if (!run || !btn) return;
+    const ids = groups(run).filter((g) => !_unselected.has(g.key)).flatMap((g) => g.items.map((f2) => f2.id));
+    if (!ids.length) return;
+    const prompt = buildAuditFixPrompt(run, ids);
+    const ok = await copyText(prompt);
+    openInClaude(prompt);
+    const label = btn.querySelector(".tb-au-btn-l");
+    const was = (label == null ? void 0 : label.textContent) || "";
+    if (label) label.textContent = ok ? "Opened \u2014 also copied" : "Opened";
+    setTimeout(() => {
+      if (label) label.textContent = was;
+    }, 2200);
+  }
   async function fixWithAi(btn) {
     const run = getLastAuditRun();
     if (!run || !btn) return;
@@ -38254,6 +38402,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       <div class="tb-au-foot-bar">
         <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read with the MCP tools">${ICON.export}<span class="tb-au-btn-l">Export report</span></button>
         <button type="button" class="tb-au-btn" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent (no MCP needed)">${ICON.copy}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="open-claude" disabled title="Copy the selected findings and open a new Claude chat with them (claude.ai). The prompt is also on your clipboard for Claude Code, Cursor or the Claude desktop app.">${ICON.sparkle}<span class="tb-au-btn-l">Open in Claude</span></button>
         <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="fix-ai" disabled title="Save the whole audit to your downloads and copy one line for your coding agent, which reads it with the TraceBug MCP server">${ICON.sparkle}<span class="tb-au-btn-l">Fix with AI</span></button>
       </div>
     </div>`);
@@ -38280,6 +38429,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       else if (action === "rerun") void showAuditPanel(root2);
       else if (action === "export") void exportCurrent(actionEl);
       else if (action === "copy-ai") void copyForAi(actionEl);
+      else if (action === "open-claude") void openClaude(actionEl);
+      else if (action === "signin") window.dispatchEvent(new CustomEvent("tracebug-open-signin"));
       else if (action === "fix-ai") void fixWithAi(actionEl);
       else if (action === "scan") void showAuditPanel(root2, actionEl == null ? void 0 : actionEl.dataset.scan);
       else if (action === "reveal") void revealAndRerun(root2);
@@ -38368,7 +38519,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     const panel = document.getElementById(PANEL_ID2);
     if (!panel) return;
     const hasRun = !!getLastAuditRun();
-    panel.querySelectorAll('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"], [data-tb-au="fix-ai"]').forEach((b) => {
+    panel.querySelectorAll('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"], [data-tb-au="open-claude"], [data-tb-au="fix-ai"]').forEach((b) => {
       b.disabled = busy || (b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai" || b.dataset.tbAu === "fix-ai") && !hasRun;
     });
     panel.setAttribute("aria-busy", String(busy));
@@ -38429,8 +38580,19 @@ Response: ${match.response.slice(0, 160)}` : "";
     const all = groups(run);
     const shown = visibleGroups(run);
     const parts = [];
+    if (_gated) parts.push(gateHtml());
+    else if (_freeLeft != null) {
+      parts.push(_freeLeft === 0 ? `<div class="tb-au-gate" role="status">${ICON.info}<div><b>That was your last free audit.</b>
+          <div class="tb-au-muted">A free account \u2014 just your email \u2014 keeps Site Audit going. This result stays here either way.</div>
+          <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="signin">Sign in free</button></div></div>` : `<div class="tb-au-free tb-au-muted">${_freeLeft} free audit${_freeLeft === 1 ? "" : "s"} left \xB7 then a free account (just your email) keeps it going</div>`);
+    }
     parts.push(scoreHeader(run, all));
-    if (_lastDiff) parts.push(diffHtml(_lastDiff));
+    if (_showingSaved && !_gated) {
+      parts.push(`<div class="tb-au-saved" role="status">${ICON.info}<div><b>Your last scan of this page, ${escapeHtml(agoText(run.scannedAt))}.</b>
+      <div class="tb-au-muted">Fixed something? Re-scan to see the old and new score side by side.</div></div>
+      <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="rerun">${ICON.rerun}<span class="tb-au-btn-l">Re-scan</span></button></div>`);
+    }
+    if (_lastDiff) parts.push(diffHtml(_lastDiff, _scoreDelta));
     const a11y = run.categories.find((c2) => c2.name === "accessibility");
     const hidden = (_b = (_a2 = a11y == null ? void 0 : a11y.metrics) == null ? void 0 : _a2.transparentText) != null ? _b : 0;
     if (hidden > 0) {
@@ -38461,6 +38623,12 @@ Response: ${match.response.slice(0, 160)}` : "";
     setBody(parts.join(""));
     setBusy(false);
     syncSelection(run);
+  }
+  function headlineScore(run) {
+    var _a2, _b, _c;
+    const single = run.categories.length === 1 ? run.categories[0].name : null;
+    const v2 = single ? (_b = (_a2 = run.score) == null ? void 0 : _a2.categories) == null ? void 0 : _b[single] : (_c = run.score) == null ? void 0 : _c.overall;
+    return typeof v2 === "number" ? v2 : null;
   }
   function scoreHeader(run, all) {
     var _a2, _b, _c, _d;
@@ -38526,6 +38694,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       const l2 = btn.querySelector(".tb-au-btn-l");
       if (l2 && !/Copied|failed/.test(l2.textContent || "")) l2.textContent = n2 ? `Copy for AI (${n2})` : "Copy for AI";
     }
+    const claude = panel.querySelector('[data-tb-au="open-claude"]');
+    if (claude) claude.disabled = n2 === 0;
     const count2 = panel.querySelector('[data-tb-au="sel-count"]');
     if (count2) count2.textContent = `${selected.length} selected`;
     const box2 = panel.querySelector('[data-tb-au="select-all"]');
@@ -38547,7 +38717,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (m.requests !== void 0) out.push(`${m.requests} requests`);
     return out.join(" \xB7 ");
   }
-  function diffHtml(d) {
+  function diffHtml(d, delta) {
     const bits = [
       `<b class="tb-au-good">${d.fixed.length} fixed</b>`,
       `${d.stillPresent.length} still present`,
@@ -38555,7 +38725,13 @@ Response: ${match.response.slice(0, 160)}` : "";
       d.new.length ? `${d.new.length} new` : ""
     ].filter(Boolean).join(" \xB7 ");
     const skipped = d.skippedCategories.length ? ` <span class="tb-au-muted">(${escapeHtml(d.skippedCategories.map((c2) => CATEGORY_LABEL2[c2]).join(", "))} not compared: not run both times)</span>` : "";
-    return `<div class="tb-au-diff" role="status">Since the last run: ${bits}${skipped}</div>`;
+    const score = delta ? (() => {
+      const ch = delta.to - delta.from;
+      const word = ch > 0 ? `<b class="tb-au-good">+${ch}</b>` : ch < 0 ? `<b class="tb-au-bad">${ch}</b>` : `<span class="tb-au-muted">no change</span>`;
+      const pill = (v2) => `<span class="tb-au-pill tb-au-band-${scoreBand(v2)}">${v2}</span>`;
+      return `<div class="tb-au-delta" aria-label="Score was ${delta.from}, now ${delta.to}"><span class="tb-au-muted">Score</span>${pill(delta.from)}<span class="tb-au-arrow" aria-hidden="true">\u2192</span>${pill(delta.to)}${word}</div>`;
+    })() : "";
+    return `<div class="tb-au-diff" role="status">${score}<div>Since the last run: ${bits}${skipped}</div></div>`;
   }
   function foundRequired(f2) {
     var _a2, _b, _c;
@@ -38830,14 +39006,23 @@ Response: ${match.response.slice(0, 160)}` : "";
     ${P} .tb-au-linkbtn { background: none; border: 0; color: var(--tb-accent, #FF5C6C); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
     ${P} button:focus-visible, ${P} a:focus-visible, ${P} summary:focus-visible, ${P} input:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C) !important; outline-offset: 2px; }
     ${P} .tb-au-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-    ${P} .tb-au-foot-bar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--tb-border, #252A38); background: var(--tb-bg-primary, #0B0D14); }
-    ${P} .tb-au-foot-bar .tb-au-btn { flex: 1; }
+    ${P} .tb-au-foot-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--tb-border, #252A38); background: var(--tb-bg-primary, #0B0D14); }
+    ${P} .tb-au-foot-bar .tb-au-btn { min-width: 0; }
+    ${P} .tb-au-foot-bar .tb-au-btn-l { overflow: hidden; text-overflow: ellipsis; }
     ${P} .tb-au-empty { padding: 36px 16px; text-align: center; color: var(--tb-text-secondary, #A8AEBE); }
     ${P} .tb-au-spin { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--tb-border, #252A38); border-top-color: var(--tb-accent, #FF5C6C); border-radius: 50%; animation: tb-au-spin .8s linear infinite; }
     @keyframes tb-au-spin { to { transform: rotate(360deg); } }
     ${P} .tb-au-note { margin: 10px 14px; color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
     ${P} .tb-au-good { color: ${good}; } ${P} .tb-au-bad { color: ${poor}; }
     ${P} .tb-au-diff { margin: 12px 14px 0; padding: 9px 12px; border-radius: 10px; background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); font-size: 12.5px; }
+    ${P} .tb-au-delta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; }
+    ${P} .tb-au-delta .tb-au-arrow { opacity: 0.7; }
+    ${P} .tb-au-saved { display: flex; align-items: flex-start; gap: 8px; margin: 12px 14px 0; padding: 9px 12px; border-radius: 10px; background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); font-size: 12.5px; }
+    ${P} .tb-au-saved > div { flex: 1; min-width: 0; }
+    ${P} .tb-au-gate { display: flex; align-items: flex-start; gap: 8px; margin: 12px 14px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--tb-accent, #FF5C6C); background: var(--tb-bg-secondary, #141823); font-size: 12.5px; }
+    ${P} .tb-au-gate > div { flex: 1; min-width: 0; }
+    ${P} .tb-au-gate .tb-au-btn { margin-top: 8px; }
+    ${P} .tb-au-free { margin: 10px 14px 0; font-size: 12px; }
     ${P} .tb-au-notice { display: flex; gap: 10px; margin: 12px 14px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid ${fair}; background: rgba(217,119,6,.08); font-size: 12.5px; }
     ${P} .tb-au-notice svg { flex-shrink: 0; margin-top: 2px; color: ${fair}; }
     ${P} .tb-au-notice .tb-au-btn { margin-top: 8px; }
@@ -38959,11 +39144,13 @@ Response: ${match.response.slice(0, 160)}` : "";
   `;
     document.head.appendChild(s2);
   }
-  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, SNAP, MCP_SETUP_URL, hex, LABEL;
+  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _scoreDelta, _showingSaved, _gated, _freeLeft, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, SNAP, MCP_SETUP_URL, hex, LABEL;
   var init_audit_panel = __esm({
     "src/ui/audit-panel.ts"() {
       "use strict";
       init_audit();
+      init_last_run();
+      init_ai_prompt();
       init_compare();
       init_helpers();
       init_types();
@@ -39039,6 +39226,10 @@ Response: ${match.response.slice(0, 160)}` : "";
       _cat = "all";
       _minimized = false;
       _lastDiff = null;
+      _scoreDelta = null;
+      _showingSaved = false;
+      _gated = false;
+      _freeLeft = null;
       _expanded = /* @__PURE__ */ new Set();
       _unselected = /* @__PURE__ */ new Set();
       _highlightTimer = null;
@@ -45681,14 +45872,15 @@ ${summary}`;
     }
     /** Run an audit and show it in the Site Audit panel (needs the dashboard). `scan` picks a menu scan
      *  ("full", "auto-review", "accessibility", "performance-seo"); default: the last one chosen.
-     *  Running it again shows what changed since the previous run. */
-    async showAuditPanel(scan2) {
+     *  Running it again shows what changed since the previous run, also after a reload of the tab.
+     *  `{ showLast: true }` shows this page's last result for the scan instead of running it, if there is one. */
+    async showAuditPanel(scan2, opts) {
       var _a2;
       if (!((_a2 = this.config) == null ? void 0 : _a2.enableDashboard)) return null;
       const root2 = document.getElementById("tracebug-root");
       if (!root2) return null;
       const m = await Promise.resolve().then(() => (init_audit_panel(), audit_panel_exports));
-      return m.showAuditPanel(root2, scan2);
+      return m.showAuditPanel(root2, scan2, opts);
     }
     /**
      * Snapshot of the most recent scan's issues. Pass `{ includeDismissed: true }`

@@ -190,6 +190,8 @@ function wireCopy() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  void initAccountCard();
+
   // Version — from the manifest, so it cannot disagree with the build.
   try {
     const v = chrome.runtime.getManifest().version;
@@ -257,3 +259,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 });
+
+// Optional Site Audit sign-in card (ADR 009). Never required: hidden when
+// already signed in, and "Skip for now" hides it for good. The skip has its
+// own key because background.js rewrites tb_audit_gate_v1 field by field.
+// The popup's account menu and the 4th audit still offer sign-in later.
+async function initAccountCard() {
+  const card = document.getElementById("acctCard");
+  if (!card) return;
+  const KEY = "tb_audit_gate_v1";
+  const SKIP_KEY = "tb_welcome_signin_skipped";
+  let g = {};
+  try { g = (await chrome.storage.local.get(KEY))[KEY] || {}; } catch {}
+  let skipped = false;
+  try { skipped = !!(await chrome.storage.local.get(SKIP_KEY))[SKIP_KEY]; } catch {}
+  if ((g.account && g.account.email) || skipped) return;
+  card.hidden = false;
+  document.getElementById("acctSkip").addEventListener("click", async () => {
+    card.hidden = true;
+    try { await chrome.storage.local.set({ [SKIP_KEY]: true }); } catch {}
+  });
+  // Once signed in (in the signin.html tab), the card has done its job.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      const v = area === "local" && changes[KEY] && changes[KEY].newValue;
+      if (v && v.account && v.account.email) card.hidden = true;
+    });
+  } catch {}
+}

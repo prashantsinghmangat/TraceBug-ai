@@ -1021,6 +1021,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Site Audit gate (ADR 009): may this scan run? Always answers.
+  if (message.type === "TB_AUDIT_PERMIT") {
+    auditPermit().then(sendResponse).catch(() => sendResponse({ allowed: true, signedIn: false, remaining: null }));
+    return true;
+  }
+  if (message.type === "TB_OPEN_SIGNIN") {
+    try { chrome.tabs.create({ url: chrome.runtime.getURL("signin.html") }); } catch {}
+    sendResponse({ ok: true });
+    return true;
+  }
+
   // A real result in the page (audit / ticket / export) — count it for the
   // popup's optional email ask. Kind only; nothing about the result.
   if (message.type === "TB_SUCCESS") {
@@ -2152,7 +2163,8 @@ if (chrome.tabs && chrome.tabs.onRemoved) {
 
 // ── Optional email ask: success counter ────────────────────────────────────
 // docs/launch/email-capture-plan.md. The popup shows the ask when `state` is
-// "due": after the 2nd real result, and once more at the 10th only if the
+// "due": after the 2nd saved ticket or export (audits don't count — ADR 009's
+// sign-in covers audit users), and once more at the 10th only if the
 // first was closed with ✕ ("snoozed"). "No thanks" or a signup → "done",
 // never shown again. Counts stay on this machine; the popup sends them only
 // if the user ticks the box under the email field.
@@ -2168,14 +2180,50 @@ function recordSuccess(kind) {
       const st = (await chrome.storage.local.get(EMAIL_ASK_KEY))[EMAIL_ASK_KEY] || {};
       const counts = { audit: 0, ticket: 0, export: 0, ...(st.counts || {}) };
       counts[kind] = Math.min((counts[kind] || 0) + 1, 99999);
-      const total = counts.audit + counts.ticket + counts.export;
+      // Audits are counted (for the opt-in usage snapshot) but don't move the ask: Site Audit has
+      // its own sign-in after 3 audits (ADR 009), and one ask per user is enough.
+      const total = counts.ticket + counts.export;
       let state = st.state || "waiting";
       let source = st.source || "";
       if (state === "waiting" && total >= 2) { state = "due"; source = `ext-${kind}-2`; }
       else if (state === "snoozed" && total >= 10) { state = "due"; source = "ext-retry-10"; }
       await chrome.storage.local.set({ [EMAIL_ASK_KEY]: { ...st, counts, state, source } });
+      if (kind === "audit") {
+        const g = await readAuditGate();
+        await chrome.storage.local.set({ [AUDIT_GATE_KEY]: { ...g, audits: Math.min(g.audits + 1, 99999) } });
+      }
     } catch {}
   });
   return _emailAskChain;
+}
+
+// ── Site Audit sign-in gate (ADR 009, docs/launch/sign-in-gate-plan.md) ────
+// 3 audits free in total, then a free account (email + code, signin.html).
+// `audits` counts finished audits (recordSuccess); `account` is set by
+// signin.html after the code is verified; `graceUntil` is set there when
+// sign-in can't be reached, so a server problem never blocks the audit.
+// Only the audit is gated — capture, exports, tickets and MCP never are.
+const AUDIT_GATE_KEY = "tb_audit_gate_v1";
+const FREE_AUDITS = 3;
+
+async function readAuditGate() {
+  try {
+    const g = (await chrome.storage.local.get(AUDIT_GATE_KEY))[AUDIT_GATE_KEY] || {};
+    return {
+      audits: Number.isFinite(g.audits) ? g.audits : 0,
+      account: g.account && typeof g.account.email === "string" ? g.account : null,
+      graceUntil: Number.isFinite(g.graceUntil) ? g.graceUntil : 0,
+    };
+  } catch {
+    return { audits: 0, account: null, graceUntil: 0 };
+  }
+}
+
+async function auditPermit() {
+  const g = await readAuditGate();
+  const signedIn = !!g.account;
+  const remaining = signedIn ? null : Math.max(0, FREE_AUDITS - g.audits);
+  const allowed = signedIn || remaining > 0 || g.graceUntil > Date.now();
+  return { allowed, signedIn, remaining, free: FREE_AUDITS };
 }
 

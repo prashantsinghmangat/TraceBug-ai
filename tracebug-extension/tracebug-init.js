@@ -206,7 +206,8 @@
         // results panel; a second click re-runs and shows what changed.
         if (window.__TraceBugExtension.showAuditPanel) {
           // showAuditPanel ignores any scan name it doesn't know.
-          window.__TraceBugExtension.showAuditPanel(e.detail && e.detail.scan);
+          // showLast: reopening shows the last result for this page; the panel's Re-scan runs again.
+          window.__TraceBugExtension.showAuditPanel(e.detail && e.detail.scan, { showLast: true });
         } else {
           showToast("Site audit requires the latest extension build");
         }
