@@ -13,12 +13,16 @@
 import { getAllSessions } from "../storage";
 import { resolveCloudEndpoint } from "../cloud-endpoint";
 import { setInnerHTML, setInlineStyle } from "./helpers";
+import { isExtensionMode } from "../ext-transport";
 
 const DONE_KEY = "tracebug_milestone_ask_done";
 const CARD_ID = "tracebug-milestone-ask";
 const MILESTONE = 5;
 
 export function maybeShowMilestoneAsk(root: HTMLElement): void {
+  // The extension asks from its own popup instead (email-capture-plan.md):
+  // no host-page CSP to fight, nothing shown on the user's site.
+  if (isExtensionMode()) return;
   try {
     if (localStorage.getItem(DONE_KEY)) return;
     const savedCount = getAllSessions().filter((s) => s.saved).length;
@@ -53,7 +57,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
       <button data-act="close" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0">✕</button>
     </div>
     <p style="margin:6px 0 10px;font-size:12px;line-height:1.5;color:var(--tb-text-secondary,#aaa)">
-      Want release updates from the solo dev who builds TraceBug? A few emails a year, nothing else.
+      Want release updates from the solo dev who builds TraceBug? At most one email a month, nothing else.
     </p>
     <form data-act="form" style="display:flex;gap:6px">
       <input data-act="email" type="email" required placeholder="you@company.com" aria-label="Email address"
@@ -93,9 +97,10 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, source: "milestone-5" }),
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
-        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">✓ You're on the list — thanks for using TraceBug this much.</div>`);
+        const already = (await res.json().catch(() => ({})))?.status === "subscribed";
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">${already ? "✓ You're already on the list. Thanks!" : "✓ Almost done: check your inbox for a link to confirm."}</div>`);
         setTimeout(close, 2500);
       })
       .catch(() => {

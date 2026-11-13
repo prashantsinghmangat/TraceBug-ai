@@ -164,9 +164,13 @@ Downloads a run (default: the last) as a self-contained `.html` that opens on
 its Audit tab. The MCP server reads it with `get_audit`, `get_finding` and
 `compare_audits`.
 
-### `TraceBug.showAuditPanel(scan?): Promise<AuditRun | null>`
+### `TraceBug.showAuditPanel(scan?, { showLast? }?): Promise<AuditRun | null>`
 Runs an audit and shows it in the Site Audit panel (needs the dashboard).
-Running it again shows what changed since the previous run.
+Running it again shows what changed since the previous run, including the old
+and new score — also after a reload, because the last run per page and scan is
+kept in `sessionStorage` (`tracebug_audit_last_v1`). With `{ showLast: true }`
+it shows that saved run instead of scanning when there is one (the extension's
+popup and toolbar do this). `getLastAudit()` falls back to the saved run.
 
 ---
 

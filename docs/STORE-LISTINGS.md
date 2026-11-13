@@ -169,6 +169,32 @@ user-supplied API tokens. Leaving out a category a reviewer thinks applies can c
   Microphone audio stays inside the local video file and is never transmitted by TraceBug.
 - ✅ All three certifications.
 
+**Email ask (next release after 1.12.0 — update the data-use answers BEFORE submitting it):** the popup may
+offer an optional email signup after the 2nd saved ticket/export (audits don't trigger it; Site Audit has its own sign-in). It sends the address the user types to
+tracebug.dev and, only if they tick a box, three counts (audits, saved tickets, exports). CWS: tick
+**Personally identifiable information** (email); purpose "product update emails, user
+opted in"; not sold, not used for credit. AMO: the listing's privacy policy link covers it (updated 2026-11-13).
+What happens after it is sent (website side, not the extension): one confirm email (double opt-in), then at
+most one update a month with a one-click unsubscribe; delivered by Resend, named on the privacy page. The
+extension itself still talks only to tracebug.dev, so no new host or permission to declare. Don't release
+the popup ask until `/api/confirm` and `/api/unsubscribe` are live and a test signup went through end to end.
+The SDK's 5th-ticket card already sent a typed email before this, so the old "leave PII unticked" answer was
+arguably wrong already.
+
+**Site Audit sign-in (ADR 009 — the release that ships it; change ALL of this before submitting):**
+- Description: replace "No account, no upload, no TraceBug server." with
+  "No account for bug capture, nothing uploaded. Site Audit asks for a free account (just your email) after 3 audits."
+  Add to the 1.13 "New in" paragraph: "Site Audit remembers its last result, shows the old and new score after a
+  re-scan, and opens findings in Claude. After 3 free audits it asks for a free account (email + code)."
+- CWS data-use: tick **Personally identifiable information** (email) and **Authentication information** (the
+  one-time code). Purpose: "account sign-in for Site Audit; product emails only if the user ticks a separate box".
+  Not sold, not used for credit. The audit's results, pages and URLs are never sent.
+- CWS reviewer note: "Site Audit asks for a free account after 3 audits. Sign-in is email + 6-digit code on an
+  extension page (signin.html); the extension calls only tracebug.dev. No new permissions. Test account: any
+  email you control." AMO: same note; check the current add-on policies on features that need an account and
+  say it in the listing.
+- Screenshots/slides that say "no account" for the whole product: recaption.
+
 **Disclose if they change** (found in a code review, 2026-10-26):
 - "Open in Claude" / "Open in ChatGPT" (`src/exporters/ai-prompt.ts`) puts the report text into the
   destination URL's query string when it's ≤ 6000 characters, so it lands in browser history.

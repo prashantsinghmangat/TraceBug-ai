@@ -46,6 +46,8 @@
     "e2e:quality": "node e2e/report-quality.e2e.mjs",
     "e2e:audit": "node e2e/site-audit.e2e.mjs",
     "e2e:audit-ext": "node e2e/ext-site-audit.e2e.mjs",
+    "e2e:audit-gate": "node e2e/ext-audit-gate.e2e.mjs",
+    "e2e:email-ask": "node e2e/ext-email-ask.e2e.mjs",
     "zip:ext": "npm run check:versions && npm run build:ext && node tracebug-extension/build/zip-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",

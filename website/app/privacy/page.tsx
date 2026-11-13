@@ -16,7 +16,7 @@ export default function PrivacyPage() {
 
         <h1 className="mb-2 text-h2 font-medium text-text-primary">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: November 10, 2026
+          Last updated: November 13, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -113,7 +113,10 @@ export default function PrivacyPage() {
                 Screen recordings, your settings and the recording options are
                 stored in the extension&apos;s own storage (
                 <code className="text-accent">chrome.storage.local</code>), which
-                websites cannot read.
+                websites cannot read. So are three counters (audits run, tickets
+                saved, reports exported) that decide when the popup offers its
+                optional email signup; they never leave your machine unless you
+                tick the box to send them with your email.
               </li>
               <li>
                 Voice-note transcripts are produced by your browser&apos;s
@@ -228,8 +231,31 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-6 space-y-1 mt-2">
               <li>
                 <strong className="text-text-primary">Email list</strong> — your
-                email address, which form you used, and your browser&apos;s user
-                agent and referring page. Used only to send release updates.
+                email address, which form you used, your browser&apos;s user
+                agent and referring page, and when you confirmed or unsubscribed.
+                Used only to send release updates and early-access invitations,
+                at most one email a month. We first send one email asking you to
+                confirm; until you click its link, nothing else is sent to that
+                address. Every update has a one-click unsubscribe link, and
+                unsubscribing stops all emails at once. If you sign up from the
+                extension popup and tick &ldquo;Also send my usage counts&rdquo;,
+                we also store three numbers: how many audits, saved tickets and
+                exports you have made. Nothing else about your use is sent.
+                Emails are delivered by{" "}
+                <a href="https://resend.com/legal/privacy-policy" className="text-primary hover:underline">Resend</a>,
+                which receives only the address and the email itself. To have
+                your address deleted entirely, reply to any email from us.
+              </li>
+              <li>
+                <strong className="text-text-primary">Site Audit account</strong> — when the
+                extension version you use asks for a free account after 3 audits, signing in
+                stores your email address, an account id, and when you signed up and last signed
+                in (in our database host, Supabase). The 6-digit sign-in code is emailed through
+                Resend. We never receive your audits, the pages you audit or their addresses —
+                the extension only tells itself that you are signed in. A separate, unticked box
+                adds you to the email list above; signing in alone does not. You can delete the
+                account from the extension (Options → Site Audit account → Delete my account),
+                which also removes your address from the email list.
               </li>
               <li>
                 <strong className="text-text-primary">Feedback and uninstall forms</strong>{" "}

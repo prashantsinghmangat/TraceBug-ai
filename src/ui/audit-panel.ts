@@ -8,7 +8,8 @@
 //     WCAG line that only ever states failures (automated checks can't prove a
 //     pass), counts by severity, rules passed, when it was scanned
 //   - per-category scores (All checks) and what each check can't tell you
-//   - actions: Re-run, Export report, Copy for AI (selected findings)
+//   - actions: Re-run, Export report, Copy for AI (selected findings), Fix with AI
+//     (whole audit to Downloads + a one-line prompt for an MCP-connected agent)
 //   - findings grouped by rule: "Low contrast · 3 elements" is one row with
 //     its elements underneath, each with Locate and Copy selector — the
 //     grouping is display only; the run keeps one finding per element so
@@ -19,7 +20,9 @@
 // (CSP nonce), the same as the issues panel.
 
 import type { AuditCategory, AuditRun, Issue } from "../types";
-import { runAudit, getLastAuditRun } from "../audit";
+import { runAudit, getLastAuditRun, setLastAuditRun } from "../audit";
+import { loadAuditRun } from "../audit/last-run";
+import { openInClaude } from "../exporters/ai-prompt";
 import { compareAudits, type AuditComparison as AuditComparisonOf } from "../audit/compare";
 type AuditComparison = AuditComparisonOf<Issue>;
 import { escapeHtml, setInnerHTML, createStyleTag } from "./helpers";
@@ -28,6 +31,9 @@ import { SCORE_EXPLANATION, scoreBand, type ScoreBand } from "../audit/score";
 import { wcagLabel } from "../audit/wcag";
 import { buildAuditFixPrompt, SEVERITY_NAME } from "../audit/prompt";
 import { isExtensionMode } from "../ext-transport";
+import { FIX_AUDIT_PROMPT } from "../exporters/agent-workflow";
+import { showToast, showActionToast } from "./toast";
+import { signalSuccess } from "../success-signal";
 
 const PANEL_ID = "tracebug-audit-panel";
 const STYLE_ID = "tracebug-audit-panel-styles";
@@ -102,6 +108,59 @@ let _sev: Issue["severity"] | "all" = "all";
 let _cat: AuditCategory | "all" = "all";
 let _minimized = false;
 let _lastDiff: AuditComparison | null = null;
+/** Headline score before → after a re-scan of the same scan (null when either has none). */
+let _scoreDelta: { from: number; to: number } | null = null;
+/** The panel is showing a saved result, not one it just ran. */
+let _showingSaved = false;
+/** Extension gate (ADR 009): "sign in to keep scanning" is showing. */
+let _gated = false;
+/** Free audits left after the scan just run (extension, signed out); null = no note. */
+let _freeLeft: number | null = null;
+
+interface AuditPermit { allowed: boolean; signedIn: boolean; remaining: number | null }
+
+/** Extension only: ask the worker whether this scan may run (3 free, then a free account — ADR 009).
+ *  Fails open: no answer within 3 s, or any odd answer, means yes. The SDK outside the extension is never gated. */
+function auditPermit(): Promise<AuditPermit> {
+  const yes: AuditPermit = { allowed: true, signedIn: false, remaining: null };
+  if (!isExtensionMode()) return Promise.resolve(yes);
+  return new Promise((resolve) => {
+    const done = (e?: Event) => {
+      window.removeEventListener("tracebug-ext-audit-permit", done);
+      clearTimeout(t);
+      const d = (e as CustomEvent | undefined)?.detail;
+      resolve(d && typeof d.allowed === "boolean"
+        ? { allowed: d.allowed, signedIn: !!d.signedIn, remaining: typeof d.remaining === "number" ? d.remaining : null }
+        : yes);
+    };
+    const t = setTimeout(done, 3000);
+    window.addEventListener("tracebug-ext-audit-permit", done);
+    window.dispatchEvent(new CustomEvent("tracebug-audit-permit-request"));
+  });
+}
+
+/** Out of free audits: keep the saved result (if any) on screen and ask for a free account. */
+function showGate(saved: AuditRun | null): void {
+  _gated = true;
+  _showingSaved = !!saved;
+  _lastDiff = null;
+  _scoreDelta = null;
+  _freeLeft = null;
+  if (saved) {
+    setLastAuditRun(saved);
+    render(saved);
+  } else {
+    setBody(gateHtml());
+    setBusy(false);
+  }
+}
+
+function gateHtml(): string {
+  return `<div class="tb-au-gate" role="status">${ICON.info}<div><b>You've used your free audits.</b>
+    <div class="tb-au-muted">A free TraceBug account keeps Site Audit going — just your email and a 6-digit code, no password.
+    Bug capture, exports and everything else stay free without one.</div>
+    <button type="button" class="tb-au-btn tb-au-btn-solid tb-au-btn-sm" data-tb-au="signin">Sign in free</button></div></div>`;
+}
 let _expanded = new Set<string>();
 /** Group keys NOT selected for Copy for AI (everything starts selected). */
 let _unselected = new Set<string>();
@@ -188,21 +247,52 @@ function initDrag(panel: HTMLElement): void {
 /** Open the panel, or close it when it is already open (the toolbar button). */
 export async function toggleAuditPanel(root: HTMLElement): Promise<void> {
   if (_open) { closeAuditPanel(); return; }
-  await showAuditPanel(root);
+  await showAuditPanel(root, undefined, { showLast: true });
+}
+
+export interface ShowAuditOptions {
+  /** Show this page's last saved result for the scan instead of running it, when there is one. */
+  showLast?: boolean;
 }
 
 /** Run an audit (a menu scan, default: the last one chosen) and show it. If the panel is already open, re-runs in place. */
-export async function showAuditPanel(root: HTMLElement, scan?: AuditScan | string): Promise<AuditRun | null> {
+export async function showAuditPanel(root: HTMLElement, scan?: AuditScan | string, opts: ShowAuditOptions = {}): Promise<AuditRun | null> {
   if (isAuditScan(scan)) _scan = scan;
   _root = root;
   injectStyles();
   if (!_open) mountShell(root);
   setMinimized(false);
   markScan();
+
+  const saved = loadAuditRun(location.href, _scan);
+  if (opts.showLast && saved) {
+    setLastAuditRun(saved);
+    _gated = false;
+    _freeLeft = null;
+    _showingSaved = true;
+    _lastDiff = null;
+    _scoreDelta = null;
+    _expanded = new Set();
+    _unselected = new Set();
+    _sev = "all";
+    _cat = "all";
+    render(saved);
+    return saved;
+  }
   setBody(`<div class="tb-au-empty" role="status"><span class="tb-au-spin" aria-hidden="true"></span>${escapeHtml(_scan === "full" ? "Checking accessibility, layout, performance, SEO and errors…" : `Running ${AUDIT_SCANS[_scan].label}…`)}</div>`);
   setBusy(true);
 
-  const previous = getLastAuditRun();
+  const permit = await auditPermit();
+  if (!permit.allowed) {
+    showGate(saved ?? null);
+    return saved ?? null;
+  }
+  _gated = false;
+  // Signed out with free audits left: after this scan, say how many remain.
+  _freeLeft = !permit.signedIn && permit.remaining != null ? Math.max(0, permit.remaining - 1) : null;
+
+  // The saved run survives a reload, so "fix → reload → re-scan" still has a before.
+  const previous = saved ?? getLastAuditRun();
   let run: AuditRun;
   try {
     if (AUDIT_SCANS[_scan].categories.includes("accessibility")) await ensureAxe();
@@ -216,11 +306,16 @@ export async function showAuditPanel(root: HTMLElement, scan?: AuditScan | strin
   // Only the same scan is a re-run; switching scans is a different question, not "what changed".
   const diff = previous && (previous.scan ?? "full") === (run.scan ?? "full") ? compareAudits(previous, run) : null;
   _lastDiff = diff && diff.comparable ? diff : null;
+  const before = _lastDiff && previous ? headlineScore(previous) : null;
+  const after = headlineScore(run);
+  _scoreDelta = before != null && after != null ? { from: before, to: after } : null;
+  _showingSaved = false;
   _expanded = new Set();
   _unselected = new Set();
   _sev = "all";
   _cat = "all";
   render(run);
+  signalSuccess("audit");
   return run;
 }
 
@@ -307,6 +402,80 @@ async function copyForAi(btn: HTMLButtonElement | null): Promise<void> {
   setTimeout(() => { if (label) label.textContent = was; }, 2200);
 }
 
+/** Open in Claude: copy the same prompt as Copy for AI (inside the click, while the
+ *  clipboard is allowed), then open claude.ai prefilled when it fits in a URL, an empty
+ *  chat otherwise. Page text in a prefilled URL lands in browser history — the same trade
+ *  as the bug report's Open in Claude (docs/STORE-LISTINGS.md). */
+async function openClaude(btn: HTMLButtonElement | null): Promise<void> {
+  const run = getLastAuditRun();
+  if (!run || !btn) return;
+  const ids = groups(run).filter((g) => !_unselected.has(g.key)).flatMap((g) => g.items.map((f) => f.id));
+  if (!ids.length) return;
+  const prompt = buildAuditFixPrompt(run, ids);
+  const ok = await copyText(prompt);
+  openInClaude(prompt);
+  const label = btn.querySelector(".tb-au-btn-l");
+  const was = label?.textContent || "";
+  if (label) label.textContent = ok ? "Opened — also copied" : "Opened";
+  setTimeout(() => { if (label) label.textContent = was; }, 2200);
+}
+
+/** Where "Set up the agent" points. The panel can't tell whether an agent has
+ *  the MCP server (they are separate processes, and the page can't see either),
+ *  so the link is offered every time, worded as a condition, never as a status. */
+const MCP_SETUP_URL = "https://tracebug.dev/docs/mcp";
+
+/** Fix with AI: copy the one-line prompt, then download the whole audit for the
+ *  MCP server (it searches Downloads, newest first). Copy goes first: the
+ *  clipboard needs the click's user activation, which the export's awaits can
+ *  outlast. Each step reports its own result; nothing claims an agent is connected. */
+async function fixWithAi(btn: HTMLButtonElement | null): Promise<void> {
+  const run = getLastAuditRun();
+  if (!run || !btn) return;
+  const label = btn.querySelector(".tb-au-btn-l");
+  const was = label?.textContent || "Fix with AI";
+  const set = (t: string) => { if (label) label.textContent = t; };
+  btn.disabled = true;
+  set("Saving…");
+  const copied = await copyText(FIX_AUDIT_PROMPT);
+  let filename = "";
+  try {
+    const { exportAuditReport } = await import("../audit/export");
+    filename = (await exportAuditReport(run)).filename;
+  } catch (err) {
+    console.warn("[TraceBug] Audit export for Fix with AI failed:", err);
+  }
+  set(was);
+  btn.disabled = false;
+  const root = _root || document.getElementById("tracebug-root");
+  if (!root) return;
+  if (!filename) {
+    showToast("Couldn't save the audit. Use Copy for AI instead.", root);
+    return;
+  }
+  const msg = copied
+    ? `Audit downloaded as ${filename}. Prompt copied: paste it into your coding agent.`
+    : `Audit downloaded as ${filename}. Couldn't copy the prompt: type "${FIX_AUDIT_PROMPT}" in your coding agent.`;
+  showActionToast(msg, "Agent not set up? →", () => { window.open(MCP_SETUP_URL, "_blank", "noopener"); }, root, { autoDismissMs: null });
+  keepToastBesidePanel(root);
+}
+
+/** Toasts centre on the window, which puts them over a docked panel's footer.
+ *  When the panel is docked, centre the toast in the free space beside it. */
+function keepToastBesidePanel(root: HTMLElement): void {
+  const toast = root.querySelector<HTMLElement>(".bt-toast");
+  const panel = document.getElementById(PANEL_ID);
+  if (!toast || !panel || !_open) return;
+  const side = panel.dataset.dock;
+  if (side !== "left" && side !== "right") return;
+  const r = panel.getBoundingClientRect();
+  const from = side === "right" ? 0 : r.right;
+  const to = side === "right" ? r.left : window.innerWidth;
+  if (to - from < 280) return; // too narrow beside the panel: leave it centred
+  toast.style.setProperty("left", `${Math.round((from + to) / 2)}px`, "important");
+  toast.style.setProperty("max-width", `${Math.min(560, Math.round(to - from - 32))}px`, "important");
+}
+
 function onKey(e: KeyboardEvent): void {
   if (e.key !== "Escape" || !_open) return;
   const panel = document.getElementById(PANEL_ID);
@@ -342,7 +511,9 @@ function mountShell(root: HTMLElement): void {
       <div class="tb-au-body" data-tb-au="body"></div>
       <div class="tb-au-foot-bar">
         <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read with the MCP tools">${ICON.export}<span class="tb-au-btn-l">Export report</span></button>
-        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent">${ICON.sparkle}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent (no MCP needed)">${ICON.copy}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="open-claude" disabled title="Copy the selected findings and open a new Claude chat with them (claude.ai). The prompt is also on your clipboard for Claude Code, Cursor or the Claude desktop app.">${ICON.sparkle}<span class="tb-au-btn-l">Open in Claude</span></button>
+        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="fix-ai" disabled title="Save the whole audit to your downloads and copy one line for your coding agent, which reads it with the TraceBug MCP server">${ICON.sparkle}<span class="tb-au-btn-l">Fix with AI</span></button>
       </div>
     </div>`);
   root.appendChild(panel);
@@ -369,6 +540,9 @@ function mountShell(root: HTMLElement): void {
     else if (action === "rerun") void showAuditPanel(root);
     else if (action === "export") void exportCurrent(actionEl as HTMLButtonElement);
     else if (action === "copy-ai") void copyForAi(actionEl as HTMLButtonElement);
+    else if (action === "open-claude") void openClaude(actionEl as HTMLButtonElement);
+    else if (action === "signin") window.dispatchEvent(new CustomEvent("tracebug-open-signin"));
+    else if (action === "fix-ai") void fixWithAi(actionEl as HTMLButtonElement);
     else if (action === "scan") void showAuditPanel(root, actionEl?.dataset.scan);
     else if (action === "reveal") void revealAndRerun(root);
     else if (action === "sev" && run) { _sev = (actionEl?.dataset.sev as typeof _sev) || "all"; render(run); }
@@ -453,8 +627,8 @@ function setBusy(busy: boolean): void {
   const panel = document.getElementById(PANEL_ID);
   if (!panel) return;
   const hasRun = !!getLastAuditRun();
-  panel.querySelectorAll<HTMLButtonElement>('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"]').forEach((b) => {
-    b.disabled = busy || ((b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai") && !hasRun);
+  panel.querySelectorAll<HTMLButtonElement>('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"], [data-tb-au="open-claude"], [data-tb-au="fix-ai"]').forEach((b) => {
+    b.disabled = busy || ((b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai" || b.dataset.tbAu === "fix-ai") && !hasRun);
   });
   panel.setAttribute("aria-busy", String(busy));
 }
@@ -525,8 +699,21 @@ function render(run: AuditRun): void {
   const all = groups(run);
   const shown = visibleGroups(run);
   const parts: string[] = [];
+  if (_gated) parts.push(gateHtml());
+  else if (_freeLeft != null) {
+    parts.push(_freeLeft === 0
+      ? `<div class="tb-au-gate" role="status">${ICON.info}<div><b>That was your last free audit.</b>
+          <div class="tb-au-muted">A free account — just your email — keeps Site Audit going. This result stays here either way.</div>
+          <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="signin">Sign in free</button></div></div>`
+      : `<div class="tb-au-free tb-au-muted">${_freeLeft} free audit${_freeLeft === 1 ? "" : "s"} left · then a free account (just your email) keeps it going</div>`);
+  }
   parts.push(scoreHeader(run, all));
-  if (_lastDiff) parts.push(diffHtml(_lastDiff));
+  if (_showingSaved && !_gated) {
+    parts.push(`<div class="tb-au-saved" role="status">${ICON.info}<div><b>Your last scan of this page, ${escapeHtml(agoText(run.scannedAt))}.</b>
+      <div class="tb-au-muted">Fixed something? Re-scan to see the old and new score side by side.</div></div>
+      <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="rerun">${ICON.rerun}<span class="tb-au-btn-l">Re-scan</span></button></div>`);
+  }
+  if (_lastDiff) parts.push(diffHtml(_lastDiff, _scoreDelta));
 
   const a11y = run.categories.find((c) => c.name === "accessibility");
   const hidden = a11y?.metrics?.transparentText ?? 0;
@@ -559,6 +746,13 @@ function render(run: AuditRun): void {
   setBody(parts.join(""));
   setBusy(false);
   syncSelection(run);
+}
+
+/** The number the header shows: the category's score for a one-category scan, the overall otherwise. */
+function headlineScore(run: AuditRun): number | null {
+  const single = run.categories.length === 1 ? run.categories[0].name : null;
+  const v = single ? run.score?.categories?.[single] : run.score?.overall;
+  return typeof v === "number" ? v : null;
 }
 
 function scoreHeader(run: AuditRun, all: Group[]): string {
@@ -637,6 +831,8 @@ function syncSelection(run: AuditRun): void {
     const l = btn.querySelector(".tb-au-btn-l");
     if (l && !/Copied|failed/.test(l.textContent || "")) l.textContent = n ? `Copy for AI (${n})` : "Copy for AI";
   }
+  const claude = panel.querySelector<HTMLButtonElement>('[data-tb-au="open-claude"]');
+  if (claude) claude.disabled = n === 0;
   const count = panel.querySelector('[data-tb-au="sel-count"]');
   if (count) count.textContent = `${selected.length} selected`;
   const box = panel.querySelector<HTMLInputElement>('[data-tb-au="select-all"]');
@@ -661,7 +857,7 @@ export function formatCategoryMetrics(m: Record<string, number>): string {
   return out.join(" · ");
 }
 
-function diffHtml(d: AuditComparison): string {
+function diffHtml(d: AuditComparison, delta: { from: number; to: number } | null): string {
   const bits = [
     `<b class="tb-au-good">${d.fixed.length} fixed</b>`,
     `${d.stillPresent.length} still present`,
@@ -671,7 +867,13 @@ function diffHtml(d: AuditComparison): string {
   const skipped = d.skippedCategories.length
     ? ` <span class="tb-au-muted">(${escapeHtml(d.skippedCategories.map((c) => CATEGORY_LABEL[c]).join(", "))} not compared: not run both times)</span>`
     : "";
-  return `<div class="tb-au-diff" role="status">Since the last run: ${bits}${skipped}</div>`;
+  const score = delta ? (() => {
+    const ch = delta.to - delta.from;
+    const word = ch > 0 ? `<b class="tb-au-good">+${ch}</b>` : ch < 0 ? `<b class="tb-au-bad">${ch}</b>` : `<span class="tb-au-muted">no change</span>`;
+    const pill = (v: number) => `<span class="tb-au-pill tb-au-band-${scoreBand(v)}">${v}</span>`;
+    return `<div class="tb-au-delta" aria-label="Score was ${delta.from}, now ${delta.to}"><span class="tb-au-muted">Score</span>${pill(delta.from)}<span class="tb-au-arrow" aria-hidden="true">→</span>${pill(delta.to)}${word}</div>`;
+  })() : "";
+  return `<div class="tb-au-diff" role="status">${score}<div>Since the last run: ${bits}${skipped}</div></div>`;
 }
 
 const hex = /^#[0-9a-f]{3,8}$/i;
@@ -948,14 +1150,23 @@ function injectStyles(): void {
     ${P} .tb-au-linkbtn { background: none; border: 0; color: var(--tb-accent, #FF5C6C); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 4px 2px; text-decoration: underline; text-underline-offset: 2px; }
     ${P} button:focus-visible, ${P} a:focus-visible, ${P} summary:focus-visible, ${P} input:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C) !important; outline-offset: 2px; }
     ${P} .tb-au-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-    ${P} .tb-au-foot-bar { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--tb-border, #252A38); background: var(--tb-bg-primary, #0B0D14); }
-    ${P} .tb-au-foot-bar .tb-au-btn { flex: 1; }
+    ${P} .tb-au-foot-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--tb-border, #252A38); background: var(--tb-bg-primary, #0B0D14); }
+    ${P} .tb-au-foot-bar .tb-au-btn { min-width: 0; }
+    ${P} .tb-au-foot-bar .tb-au-btn-l { overflow: hidden; text-overflow: ellipsis; }
     ${P} .tb-au-empty { padding: 36px 16px; text-align: center; color: var(--tb-text-secondary, #A8AEBE); }
     ${P} .tb-au-spin { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--tb-border, #252A38); border-top-color: var(--tb-accent, #FF5C6C); border-radius: 50%; animation: tb-au-spin .8s linear infinite; }
     @keyframes tb-au-spin { to { transform: rotate(360deg); } }
     ${P} .tb-au-note { margin: 10px 14px; color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
     ${P} .tb-au-good { color: ${good}; } ${P} .tb-au-bad { color: ${poor}; }
     ${P} .tb-au-diff { margin: 12px 14px 0; padding: 9px 12px; border-radius: 10px; background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); font-size: 12.5px; }
+    ${P} .tb-au-delta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13px; }
+    ${P} .tb-au-delta .tb-au-arrow { opacity: 0.7; }
+    ${P} .tb-au-saved { display: flex; align-items: flex-start; gap: 8px; margin: 12px 14px 0; padding: 9px 12px; border-radius: 10px; background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); font-size: 12.5px; }
+    ${P} .tb-au-saved > div { flex: 1; min-width: 0; }
+    ${P} .tb-au-gate { display: flex; align-items: flex-start; gap: 8px; margin: 12px 14px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--tb-accent, #FF5C6C); background: var(--tb-bg-secondary, #141823); font-size: 12.5px; }
+    ${P} .tb-au-gate > div { flex: 1; min-width: 0; }
+    ${P} .tb-au-gate .tb-au-btn { margin-top: 8px; }
+    ${P} .tb-au-free { margin: 10px 14px 0; font-size: 12px; }
     ${P} .tb-au-notice { display: flex; gap: 10px; margin: 12px 14px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid ${fair}; background: rgba(217,119,6,.08); font-size: 12.5px; }
     ${P} .tb-au-notice svg { flex-shrink: 0; margin-top: 2px; color: ${fair}; }
     ${P} .tb-au-notice .tb-au-btn { margin-top: 8px; }

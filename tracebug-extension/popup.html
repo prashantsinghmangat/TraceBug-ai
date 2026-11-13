@@ -19,7 +19,21 @@
         </svg>
         <span class="hd-name">TraceBug</span>
       </a>
-      <button id="themeToggle" class="hd-theme" title="Toggle theme" aria-label="Toggle theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></button>
+      <div class="hd-actions">
+        <!-- Site Audit account (ADR 009): who is signed in, sign in / out, delete. -->
+        <button id="acctBtn" class="hd-theme hd-acct" title="Site Audit account" aria-label="Site Audit account" aria-haspopup="true" aria-expanded="false" aria-controls="acctMenu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="hd-acct-dot" hidden></span></button>
+        <button id="themeToggle" class="hd-theme" title="Toggle theme" aria-label="Toggle theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></button>
+      </div>
+      <div class="acct-menu" id="acctMenu" role="menu" aria-label="Site Audit account" hidden>
+        <div class="acct-head">
+          <b id="acctTitle">Not signed in</b>
+          <span id="acctSub"></span>
+        </div>
+        <button class="acct-item" id="acctSignIn" role="menuitem" type="button" hidden>Sign in free</button>
+        <button class="acct-item" id="acctSignOut" role="menuitem" type="button" hidden>Sign out</button>
+        <button class="acct-item acct-danger" id="acctDelete" role="menuitem" type="button" hidden>Delete account</button>
+        <p class="acct-note">Only Site Audit uses an account. Capture, tickets and exports never need one.</p>
+      </div>
     </header>
 
     <!-- Unavailable / blocked state. Title, text and the single action button
@@ -56,6 +70,24 @@
         <div class="wn-warn" id="whatsNewWarn" style="display:none;"></div>
         <div class="wn-foot"><button class="wn-got" id="whatsNewGot" type="button">Got it</button></div>
       </div>
+
+      <!-- Optional email ask (docs/launch/email-capture-plan.md). Hidden
+           unless the worker marked it "due" (2nd real result; once more at the
+           10th if closed with ✕). Never blocks anything. -->
+      <form class="ea" id="emailAsk" style="display:none;" novalidate>
+        <div class="ea-head">
+          <div class="ea-title">Want the next features first?</div>
+          <button type="button" class="ea-x" id="emailAskClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="ea-text">Design Tokens and Visual Comparison are coming. One email a month, early access, unsubscribe anytime. TraceBug keeps working fully either way.</p>
+        <div class="ea-row">
+          <input class="ea-input" id="emailAskInput" type="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address" required maxlength="254">
+          <button type="submit" class="ea-go" id="emailAskSubmit">Get early access</button>
+        </div>
+        <label class="ea-usage"><input type="checkbox" id="emailAskUsage"> <span>Also send my usage counts: <span id="emailAskCounts"></span></span></label>
+        <div class="ea-foot"><button type="button" class="ea-no" id="emailAskNo">No thanks</button></div>
+        <div class="ea-msg" id="emailAskMsg" role="status"></div>
+      </form>
 
       <!-- PHASE2-CLOUD: account / cloud-sharing block disabled for Phase 1 offline release
       <div class="account" id="account">

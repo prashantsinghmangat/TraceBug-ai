@@ -93,6 +93,9 @@ try {
   const perms = JSON.parse(readFileSync(join(DIST, "manifest.json"), "utf8")).permissions;
   check("manifest permissions unchanged", JSON.stringify(perms) === JSON.stringify(["activeTab", "storage", "unlimitedStorage", "scripting", "alarms", "offscreen", "tabCapture"]), short(perms));
 
+  // This suite runs many audits; the 3-free gate has its own suite (ext-audit-gate). Start signed in.
+  await sw.evaluate(() => chrome.storage.local.set({ tb_audit_gate_v1: { audits: 0, account: { email: "e2e@example.com", userId: "e2e", verifiedAt: Date.now() } } }));
+
   const page = await ctx.newPage();
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${ORIGIN}/checkout`, { waitUntil: "load" });
@@ -174,6 +177,12 @@ try {
   await sleep(200);
   check("Esc closes the panel", (await page.locator("#tracebug-audit-panel").count()) === 0);
 
+  // Reopening shows the saved result (no new scan) — proven after a reload below. Clear it here so the
+  // toolbar has to run, which is what the axe-on-request check needs.
+  check("the last run is saved per page in sessionStorage, not localStorage", await page.evaluate(() =>
+    /tracebug-audit-|"page"/.test(sessionStorage.getItem("tracebug_audit_last_v1") || "") && !Object.keys(localStorage).some((k) => k.includes("audit_last"))));
+  await page.evaluate(() => sessionStorage.removeItem("tracebug_audit_last_v1"));
+
   // The floating toolbar's Audit button: loads axe through the worker (TB_LOAD_AXE) and opens the panel.
   await page.evaluate(() => { delete window.axe; });
   await page.click("#tracebug-toolbar-audit-btn");
@@ -205,6 +214,26 @@ try {
   await page.waitForFunction(() => window.__TraceBugExtension.getLastAudit()?.scan === "performance-seo", null, { timeout: 20000 });
   const perfSeo = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
   check("the panel's scan bar switches to Performance & SEO", perfSeo.categories.map((c) => c.name).join() === "performance,seo", short(perfSeo.categories.map((c) => c.name)));
+  await page.keyboard.press("Escape");
+
+  // After a reload (the fix loop): Audit shows the saved result without scanning; Re-scan compares old and new score.
+  await page.reload({ waitUntil: "load" });
+  await sleep(1500);
+  await sw.evaluate(async (glob) => {
+    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+    // eslint-disable-next-line no-undef
+    await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id, scan: "performance-seo" }, {});
+  }, GLOB);
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-saved", { timeout: 20000 }).catch(() => {});
+  const shown = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
+  check("after a reload, Audit shows the saved result instead of scanning", shown?.id === perfSeo.id && (await page.locator("#tracebug-audit-panel .tb-au-saved").count()) === 1, short({ shown: shown?.id, saved: perfSeo.id }));
+  await page.click('#tracebug-audit-panel .tb-au-saved [data-tb-au="rerun"]');
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-delta", { timeout: 20000 }).catch(() => {});
+  const rescanned = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
+  const deltaText = await page.locator("#tracebug-audit-panel .tb-au-delta").innerText().catch(() => "");
+  check("Re-scan after a reload runs again and shows old → new score", rescanned?.id !== perfSeo.id && /Score\s*\d+\s*→\s*\d+/.test(deltaText), deltaText);
+  check("the saved-result banner is gone after the re-scan", (await page.locator("#tracebug-audit-panel .tb-au-saved").count()) === 0);
+  check("Open in Claude is offered next to Copy for AI", (await page.locator('#tracebug-audit-panel [data-tb-au="open-claude"]').count()) === 1);
   await page.keyboard.press("Escape");
 
   // Strict CSP (no eval): accessibility must still run.

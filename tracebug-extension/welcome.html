@@ -267,6 +267,16 @@
     #keysNone { text-align: center; padding: 0 14px; }
 
     /* ── Privacy ───────────────────────────────────────── */
+    .acct {
+      margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px;
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 22px 28px; box-shadow: var(--card-shadow);
+    }
+    .acct[hidden] { display: none; }
+    .acct-t { font-size: 17px; letter-spacing: -0.01em; margin-bottom: 6px; }
+    .acct-h { color: var(--text-2); font-size: 14px; margin: 0; max-width: 640px; }
+    .acct-btns { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .acct-btns .btn, .acct-btns .btn-sec { margin: 0; cursor: pointer; }
     .privacy {
       margin-top: 48px; background: var(--card-bg);
       border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -340,6 +350,7 @@
       .hero-sub { margin-left: 0; }
       .privacy { padding: 20px; }
       .step { padding: 18px; }
+      .acct { flex-direction: column; align-items: flex-start; padding: 20px; }
     }
   </style>
 </head>
@@ -482,6 +493,21 @@
 
     </section>
 
+    <!-- ── Optional Site Audit sign-in (ADR 009) ──────────────
+         Skippable: Site Audit gives 3 free audits first, and nothing else
+         needs an account. welcome.js hides it when already signed in or
+         after "Skip for now" (remembered). Sign-in itself is signin.html. -->
+    <section class="acct" id="acctCard" hidden>
+      <div class="acct-txt">
+        <h2 class="acct-t">Optional: sign in for Site Audit</h2>
+        <p class="acct-h">Site Audit is free for 3 audits, then needs a free account: just your email and a 6-digit code, no password. Sign in now and you won't be asked later. Capture, tickets and exports never need an account.</p>
+      </div>
+      <div class="acct-btns">
+        <a class="btn" id="acctSignIn" href="signin.html" target="_blank" rel="noopener">Sign in free</a>
+        <button class="btn-sec" id="acctSkip" type="button">Skip for now</button>
+      </div>
+    </section>
+
     <!-- ── Privacy ─────────────────────────────────────────── -->
     <section class="privacy">
       <div class="privacy-cols">
@@ -495,7 +521,7 @@
             What TraceBug sees
           </h3>
           <div class="chips">
-            <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No account</span>
+            <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No account to capture</span>
             <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No upload</span>
             <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No telemetry</span>
           </div>

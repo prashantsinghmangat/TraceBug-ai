@@ -12,7 +12,8 @@ Last updated: 2026-11-12 (version 1.12.0).
 ## 1. What TraceBug is
 
 A local-first tool that turns front-end problems into evidence an AI coding
-agent can fix from. No account, no backend, no telemetry, nothing uploaded.
+agent can fix from. No backend for your data, no telemetry, nothing uploaded. No account for capture; in the
+extension, Site Audit asks for a free account (email + code) after 3 audits (ADR 009) — results are never sent.
 MIT licence.
 
 Three surfaces, one code base:
@@ -75,7 +76,7 @@ fair, under 50 poor. Not a WCAG conformance claim. Code: `src/audit/score.ts`.
 **Panel:** docked right/left or dragged free by its header (remembered);
 findings grouped by rule with WCAG criterion, Found vs Required, fix, and each
 element with **Locate** and **Copy selector**; **Needs a person to check**
-(axe "incomplete", not scored); **Copy for AI** (ticked findings → prompt);
+(axe "incomplete", not scored); **Fix with AI** (downloads the audit + copies a one-line prompt for an MCP agent); **Copy for AI** (ticked findings → prompt, no MCP needed);
 **Export report** (`.html`); re-run shows what changed.
 
 **Trust rules the audit follows** (keep them in any change):
@@ -124,7 +125,9 @@ finds exports in the project, Downloads and Desktop.
 | `get_finding` | One finding: evidence, WCAG, fix, codebase search hints |
 | `compare_audits` | Before/after: fixed, still present, new, regressed |
 
-Prompt: `debug_bug_report` (`/tracebug:debug_bug_report` in Claude Code).
+Prompts: `debug_bug_report` and `fix_site_audit` (`/tracebug:<name>` in Claude Code). The audit panel's
+**Fix with AI** downloads the audit and copies "Fix the latest TraceBug site audit."; the agent then follows
+`fix_site_audit`: evidence-based grouping, approval before edits, and verification only from a fresh audit.
 Details: [mcp.md](mcp.md).
 
 ## 6. SDK quick reference

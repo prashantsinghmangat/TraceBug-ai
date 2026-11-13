@@ -85,6 +85,8 @@ const SHARED_FILES = [
   "welcome.html",
   "confirm-send.js",
   "confirm-send.html",
+  "signin.js",
+  "signin.html",
   "player.js",
   "player.html",
   "styles.css",

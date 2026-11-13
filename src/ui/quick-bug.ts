@@ -7,6 +7,7 @@ import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
 import { maybeShowMilestoneAsk } from "./milestone-ask";
+import { signalSuccess } from "../success-signal";
 import { recordExport, showReviewAsk } from "./review-ask";
 import { issueSignatureEnabled, setIssueSignature } from "../integrations/issue-signature";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
@@ -1202,6 +1203,7 @@ function _openModal(
       // The ticket is persisted \u2014 the draft's job is done. Clearing it here is
       // what stops a saved bug's text from silently pre-filling the next one.
       _clearDraft();
+      signalSuccess("ticket");
       setInnerHTML(saveTicketBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`);
       saveTicketBtn.classList.add("tb-qb-btn-saved");
       saveTicketBtn.disabled = true;
