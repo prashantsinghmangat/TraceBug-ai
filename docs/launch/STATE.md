@@ -29,8 +29,16 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   registry `isLatest`, AMO 1.12.0 public, CWS approved (per owner; the CWS page can't be fetched by script), `main` =
   `develop` = merge `10c7595`, tag `v1.12.0` pushed, tracebug.dev serves the new SDK (hash matches) with the audit pages
   and `llms.txt`, `npx -y tracebug@1.12.0 mcp --help` works in an empty folder. 1.11.6 skipped the stores.
-- **On `develop`, not on `main` / not deployed** (checked 2026-11-13: tracebug.dev `/email`, `/api/confirm`, the new blog
-  post all 404). Committed: Fix with AI + MCP `fix_site_audit` (`c7a37fa`); popup **email ask** after the 2nd
+- **Website is deployed from `main` = merge `79849c5`** (checked live 2026-11-13 late: `/email`, `/api/confirm`,
+  `/api/unsubscribe`, `/api/ext/otp/*`, `/api/keepalive` all served). The **extension** side of the sign-in gate is in
+  no store release yet. **Security audit 2026-11-13:** `docs/audit/website-complete-security-ux-audit.md`. The P0 fixes
+  are uncommitted on `develop` and not deployed:
+  - the cloud routes 404 via `lib/flags.ts` + `middleware.ts`;
+  - the `/auth/callback` open redirect is fixed;
+  - the OTP routes accept extension origins only, and a DB send log (migration **0009**, apply it) caps 3 per hour
+    per address and `OTP_DAILY_CAP`/day, default 50 (fails open).
+
+  P1 items there block the store release of the gate. Committed: Fix with AI + MCP `fix_site_audit` (`c7a37fa`); popup **email ask** after the 2nd
   saved ticket/export (audits counted, not triggering — the gate covers them) + sending via Resend free — double opt-in, `/api/confirm`, `/api/unsubscribe` (+ RFC 8058),
   `/email`, `website/scripts/email.mjs` (`01df764`, `9a8674a`; `e2e/ext-email-ask.e2e.mjs` 21/21, not in `check.mjs`).
   Owner setup done and tested locally end to end (Resend domain + DNS, migrations 0007/0008, Netlify env, Auth SMTP).
@@ -57,7 +65,8 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 4. Pricing (B4) decided 2026-11-13: `monetization-plan.md`; sign-in gate decided (ADR 009) and built.
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
 7. Sign-in gate go-live (owner): Supabase templates (code + link) and OTP length 6 **done**, local sign-in tested
-   2026-11-13; still: Auth email limit ~30/hour, deploy website first, live sign-in + delete test, run keep-alive once,
+   2026-11-13; still: apply migration 0009 (optionally set Netlify `OTP_DAILY_CAP`), remove `ANTHROPIC_API_KEY`
+   from Netlify, drop `{{ .ConfirmationURL }}` from the code template, Auth email limit ~30/hour, deploy website first, live sign-in + delete test, run keep-alive once,
    store/website copy at release — `sign-in-gate-plan.md` *Owner setup before release*.
 6. Email go-live (owner): merge `develop` → `main`; live test on tracebug.dev (sign up, confirm, unsubscribe);
    send the backlog (`website`: `node --env-file=.env.local scripts/email.mjs confirm`, then `--send`); CWS data-use
