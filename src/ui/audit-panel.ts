@@ -8,7 +8,8 @@
 //     WCAG line that only ever states failures (automated checks can't prove a
 //     pass), counts by severity, rules passed, when it was scanned
 //   - per-category scores (All checks) and what each check can't tell you
-//   - actions: Re-run, Export report, Copy for AI (selected findings)
+//   - actions: Re-run, Export report, Copy for AI (selected findings), Fix with AI
+//     (whole audit to Downloads + a one-line prompt for an MCP-connected agent)
 //   - findings grouped by rule: "Low contrast · 3 elements" is one row with
 //     its elements underneath, each with Locate and Copy selector — the
 //     grouping is display only; the run keeps one finding per element so
@@ -28,6 +29,8 @@ import { SCORE_EXPLANATION, scoreBand, type ScoreBand } from "../audit/score";
 import { wcagLabel } from "../audit/wcag";
 import { buildAuditFixPrompt, SEVERITY_NAME } from "../audit/prompt";
 import { isExtensionMode } from "../ext-transport";
+import { FIX_AUDIT_PROMPT } from "../exporters/agent-workflow";
+import { showToast, showActionToast } from "./toast";
 
 const PANEL_ID = "tracebug-audit-panel";
 const STYLE_ID = "tracebug-audit-panel-styles";
@@ -307,6 +310,62 @@ async function copyForAi(btn: HTMLButtonElement | null): Promise<void> {
   setTimeout(() => { if (label) label.textContent = was; }, 2200);
 }
 
+/** Where "Set up the agent" points. The panel can't tell whether an agent has
+ *  the MCP server (they are separate processes, and the page can't see either),
+ *  so the link is offered every time, worded as a condition, never as a status. */
+const MCP_SETUP_URL = "https://tracebug.dev/docs/mcp";
+
+/** Fix with AI: copy the one-line prompt, then download the whole audit for the
+ *  MCP server (it searches Downloads, newest first). Copy goes first: the
+ *  clipboard needs the click's user activation, which the export's awaits can
+ *  outlast. Each step reports its own result; nothing claims an agent is connected. */
+async function fixWithAi(btn: HTMLButtonElement | null): Promise<void> {
+  const run = getLastAuditRun();
+  if (!run || !btn) return;
+  const label = btn.querySelector(".tb-au-btn-l");
+  const was = label?.textContent || "Fix with AI";
+  const set = (t: string) => { if (label) label.textContent = t; };
+  btn.disabled = true;
+  set("Saving…");
+  const copied = await copyText(FIX_AUDIT_PROMPT);
+  let filename = "";
+  try {
+    const { exportAuditReport } = await import("../audit/export");
+    filename = (await exportAuditReport(run)).filename;
+  } catch (err) {
+    console.warn("[TraceBug] Audit export for Fix with AI failed:", err);
+  }
+  set(was);
+  btn.disabled = false;
+  const root = _root || document.getElementById("tracebug-root");
+  if (!root) return;
+  if (!filename) {
+    showToast("Couldn't save the audit. Use Copy for AI instead.", root);
+    return;
+  }
+  const msg = copied
+    ? `Audit downloaded as ${filename}. Prompt copied: paste it into your coding agent.`
+    : `Audit downloaded as ${filename}. Couldn't copy the prompt: type "${FIX_AUDIT_PROMPT}" in your coding agent.`;
+  showActionToast(msg, "Agent not set up? →", () => { window.open(MCP_SETUP_URL, "_blank", "noopener"); }, root, { autoDismissMs: null });
+  keepToastBesidePanel(root);
+}
+
+/** Toasts centre on the window, which puts them over a docked panel's footer.
+ *  When the panel is docked, centre the toast in the free space beside it. */
+function keepToastBesidePanel(root: HTMLElement): void {
+  const toast = root.querySelector<HTMLElement>(".bt-toast");
+  const panel = document.getElementById(PANEL_ID);
+  if (!toast || !panel || !_open) return;
+  const side = panel.dataset.dock;
+  if (side !== "left" && side !== "right") return;
+  const r = panel.getBoundingClientRect();
+  const from = side === "right" ? 0 : r.right;
+  const to = side === "right" ? r.left : window.innerWidth;
+  if (to - from < 280) return; // too narrow beside the panel: leave it centred
+  toast.style.setProperty("left", `${Math.round((from + to) / 2)}px`, "important");
+  toast.style.setProperty("max-width", `${Math.min(560, Math.round(to - from - 32))}px`, "important");
+}
+
 function onKey(e: KeyboardEvent): void {
   if (e.key !== "Escape" || !_open) return;
   const panel = document.getElementById(PANEL_ID);
@@ -342,7 +401,8 @@ function mountShell(root: HTMLElement): void {
       <div class="tb-au-body" data-tb-au="body"></div>
       <div class="tb-au-foot-bar">
         <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read with the MCP tools">${ICON.export}<span class="tb-au-btn-l">Export report</span></button>
-        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent">${ICON.sparkle}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent (no MCP needed)">${ICON.copy}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="fix-ai" disabled title="Save the whole audit to your downloads and copy one line for your coding agent, which reads it with the TraceBug MCP server">${ICON.sparkle}<span class="tb-au-btn-l">Fix with AI</span></button>
       </div>
     </div>`);
   root.appendChild(panel);
@@ -369,6 +429,7 @@ function mountShell(root: HTMLElement): void {
     else if (action === "rerun") void showAuditPanel(root);
     else if (action === "export") void exportCurrent(actionEl as HTMLButtonElement);
     else if (action === "copy-ai") void copyForAi(actionEl as HTMLButtonElement);
+    else if (action === "fix-ai") void fixWithAi(actionEl as HTMLButtonElement);
     else if (action === "scan") void showAuditPanel(root, actionEl?.dataset.scan);
     else if (action === "reveal") void revealAndRerun(root);
     else if (action === "sev" && run) { _sev = (actionEl?.dataset.sev as typeof _sev) || "all"; render(run); }
@@ -453,8 +514,8 @@ function setBusy(busy: boolean): void {
   const panel = document.getElementById(PANEL_ID);
   if (!panel) return;
   const hasRun = !!getLastAuditRun();
-  panel.querySelectorAll<HTMLButtonElement>('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"]').forEach((b) => {
-    b.disabled = busy || ((b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai") && !hasRun);
+  panel.querySelectorAll<HTMLButtonElement>('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"], [data-tb-au="fix-ai"]').forEach((b) => {
+    b.disabled = busy || ((b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai" || b.dataset.tbAu === "fix-ai") && !hasRun);
   });
   panel.setAttribute("aria-busy", String(busy));
 }

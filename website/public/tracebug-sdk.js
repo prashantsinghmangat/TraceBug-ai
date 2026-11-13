@@ -26327,7 +26327,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
   function numberedSteps(steps) {
     return steps.map((s2, i2) => `${i2 + 1}. ${s2}`).join("\n");
   }
-  var ROOT_CAUSE_STEP, CHAT_WORKFLOW_STEPS, CLAUDE_MCP_ADD;
+  var ROOT_CAUSE_STEP, CHAT_WORKFLOW_STEPS, FIX_AUDIT_PROMPT, CLAUDE_MCP_ADD;
   var init_agent_workflow = __esm({
     "src/exporters/agent-workflow.ts"() {
       "use strict";
@@ -26340,6 +26340,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         "If you can run tests, run it: it should fail before the fix and pass after it.",
         "If you can edit files, ask for approval before changing anything."
       ];
+      FIX_AUDIT_PROMPT = "Fix the latest TraceBug site audit.";
       CLAUDE_MCP_ADD = "claude mcp add -s user tracebug -- npx -y tracebug mcp";
     }
   });
@@ -71283,6 +71284,51 @@ Response: ${match.response.slice(0, 160)}` : "";
       if (label) label.textContent = was;
     }, 2200);
   }
+  async function fixWithAi(btn) {
+    const run = getLastAuditRun();
+    if (!run || !btn) return;
+    const label = btn.querySelector(".tb-au-btn-l");
+    const was = (label == null ? void 0 : label.textContent) || "Fix with AI";
+    const set = (t2) => {
+      if (label) label.textContent = t2;
+    };
+    btn.disabled = true;
+    set("Saving\u2026");
+    const copied = await copyText(FIX_AUDIT_PROMPT);
+    let filename = "";
+    try {
+      const { exportAuditReport: exportAuditReport2 } = await Promise.resolve().then(() => (init_export(), export_exports));
+      filename = (await exportAuditReport2(run)).filename;
+    } catch (err) {
+      console.warn("[TraceBug] Audit export for Fix with AI failed:", err);
+    }
+    set(was);
+    btn.disabled = false;
+    const root2 = _root2 || document.getElementById("tracebug-root");
+    if (!root2) return;
+    if (!filename) {
+      showToast("Couldn't save the audit. Use Copy for AI instead.", root2);
+      return;
+    }
+    const msg = copied ? `Audit downloaded as ${filename}. Prompt copied: paste it into your coding agent.` : `Audit downloaded as ${filename}. Couldn't copy the prompt: type "${FIX_AUDIT_PROMPT}" in your coding agent.`;
+    showActionToast(msg, "Agent not set up? \u2192", () => {
+      window.open(MCP_SETUP_URL, "_blank", "noopener");
+    }, root2, { autoDismissMs: null });
+    keepToastBesidePanel(root2);
+  }
+  function keepToastBesidePanel(root2) {
+    const toast = root2.querySelector(".bt-toast");
+    const panel = document.getElementById(PANEL_ID2);
+    if (!toast || !panel || !_open) return;
+    const side = panel.dataset.dock;
+    if (side !== "left" && side !== "right") return;
+    const r2 = panel.getBoundingClientRect();
+    const from = side === "right" ? 0 : r2.right;
+    const to = side === "right" ? r2.left : window.innerWidth;
+    if (to - from < 280) return;
+    toast.style.setProperty("left", `${Math.round((from + to) / 2)}px`, "important");
+    toast.style.setProperty("max-width", `${Math.min(560, Math.round(to - from - 32))}px`, "important");
+  }
   function onKey(e2) {
     if (e2.key !== "Escape" || !_open) return;
     const panel = document.getElementById(PANEL_ID2);
@@ -71316,7 +71362,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       <div class="tb-au-body" data-tb-au="body"></div>
       <div class="tb-au-foot-bar">
         <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read with the MCP tools">${ICON.export}<span class="tb-au-btn-l">Export report</span></button>
-        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent">${ICON.sparkle}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="copy-ai" disabled title="Copy the selected findings as a fix prompt for Claude Code, Cursor or any coding agent (no MCP needed)">${ICON.copy}<span class="tb-au-btn-l">Copy for AI</span></button>
+        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="fix-ai" disabled title="Save the whole audit to your downloads and copy one line for your coding agent, which reads it with the TraceBug MCP server">${ICON.sparkle}<span class="tb-au-btn-l">Fix with AI</span></button>
       </div>
     </div>`);
     root2.appendChild(panel);
@@ -71342,6 +71389,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       else if (action === "rerun") void showAuditPanel(root2);
       else if (action === "export") void exportCurrent(actionEl);
       else if (action === "copy-ai") void copyForAi(actionEl);
+      else if (action === "fix-ai") void fixWithAi(actionEl);
       else if (action === "scan") void showAuditPanel(root2, actionEl == null ? void 0 : actionEl.dataset.scan);
       else if (action === "reveal") void revealAndRerun(root2);
       else if (action === "sev" && run) {
@@ -71429,8 +71477,8 @@ Response: ${match.response.slice(0, 160)}` : "";
     const panel = document.getElementById(PANEL_ID2);
     if (!panel) return;
     const hasRun = !!getLastAuditRun();
-    panel.querySelectorAll('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"]').forEach((b) => {
-      b.disabled = busy || (b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai") && !hasRun;
+    panel.querySelectorAll('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"], [data-tb-au="copy-ai"], [data-tb-au="fix-ai"]').forEach((b) => {
+      b.disabled = busy || (b.dataset.tbAu === "export" || b.dataset.tbAu === "copy-ai" || b.dataset.tbAu === "fix-ai") && !hasRun;
     });
     panel.setAttribute("aria-busy", String(busy));
   }
@@ -72020,7 +72068,7 @@ Response: ${match.response.slice(0, 160)}` : "";
   `;
     document.head.appendChild(s2);
   }
-  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, SNAP, hex, LABEL;
+  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, SNAP, MCP_SETUP_URL, hex, LABEL;
   var init_audit_panel = __esm({
     "src/ui/audit-panel.ts"() {
       "use strict";
@@ -72032,6 +72080,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       init_wcag();
       init_prompt();
       init_ext_transport();
+      init_agent_workflow();
+      init_toast();
       PANEL_ID2 = "tracebug-audit-panel";
       STYLE_ID3 = "tracebug-audit-panel-styles";
       HIGHLIGHT_ID = "tracebug-audit-highlight";
@@ -72103,6 +72153,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       _highlightRaf = 0;
       _clock = null;
       SNAP = 24;
+      MCP_SETUP_URL = "https://tracebug.dev/docs/mcp";
       hex = /^#[0-9a-f]{3,8}$/i;
       LABEL = {
         needed: "Space needed (px)",

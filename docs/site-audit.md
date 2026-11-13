@@ -110,6 +110,8 @@ Lighthouse's simulated slow network.
   **Found vs Required** values, **how to fix it**, and every element it was
   found on with **Locate** (scrolls to it and outlines it; the panel stays
   open) and **Copy selector**.
+- **Fix with AI**: downloads the whole audit and copies a one-line prompt for
+  an agent with the TraceBug MCP server (see below).
 - **Copy for AI**: tick findings and copy a ready prompt for your coding
   agent with the evidence, selectors, fix and page HTML.
 - **Export report**: a self-contained `.html` file (opens offline, no remote
@@ -118,16 +120,30 @@ Lighthouse's simulated slow network.
 
 ## Fix it with your coding agent
 
-1. Run the audit, then **Export report**.
-2. Run `npx -y tracebug mcp` in your agent (Claude Code, Cursor, Windsurf,
-   VS Code). See [mcp.md](mcp.md).
-3. Ask it to fix the audit. It calls `get_audit` (score, checks that ran and
-   their limits, findings), then `get_finding` for each one (evidence, WCAG,
-   fix, codebase search hints).
-4. Re-run the audit on the fixed page and export again. `compare_audits`
-   tells the agent what is fixed, still present, new or regressed.
+One-time setup: add the TraceBug MCP server to your agent (Claude Code:
+`claude mcp add -s user tracebug -- npx -y tracebug mcp`; Cursor, Windsurf,
+VS Code: [mcp.md](mcp.md)).
 
-Or skip the export: tick findings and use **Copy for AI**, then paste.
+1. Run the audit, then click **Fix with AI**. It downloads the whole audit
+   (`tracebug-audit-<host>-<time>.html`) and copies one line:
+   *Fix the latest TraceBug site audit.* Keep the file in your Downloads
+   folder (or the project): that's where the MCP server looks, newest first.
+2. Paste the line into your agent, or in Claude Code run
+   `/tracebug:fix_site_audit`. The agent reads the audit (`get_audit`) and
+   each finding (`get_finding`: evidence, WCAG, fix, codebase search hints),
+   groups findings only where the evidence shows a shared cause, and proposes
+   one set of changes. **It asks before editing anything.**
+3. After the changes, reload the page and press **Re-scan**: the panel shows
+   what is fixed, still there, new or regressed. Export again (or Fix with AI)
+   and the agent compares the two runs with `compare_audits`. A fix only
+   counts as verified on a fresh audit, never because the code changed: the
+   agent can't run the audit itself.
+
+No MCP? Tick findings and use **Copy for AI**, then paste: the findings and
+their evidence go in the prompt itself.
+
+The panel can't tell whether your agent has the MCP server, so after Fix with
+AI it always offers "Agent not set up?" instead of claiming a connection.
 
 Text read from the audited page is marked untrusted in the MCP output, so
 the agent treats it as data, not instructions.
