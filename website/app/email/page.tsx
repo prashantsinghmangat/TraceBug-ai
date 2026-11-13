@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import EmailAction, { GoHome } from "./EmailAction";
+import { RESULTS } from "./messages";
 
 export const metadata: Metadata = {
   title: "TraceBug email updates",
@@ -7,25 +9,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   // The confirm/unsubscribe step URLs carry a token; never send it on as a referrer.
   referrer: "no-referrer",
-};
-
-const MESSAGES: Record<string, { title: string; body: string }> = {
-  confirmed: {
-    title: "You're confirmed",
-    body: "You'll get at most one email a month about new TraceBug features and early access. Every email has a one-click unsubscribe link.",
-  },
-  unsubscribed: {
-    title: "You're unsubscribed",
-    body: "TraceBug won't email this address again. Changed your mind? You can sign up again anytime from the extension or this site.",
-  },
-  invalid: {
-    title: "That link doesn't work",
-    body: "It may have been cut off when it was copied. Try clicking it straight from the email.",
-  },
-  error: {
-    title: "Something went wrong on our side",
-    body: "Nothing was changed. Please try the link again in a minute.",
-  },
 };
 
 // Steps that need one click: opening the link changes nothing (mail scanners open links
@@ -52,28 +35,30 @@ export default function EmailStatusPage({ searchParams }: { searchParams: { s?: 
   const s = searchParams.s ?? "";
   const token = searchParams.token ?? "";
   const step = STEPS[s] && TOKEN_RE.test(token) ? STEPS[s] : null;
-  const msg = step ? null : MESSAGES[s] ?? MESSAGES.invalid;
+  const msg = step ? null : RESULTS[s] ?? RESULTS.invalid;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-[560px] rounded-xl border border-border bg-surface p-6">
-        <h1 className="text-lg font-semibold text-text-primary mb-2">{step ? step.title : msg!.title}</h1>
-        <p className="text-sm text-text-muted leading-relaxed">{step ? step.body : msg!.body}</p>
-        {step && (
-          <form method="post" action={step.action} className="mt-5">
-            <input type="hidden" name="token" value={token} />
-            {step.page && <input type="hidden" name="from" value="page" />}
-            <button
-              type="submit"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90"
-            >
-              {step.button}
-            </button>
-          </form>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
+      <Link href="/" className="mb-5 flex items-center gap-2.5 text-text-primary">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/email/tracebug-logo.png" width={28} height={28} alt="" className="rounded-md" />
+        <span className="text-base font-bold">TraceBug</span>
+      </Link>
+      <div className="w-full max-w-[520px] rounded-xl border border-border bg-surface p-6">
+        {step ? (
+          <EmailAction {...step} token={token} />
+        ) : (
+          <>
+            <h1 className="text-lg font-semibold text-text-primary mb-2">{msg!.title}</h1>
+            <p className="text-sm text-text-muted leading-relaxed">{msg!.body}</p>
+            {s === "confirmed" && <GoHome />}
+          </>
         )}
-        <p className="mt-4 text-sm">
-          <Link href="/" className="text-primary hover:underline">tracebug.dev</Link>
-        </p>
       </div>
+      <p className="mt-5 text-xs text-text-muted">
+        <Link href="/" className="hover:underline">tracebug.dev</Link>
+        <span className="mx-2">·</span>
+        <Link href="/privacy" className="hover:underline">Privacy</Link>
+      </p>
     </main>
   );
 }

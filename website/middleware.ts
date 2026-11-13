@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PHASE2_CLOUD_LIVE, isCloudRoute } from "@/lib/flags";
 
 // Two responsibilities, both API-scoped:
 //   1. CORS — allow chrome-extension://<id>/ + moz-extension://<id>/ origins
@@ -33,6 +34,18 @@ function allowedSameSiteOrigins(): string[] {
 
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
+
+  // Parked cloud feature (lib/flags.ts): its routes don't exist until it ships.
+  if (!PHASE2_CLOUD_LIVE && isCloudRoute(path)) {
+    return path.startsWith("/api/")
+      ? new NextResponse(JSON.stringify({ error: "not_found" }), {
+          status: 404,
+          headers: { "content-type": "application/json", "cache-control": "no-store" },
+        })
+      // No such page: Next renders app/not-found.tsx with a 404.
+      : NextResponse.rewrite(new URL("/__cloud-not-live", req.url));
+  }
+
   const isApi = ALLOWED_API_PREFIXES.some((p) => path.startsWith(p));
   if (!isApi) return NextResponse.next();
 
@@ -83,5 +96,5 @@ function corsHeaders(origin: string): Record<string, string> {
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/api/:path*", "/share/:path*", "/auth/callback"],
 };

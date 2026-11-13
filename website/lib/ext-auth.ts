@@ -4,19 +4,43 @@
 // never from the audited site. Nothing about audits is sent — only the email,
 // the code, and the marketing-consent box.
 
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabase-server";
 
-export const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+// Only extension pages may call these routes from a browser. Firefox gives each
+// install a random moz-extension:// UUID, so the scheme is the check, not an ID.
+// A request with no Origin (curl, server) is let through: browsers always send
+// one on a cross-origin POST, and the DB limits in otpSendBudget cover scripts.
+const EXT_ORIGIN = /^(chrome-extension|moz-extension):\/\/[a-z0-9-]+$/i;
 
-export const json = (body: unknown, status = 200) =>
-  NextResponse.json(body, { status, headers: { ...CORS_HEADERS, "Cache-Control": "no-store" } });
+function extOrigin(req: Request): string | null {
+  const o = req.headers.get("origin");
+  return o && EXT_ORIGIN.test(o) ? o : null;
+}
 
-export const preflight = () => new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+/** False when a browser page that isn't one of ours is calling. */
+export function originAllowed(req: Request): boolean {
+  return !req.headers.get("origin") || !!extOrigin(req);
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const o = extOrigin(req);
+  return o
+    ? {
+        "Access-Control-Allow-Origin": o,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        Vary: "Origin",
+      }
+    : { Vary: "Origin" };
+}
+
+export const json = (req: Request, body: unknown, status = 200) =>
+  NextResponse.json(body, { status, headers: { ...corsHeaders(req), "Cache-Control": "no-store" } });
+
+export const preflight = (req: Request) => new NextResponse(null, { status: 204, headers: corsHeaders(req) });
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,11 +60,64 @@ export function anonClient() {
   });
 }
 
+const PER_EMAIL_PER_HOUR = 3;
+const HOUR = 60 * 60 * 1000;
+
+/**
+ * DB-backed limit on sign-in code emails (migration 0009). Records the send
+ * when allowed. "email" = this address asked too often (retryAfter seconds);
+ * "global" = the daily cap is reached (the route answers 503, the extension
+ * fails open). If the table is missing or the DB errors, allow: the in-memory
+ * IP limit and Supabase's own caps still apply, and sign-in keeps working.
+ */
+export async function otpSendBudget(
+  email: string,
+): Promise<{ ok: true } | { ok: false; reason: "email"; retryAfter: number } | { ok: false; reason: "global" }> {
+  const hash = createHash("sha256").update(email).digest("hex");
+  const now = Date.now();
+  const cap = Number(process.env.OTP_DAILY_CAP) || 50;
+  try {
+    const db = createSupabaseAdminClient();
+    const recent = await db
+      .from("otp_send_log")
+      .select("created_at")
+      .eq("email_hash", hash)
+      .gte("created_at", new Date(now - HOUR).toISOString())
+      .order("created_at", { ascending: true })
+      .limit(PER_EMAIL_PER_HOUR);
+    if (recent.error) throw recent.error;
+    if (recent.data.length >= PER_EMAIL_PER_HOUR) {
+      const oldest = Date.parse(recent.data[0].created_at);
+      return { ok: false, reason: "email", retryAfter: Math.max(1, Math.ceil((oldest + HOUR - now) / 1000)) };
+    }
+    const day = await db
+      .from("otp_send_log")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", new Date(now - 24 * HOUR).toISOString());
+    if (day.error) throw day.error;
+    if ((day.count ?? 0) >= cap) return { ok: false, reason: "global" };
+
+    const ins = await db.from("otp_send_log").insert({ email_hash: hash });
+    if (ins.error) throw ins.error;
+    // Keep the table tiny: nothing older than two days is needed.
+    await db.from("otp_send_log").delete().lt("created_at", new Date(now - 48 * HOUR).toISOString());
+  } catch (e) {
+    console.error("[ext/otp] send log unavailable, allowing", e instanceof Error ? e.message : (e as { message?: string })?.message);
+  }
+  return { ok: true };
+}
+
 // Per-IP limit, in memory, best effort (one warm instance). Supabase Auth's own
 // per-hour email limit is the real cap on codes sent.
 const hits = new Map<string, number[]>();
 export function ipLimited(req: Request, max: number, windowMs: number, bucket: string): boolean {
-  const ip = req.headers.get("x-nf-client-connection-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  // Netlify sets x-nf-client-connection-ip at its edge. Fallback: the LAST
+  // x-forwarded-for entry (appended by the proxy) — the first one is whatever
+  // the client sent, so it would let anyone pick a fresh "IP" per request.
+  const ip =
+    req.headers.get("x-nf-client-connection-ip") ??
+    req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ??
+    "unknown";
   const key = `${bucket}:${ip}`;
   const now = Date.now();
   const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);

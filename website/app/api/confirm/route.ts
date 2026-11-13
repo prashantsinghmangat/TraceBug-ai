@@ -5,7 +5,9 @@ export const dynamic = "force-dynamic";
 
 const TOKEN_RE = /^[a-f0-9]{64}$/;
 
-const go = (req: Request, qs: string) => NextResponse.redirect(new URL(`/email?${qs}`, req.url), 303);
+// Relative Location: the browser stays on the host it used (tracebug.dev). req.url on
+// Netlify is the deploy URL (…--tracebug.netlify.app), so an absolute redirect leaked it.
+const go = (_req: Request, qs: string) => new NextResponse(null, { status: 303, headers: { Location: `/email?${qs}` } });
 
 // Double opt-in link from the confirm email (lib/mailer.mjs).
 // GET never changes anything: mail security scanners open links on their own,

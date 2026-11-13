@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
-import { anonClient, configured, ipLimited, json, normEmail, preflight } from "@/lib/ext-auth";
+import { anonClient, configured, ipLimited, json, normEmail, originAllowed, preflight } from "@/lib/ext-auth";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -13,15 +13,16 @@ export const OPTIONS = preflight;
 // address was verified. Responses:
 //   200 { ok, ... } · 400 { error: "invalid_code" | "invalid_email" } · 429 rate_limited · 503 unavailable (fail open)
 export async function POST(req: Request) {
+  if (!originAllowed(req)) return json(req, { error: "origin_not_allowed" }, 403);
   let body: { email?: unknown; code?: unknown; marketing?: unknown; intent?: unknown };
-  try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
+  try { body = await req.json(); } catch { return json(req, { error: "invalid_json" }, 400); }
   const email = normEmail(body.email);
   const code = String(body.code ?? "").replace(/\s+/g, "");
   const intent = body.intent === "delete" ? "delete" : "signin";
-  if (!email) return json({ error: "invalid_email" }, 400);
-  if (!/^\d{6,10}$/.test(code)) return json({ error: "invalid_code" }, 400);
-  if (!configured()) return json({ error: "unavailable" }, 503);
-  if (ipLimited(req, 12, 15 * 60 * 1000, "otp-verify")) return json({ error: "rate_limited" }, 429);
+  if (!email) return json(req, { error: "invalid_email" }, 400);
+  if (!/^\d{6,10}$/.test(code)) return json(req, { error: "invalid_code" }, 400);
+  if (!configured()) return json(req, { error: "unavailable" }, 503);
+  if (ipLimited(req, 12, 15 * 60 * 1000, "otp-verify")) return json(req, { error: "rate_limited" }, 429);
 
   let userId: string;
   try {
@@ -29,14 +30,14 @@ export async function POST(req: Request) {
     if (error || !data.user) {
       // 4xx from Supabase = wrong or expired code; anything else = the service.
       const st = error?.status ?? 0;
-      if (st >= 400 && st < 500 && st !== 429) return json({ error: "invalid_code" }, 400);
+      if (st >= 400 && st < 500 && st !== 429) return json(req, { error: "invalid_code" }, 400);
       console.error("[ext/otp/verify]", st, error?.code, error?.message);
-      return json({ error: "unavailable" }, 503);
+      return json(req, { error: "unavailable" }, 503);
     }
     userId = data.user.id;
   } catch (e) {
     console.error("[ext/otp/verify]", e instanceof Error ? e.message : e);
-    return json({ error: "unavailable" }, 503);
+    return json(req, { error: "unavailable" }, 503);
   }
 
   const admin = createSupabaseAdminClient();
@@ -46,9 +47,9 @@ export async function POST(req: Request) {
     const { error: delRows } = await admin.from("email_signups").delete().eq("email", email);
     if (delUser || delRows) {
       console.error("[ext/otp/verify] delete", delUser?.message, delRows?.message);
-      return json({ error: "unavailable" }, 503);
+      return json(req, { error: "unavailable" }, 503);
     }
-    return json({ ok: true, deleted: true });
+    return json(req, { ok: true, deleted: true });
   }
 
   if (body.marketing === true) {
@@ -64,5 +65,5 @@ export async function POST(req: Request) {
     if (error) console.error("[ext/otp/verify] marketing row", error.message);
   }
 
-  return json({ ok: true, email, userId });
+  return json(req, { ok: true, email, userId });
 }
