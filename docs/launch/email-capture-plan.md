@@ -73,9 +73,11 @@ Marketing Free with 1,000 contacts). Brevo (300/day per its own feature page, bu
 an account approval step) is the fallback. The 100/day is shared by confirms, the monthly send and Supabase Auth.
 
 - `website/lib/mailer.mjs`: send (Resend REST), confirm email, update email with footer + RFC 8058
-  `List-Unsubscribe` headers. Shared by the routes and the script.
+  `List-Unsubscribe` headers, all in one branded HTML `layout()` (logo `public/email/tracebug-logo.png`, plain-text
+  part kept). Shared by the routes and the script. Supabase's sign-in code email uses the same look:
+  `website/supabase/email-templates/sign-in-code.html` (pasted into Supabase by hand).
 - `POST /api/notify-me`: saves the row, then sends the confirm email unless the address is already subscribed,
-  one went out <10 min ago, or 60 were sent in 24 h (`CONFIRM_DAILY_CAP`). Limits: 5 signups/address/day (DB),
+  one went out <10 min ago, or 30 were sent in 24 h (`CONFIRM_DAILY_CAP`). Limits: 5 signups/address/day (DB),
   5 requests/IP/10 min (in memory, best effort). Pre-0007/0008 fallbacks kept.
 - `GET /api/confirm?token=`, `GET|POST /api/unsubscribe?token=` → `/email?s=...` status page. Unsubscribe
   stamps every row of the address.

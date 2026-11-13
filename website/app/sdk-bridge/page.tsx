@@ -9,6 +9,7 @@
 
 import { useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { PHASE2_CLOUD_LIVE } from "@/lib/flags";
 
 // Origins the bridge will talk to. Configure via NEXT_PUBLIC_SDK_ALLOWED_ORIGINS
 // (comma-separated list of customer origins). In development we additionally
@@ -24,10 +25,6 @@ const ALLOWED_PARENT_ORIGINS: string[] = [
     ? ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
     : []),
 ];
-
-// PHASE2-CLOUD: accounts are not live — keep in sync with auth/page.tsx and
-// dashboard/page.tsx until the flag moves to a shared module.
-const PHASE2_CLOUD_LIVE = false;
 
 function isAllowedOrigin(origin: string): boolean {
   return ALLOWED_PARENT_ORIGINS.includes(origin);

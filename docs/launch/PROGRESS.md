@@ -210,3 +210,13 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   Audit card shows free audits left; welcome page optional skippable sign-in card; signin.html footer spacing + copy
   when audits remain; welcome chip "No account to capture". Files: popup.*, styles.css, signin.*, welcome.*. Verified:
   check.mjs --full green, local sign-in with Supabase templates + OTP length 6. Not covered by e2e: menu + welcome card.
+- 2026-11-13 — Live test fixes: confirm/unsubscribe redirects now relative (were leaking `…--tracebug.netlify.app`);
+  /email confirms in place then goes home (`app/email/EmailAction.tsx`); branded HTML email layout with logo
+  (`lib/mailer.mjs` `layout`, `public/email/tracebug-logo.png`) + Supabase code template
+  (`website/supabase/email-templates/sign-in-code.html`, owner pastes it); OTP "send again too soon" → 429 with
+  seconds (was 503 "couldn't reach"); signin.html buttons. Verified: gates, local fake-token flow, screenshots.
+- 2026-11-13 — Website security audit + P0 fixes (uncommitted). Report `docs/audit/website-complete-security-ux-audit.md`.
+  Cloud routes 404 behind `website/lib/flags.ts` + `middleware.ts`; `/auth/callback` open redirect fixed (same-origin
+  check); OTP routes extension-origin only + DB send log `0009_otp_send_log.sql` (3/h/address, OTP_DAILY_CAP/day, fail
+  open), last-XFF IP fallback. Verified: check.mjs, local curl (404s, 403 web origin, CORS echo), fake-PostgREST budget
+  test. Open: owner applies 0009 + deploys; P1 policy/copy items before the gate's store release.
