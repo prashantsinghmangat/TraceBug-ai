@@ -32,7 +32,9 @@ async function unsubscribe(token: string): Promise<"unsubscribed" | "invalid" | 
   return "unsubscribed";
 }
 
-const go = (req: Request, qs: string) => NextResponse.redirect(new URL(`/email?${qs}`, req.url), 303);
+// Relative Location: the browser stays on the host it used (tracebug.dev). req.url on
+// Netlify is the deploy URL (…--tracebug.netlify.app), so an absolute redirect leaked it.
+const go = (_req: Request, qs: string) => new NextResponse(null, { status: 303, headers: { Location: `/email?${qs}` } });
 
 // The link in every update email. GET never changes anything — mail security
 // scanners open links on their own — it shows /email with one "Unsubscribe"

@@ -1,0 +1,29 @@
+<!--
+  Supabase → Authentication → Email Templates. Paste this whole file as the body of BOTH
+  "Magic link or OTP" and "Confirm signup" (subject: "Your TraceBug sign-in code").
+  Same look as website/lib/mailer.mjs `layout()`. Supabase fills {{ .Token }} (the code the
+  extension asks for) and {{ .ConfirmationURL }} (website sign-in on tracebug.dev/auth).
+-->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>Your TraceBug sign-in code</title></head>
+<body style="margin:0;padding:0;background:#f4f5f7">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0">Your code: {{ .Token }}. It expires shortly and works once.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7"><tr><td align="center" style="padding:32px 16px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+      <tr><td style="padding:0 4px 18px">
+        <a href="https://tracebug.dev" style="text-decoration:none;color:#0b0d14"><img src="https://tracebug.dev/email/tracebug-logo.png" width="32" height="32" alt="" style="vertical-align:middle;border:0;border-radius:8px"><span style="vertical-align:middle;margin-left:10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:17px;font-weight:700;color:#0b0d14">TraceBug</span></a>
+      </td></tr>
+      <tr><td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:32px 32px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+        <h1 style="margin:0 0 16px;font-size:21px;line-height:1.3;color:#0b0d14">Your sign-in code</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#2b2f3a">Enter this code in TraceBug to sign in:</p>
+        <div style="margin:0 0 20px;padding:16px;background:#f4f5f7;border-radius:8px;text-align:center;font-family:'SFMono-Regular',Consolas,Menlo,monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#0b0d14">{{ .Token }}</div>
+        <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#2b2f3a">It expires shortly and can only be used once. Didn't ask for it? Ignore this email; nobody can sign in without the code.</p>
+        <p style="margin:0;font-size:12.5px;line-height:1.5;color:#6b7280">Signing in on tracebug.dev instead? <a href="{{ .ConfirmationURL }}" style="color:#6b7280">Use this link</a>.</p>
+      </td></tr>
+      <tr><td style="padding:18px 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280">
+        Site Audit asks for a free account after 3 audits. TraceBug never stores your audits, pages or URLs.<br>
+        <a href="https://tracebug.dev" style="color:#6b7280">TraceBug</a> · Local-first bug reports and site audits for developers.
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>
