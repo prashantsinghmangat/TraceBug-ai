@@ -35,7 +35,7 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   are uncommitted on `develop` and not deployed:
   - the cloud routes 404 via `lib/flags.ts` + `middleware.ts`;
   - the `/auth/callback` open redirect is fixed;
-  - the OTP routes accept extension origins only, and a DB send log (migration **0009**, apply it) caps 3 per hour
+  - the OTP routes accept extension origins only, and a DB send log (migration **0009**, applied to prod 2026-11-13) caps 3 per hour
     per address and `OTP_DAILY_CAP`/day, default 50 (fails open).
 
   P1 items there block the store release of the gate. Committed: Fix with AI + MCP `fix_site_audit` (`c7a37fa`); popup **email ask** after the 2nd
@@ -65,7 +65,7 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 4. Pricing (B4) decided 2026-11-13: `monetization-plan.md`; sign-in gate decided (ADR 009) and built.
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
 7. Sign-in gate go-live (owner): Supabase templates (code + link) and OTP length 6 **done**, local sign-in tested
-   2026-11-13; still: apply migration 0009 (optionally set Netlify `OTP_DAILY_CAP`), remove `ANTHROPIC_API_KEY`
+   2026-11-13; still: (optionally set Netlify `OTP_DAILY_CAP`), remove `ANTHROPIC_API_KEY`
    from Netlify, drop `{{ .ConfirmationURL }}` from the code template, Auth email limit ~30/hour, deploy website first, live sign-in + delete test, run keep-alive once,
    store/website copy at release — `sign-in-gate-plan.md` *Owner setup before release*.
 6. Email go-live (owner): merge `develop` → `main`; live test on tracebug.dev (sign up, confirm, unsubscribe);
