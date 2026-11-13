@@ -21,6 +21,7 @@ import {
   PROMPT_DEFINITIONS,
   buildInvestigationGuide,
   buildDebugPrompt,
+  buildFixAuditPrompt,
   knownReportDirs,
 } from '../cli/mcp-server';
 
@@ -358,6 +359,47 @@ describe('MCP protocol (handleMessage)', () => {
   it('debug prompt falls back to list_bug_reports when no file is given', () => {
     expect(buildDebugPrompt()).toContain('list_bug_reports');
     expect(buildDebugPrompt('  ')).toContain('list_bug_reports');
+  });
+
+  it('advertises and serves the fix_site_audit prompt next to debug_bug_report', () => {
+    const list = handleMessage(tmpDir, { jsonrpc: '2.0', id: 10, method: 'prompts/list' }) as Record<string, any>;
+    expect(list.result.prompts.map((p: { name: string }) => p.name)).toEqual(['debug_bug_report', 'fix_site_audit']);
+
+    const get = handleMessage(tmpDir, {
+      jsonrpc: '2.0', id: 11, method: 'prompts/get', params: { name: 'fix_site_audit' },
+    }) as Record<string, any>;
+    const text: string = get.result.messages[0].content.text;
+    expect(get.result.description).toMatch(/Site Audit/);
+    // Finds the newest AUDIT, not just the newest report, using only existing tools.
+    expect(text).toContain('list_bug_reports');
+    expect(text).toContain('kind "audit"');
+    for (const tool of ['get_audit', 'get_finding', 'compare_audits']) expect(text).toContain(tool);
+    // Grouping only on evidence; no guessed ownership; shared causes fixed once.
+    expect(text).toMatch(/only when the evidence shows/);
+    expect(text).toMatch(/Do not guess which component or file/);
+    expect(text).toMatch(/Fix a shared cause once/);
+    // Approval before edits, approved changes only, tests run.
+    expect(text).toMatch(/Ask for approval before editing any files/);
+    expect(text).toMatch(/make only the approved changes/);
+    expect(text).toMatch(/Run the project's relevant tests/);
+    // Verification is a fresh browser audit, never the agent's say-so.
+    expect(text).toMatch(/press Re-scan/);
+    expect(text).toMatch(/Do not call any finding fixed yet/);
+    expect(text).toMatch(/fixed, still present, new and regressed/);
+    expect(text).toMatch(/You cannot re-run it/);
+    // Skipped checks and needs-review items are never passes or failures.
+    expect(text).toMatch(/did not run was not checked: never treat it as passing/);
+    expect(text).toMatch(/needsReview/);
+
+    const named = handleMessage(tmpDir, {
+      jsonrpc: '2.0', id: 12, method: 'prompts/get', params: { name: 'fix_site_audit', arguments: { file: 'tracebug-audit-x.html' } },
+    }) as Record<string, any>;
+    expect(named.result.messages[0].content.text).toContain('get_audit("tracebug-audit-x.html")');
+  });
+
+  it('fix_site_audit falls back to the newest audit when the file is blank', () => {
+    expect(buildFixAuditPrompt()).toContain('newest entry with kind "audit"');
+    expect(buildFixAuditPrompt('  ')).toContain('newest entry with kind "audit"');
   });
 });
 

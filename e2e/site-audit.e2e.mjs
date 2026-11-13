@@ -135,7 +135,7 @@ const short = (v) => JSON.stringify(v)?.slice(0, 300);
 
 const browser = await chromium.launch({ headless: !process.argv.includes("--headful"), args: ["--host-resolver-rules=MAP shop.example 127.0.0.1"] });
 try {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ["clipboard-read", "clipboard-write"] });
   const tab = await ctx.newPage();
 
   const audit = async (v) => {
@@ -329,6 +329,28 @@ try {
     !!cc2 && cc2.elements.some((e) => /over-gradient/.test(e.selector || "")) && !rvReview.findings.some((f) => /over-gradient/.test(f.selector || "")), JSON.stringify(rvReview.review)?.slice(0, 300));
   const reviewTxt = await tab.locator("#tracebug-audit-panel .tb-au-review").evaluate((el) => el.textContent || "");
   check("the panel shows the needs-review section, marked not scored", /Needs a person to check/.test(reviewTxt) && /not failures/.test(reviewTxt), reviewTxt.slice(0, 160));
+
+  // Fix with AI: one click downloads the whole audit and copies the one-line prompt; Copy for AI stays as the no-MCP path.
+  // shop.example is not a secure context, so the panel copies with its execCommand fallback there;
+  // read (and clear) the system clipboard from a secure origin (127.0.0.1) instead.
+  const clipPage = await ctx.newPage();
+  await clipPage.goto(`http://127.0.0.1:${PORT}/robots.txt`);
+  await clipPage.evaluate(() => navigator.clipboard.writeText(""));
+  const [fixDl] = await Promise.all([
+    tab.waitForEvent("download", { timeout: 20000 }),
+    tab.click('#tracebug-audit-panel [data-tb-au="fix-ai"]'),
+  ]);
+  check("fix with AI: downloads the audit export", /^tracebug-audit-shop\.example-.*\.html$/.test(fixDl.suggestedFilename()), fixDl.suggestedFilename());
+  await tab.waitForSelector("#tracebug-root .bt-toast", { timeout: 10000 });
+  const fixToast = await tab.locator("#tracebug-root .bt-toast").innerText();
+  const clip = await clipPage.evaluate(() => navigator.clipboard.readText());
+  await clipPage.close();
+  check("fix with AI: copies the one-line prompt", clip === "Fix the latest TraceBug site audit.", JSON.stringify(clip));
+  check("fix with AI: says what happened, names the file, and offers setup without claiming a connection",
+    fixToast.includes(fixDl.suggestedFilename()) && /Prompt copied/.test(fixToast) && /Agent not set up\?/.test(fixToast) && !/connected/i.test(fixToast), fixToast.slice(0, 200));
+  check("fix with AI sits beside Export report and Copy for AI (one each)",
+    await tab.evaluate(() => ["export", "copy-ai", "fix-ai"].every((a) => document.querySelectorAll(`#tracebug-audit-panel [data-tb-au="${a}"]`).length === 1)));
+  await tab.evaluate(() => document.querySelector("#tracebug-root .bt-toast [data-tb-action=dismiss]")?.click());
 
   // ── Phone width: checked in a hidden 390px frame, only what the current width doesn't already show ──
   await tab.goto(`${ORIGIN}/phone`, { waitUntil: "load" });

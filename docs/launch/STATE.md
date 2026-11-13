@@ -35,6 +35,9 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   registry `isLatest`, AMO 1.12.0 public, CWS approved (per owner; the CWS page can't be fetched by script), `main` =
   `develop` = merge `10c7595`, tag `v1.12.0` pushed, tracebug.dev serves the new SDK (hash matches) with the audit pages
   and `llms.txt`, `npx -y tracebug@1.12.0 mcp --help` works in an empty folder. 1.11.6 skipped the stores.
+- **Unreleased on `develop` (uncommitted):** audit panel **Fix with AI** (downloads the audit + copies "Fix the latest
+  TraceBug site audit."; can't detect MCP, so it always offers "Agent not set up?"), MCP prompt `fix_site_audit`
+  (steps in `src/exporters/agent-workflow.ts` `auditFixWorkflowSteps`), METRICS.md trust metrics (no data yet).
   Follow-ups: drop the Chrome "New in 1.12.0" paragraph in a few weeks; registry description still says "bug reports"
   only (`server.json`, next version); blog/announce posts (RELEASING §8).
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.

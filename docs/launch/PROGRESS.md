@@ -176,3 +176,7 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - 2026-11-12: decided 1.11.6 skips the stores; 1.11.6 highlights added to the Chrome New-in and AMO release notes; release sheet regenerated.
 - 2026-11-13: 1.12.0 live on npm + MCP registry; submitted to CWS and AMO. main-merge safety check passed (12 files, all on develop). Sheet marks the check as Git Bash only. Next: §5 after CWS approval.
 - 2026-11-13: 1.12.0 live everywhere — verified npm 1.12.0 (both), registry isLatest, AMO 1.12.0 public, main=develop=10c7595, tag v1.12.0 on origin, tracebug.dev SDK hash matches + /docs#audit, home audit tab, llms.txt live, MCP first run OK. CWS approval per owner (not scriptable).
+
+## 2026-11-13 — Audit-to-fix hand-off (Unreleased)
+- audit-panel.ts: Fix with AI (copy prompt first — clipboard needs the click's activation — then export; honest toast, beside the docked panel); Copy for AI unchanged but secondary. agent-workflow.ts: FIX_AUDIT_PROMPT + auditFixWorkflowSteps. mcp-server.ts: fix_site_audit prompt (prompts/get by name). METRICS.md: finding agreement + verified fix rate (definitions only).
+- Docs: site-audit.md, mcp.md, AGENT-BRIEF, CHANGELOG [Unreleased], website docs step. Tests: mcp-server prompt tests, e2e Fix with AI (download, clipboard via 127.0.0.1, toast). check.mjs --full green (1228/81, 80/80, 35/35).

@@ -2,6 +2,13 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Fix with AI in the audit panel.** One click downloads the whole audit and copies one line, "Fix the latest TraceBug site audit.", for a coding agent that has the TraceBug MCP server. The message names the file and offers setup ("Agent not set up?") without claiming the agent is connected, which the page can't know; if the copy or the download fails, it says so. Copy for AI stays for agents without MCP.
+- **`fix_site_audit` MCP prompt** (`/tracebug:fix_site_audit` in Claude Code), beside `debug_bug_report`: read every finding with its evidence, group findings only where the evidence shows a shared cause, fix a shared cause once, ask before editing, run the tests, then verify from a fresh browser audit (Re-scan + `compare_audits`), never from the edit itself.
+
 ## [1.12.0] - 2026-11-12
 
 > Site Audit (plan: `docs/audit-quality/implementation-plan.md`): check the page you are on, re-run to see what changed, and hand the audit to a coding agent.

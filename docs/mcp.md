@@ -154,7 +154,10 @@ Diagnosis tools tell the agent *what broke*; the fix-loop tools close the rest:
 
 Every tool's `file` argument is forgiving: pass a path, a bare filename (found anywhere under the scan dir), or a case-insensitive fragment of the filename or report title — `get_bug_report("vendor update")` works. Unresolvable names error with the list of available reports.
 
-The server also exposes one MCP **prompt**, `debug_bug_report` (optional `file` argument) — the same hand-off prompt above, invokable as `/tracebug:debug_bug_report` in Claude Code or from any client's prompt picker.
+The server also exposes two MCP **prompts**, each with an optional `file` argument, invokable in Claude Code as `/tracebug:<name>` or from any client's prompt picker:
+
+- `debug_bug_report` — the same hand-off prompt above, for a bug report.
+- `fix_site_audit` — for a Site Audit (what the audit panel's **Fix with AI** points at): read the audit and every finding, group findings only where the evidence shows a shared cause (no guessing which component owns an element), fix a shared cause once, explain the changes and **ask for approval before editing**, run the relevant tests, then ask you to press **Re-scan** in the browser and compare the runs with `compare_audits`. The server never launches a browser, so a fix is only reported as verified from a fresh audit.
 
 ## Reports from CI too
 
