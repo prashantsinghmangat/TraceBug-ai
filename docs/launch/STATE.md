@@ -1,17 +1,11 @@
 # Launch state — read this, not the archives
 
-Current facts only, verified against code and git. Last updated **2026-11-12** (audit score + docked panel, 1.12.0 prepared). **Keep this file under
+Current facts only, verified against code and git. Last updated **2026-11-13** (1.12.0 live; email ask + sending built, unreleased). **Keep this file under
 ~80 lines: rewrite it, never append** — history goes in `PROGRESS.md` (append-only, never read whole).
 Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 
 ## Where things stand
 
-- **1.11.6 is npm-only** (`tracebug-sdk`, `tracebug`, MCP Registry, 2026-11-12). It will not go to the stores:
-  1.12.0 carries it there. `docs/release-sheets/1.11.6.md` is obsolete. Contents: CHANGELOG `[1.11.6]`
-  (evidence integrity, coral look, one setup command, theme tokens fixed, video + audio kept in exports).
-- **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y fixes, two SEO posts are live. Waiting on the
-  release merge: 1.11.6 SDK + setup pages, `try.html` recolour, `llms.txt`, the fixes our own audit found (local
-  audit 100/100), and the Site Audit docs/home tab/features cell.
 - **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1226/81, ext:lint 0/22 (baseline 22),
   84/84 report, 76/76 audit, 35/35 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
@@ -38,6 +32,15 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 - **Unreleased on `develop` (uncommitted):** audit panel **Fix with AI** (downloads the audit + copies "Fix the latest
   TraceBug site audit."; can't detect MCP, so it always offers "Agent not set up?"), MCP prompt `fix_site_audit`
   (steps in `src/exporters/agent-workflow.ts` `auditFixWorkflowSteps`), METRICS.md trust metrics (no data yet).
+  Also uncommitted: **optional email ask** in the popup after the 2nd audit/ticket/export (`email-capture-plan.md`;
+  `e2e/ext-email-ask.e2e.mjs` 20/20, not in `check.mjs`), opt-in usage counts, notify-me sources + migration 0007
+  (not applied), privacy page updated. **Email sending built** (Resend free, plain fetch): double opt-in on
+  notify-me + rate limits, `/api/confirm`, `/api/unsubscribe` (+ RFC 8058), `/email` status page, migration 0008
+  (not applied), monthly/backlog script `website/scripts/email.mjs` — details + owner setup in
+  `email-capture-plan.md` *Sending*. All signup surfaces now say "at most one email a month" and "check your inbox".
+  **Before release:** owner sets up Resend + DNS + env, applies 0007/0008, tests a signup end to end;
+  CWS data-use answers (STORE-LISTINGS). 1.12.0 blog post in `website/lib/blog.ts` (no cover yet) + kit
+  `docs-internal/marketing/posts-1.12.0.md`.
   Follow-ups: drop the Chrome "New in 1.12.0" paragraph in a few weeks; registry description still says "bug reports"
   only (`server.json`, next version); blog/announce posts (RELEASING §8).
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
@@ -47,8 +50,12 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 1. Announce 1.12.0 (RELEASING §8: blog post, posts, dev.to); confirm the GitHub release for `v1.12.0` exists.
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
-4. Pricing rule vs. paid pilots (audit plan B4): decide before the sprint's paid-pilot step.
+4. Pricing (B4) decided 2026-11-13: `monetization-plan.md` (approved; no licensing/Pro code until a Founder
+   pre-sale validates one feature). Email ask + sending: `email-capture-plan.md` (built; owner setup pending, Open #6).
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
+6. Email setup (owner): Resend account + tracebug.dev DNS (SPF/DKIM/MX on `send`, DMARC), Netlify env
+   (`RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`), migrations 0007 + 0008, Supabase Auth custom SMTP.
+   Free Supabase pauses after 7 idle days: signups and unsubscribe links then fail until restored.
 
 ## Gotchas that are still true
 

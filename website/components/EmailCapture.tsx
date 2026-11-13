@@ -41,7 +41,7 @@ export default function EmailCapture({
   if (state === "done") {
     return (
       <div className="rounded-xl border border-success/30 bg-success/[0.06] px-5 py-4 text-sm text-text-primary">
-        ✓ You&apos;re on the list. One email when it ships — that&apos;s the whole deal.
+        ✓ Almost done: check your inbox for a link to confirm.
       </div>
     );
   }
@@ -69,7 +69,7 @@ export default function EmailCapture({
         </button>
       </div>
       <p className="mt-2.5 text-[12px] text-text-subtle">
-        No newsletter, no spam — only launch-sized updates. Unsubscribe anytime.
+        At most one email a month. We&apos;ll send a link to confirm first; unsubscribe in one click.
         {state === "error" && (
           <span className="text-error"> Something went wrong — try again?</span>
         )}

@@ -31,6 +31,7 @@ import { buildAuditFixPrompt, SEVERITY_NAME } from "../audit/prompt";
 import { isExtensionMode } from "../ext-transport";
 import { FIX_AUDIT_PROMPT } from "../exporters/agent-workflow";
 import { showToast, showActionToast } from "./toast";
+import { signalSuccess } from "../success-signal";
 
 const PANEL_ID = "tracebug-audit-panel";
 const STYLE_ID = "tracebug-audit-panel-styles";
@@ -224,6 +225,7 @@ export async function showAuditPanel(root: HTMLElement, scan?: AuditScan | strin
   _sev = "all";
   _cat = "all";
   render(run);
+  signalSuccess("audit");
   return run;
 }
 

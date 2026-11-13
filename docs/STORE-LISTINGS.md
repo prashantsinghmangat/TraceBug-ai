@@ -169,6 +169,18 @@ user-supplied API tokens. Leaving out a category a reviewer thinks applies can c
   Microphone audio stays inside the local video file and is never transmitted by TraceBug.
 - ✅ All three certifications.
 
+**Email ask (next release after 1.12.0 — update the data-use answers BEFORE submitting it):** the popup may
+offer an optional email signup after the 2nd audit/saved ticket/export. It sends the address the user types to
+tracebug.dev and, only if they tick a box, three counts (audits, saved tickets, exports). CWS: tick
+**Personally identifiable information** (email); purpose "product update emails, user
+opted in"; not sold, not used for credit. AMO: the listing's privacy policy link covers it (updated 2026-11-13).
+What happens after it is sent (website side, not the extension): one confirm email (double opt-in), then at
+most one update a month with a one-click unsubscribe; delivered by Resend, named on the privacy page. The
+extension itself still talks only to tracebug.dev, so no new host or permission to declare. Don't release
+the popup ask until `/api/confirm` and `/api/unsubscribe` are live and a test signup went through end to end.
+The SDK's 5th-ticket card already sent a typed email before this, so the old "leave PII unticked" answer was
+arguably wrong already.
+
 **Disclose if they change** (found in a code review, 2026-10-26):
 - "Open in Claude" / "Open in ChatGPT" (`src/exporters/ai-prompt.ts`) puts the report text into the
   destination URL's query string when it's ≤ 6000 characters, so it lands in browser history.

@@ -350,7 +350,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // wireAccountButtons();
   // void refreshAccount();
 
-  void initWhatsNew();
+  void initWhatsNew().then(initEmailAsk).catch(() => {});
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -1383,6 +1383,93 @@ async function initWhatsNew() {
     try { void chrome.storage.local.remove(WHATS_NEW_KEY); } catch {}
   });
   card.style.display = "";
+}
+
+// ── Optional email ask (docs/launch/email-capture-plan.md) ────────────────
+// The worker counts real results (audit / ticket / export) and marks the ask
+// "due" after the 2nd. It's an ask, never a wall: every path leaves TraceBug
+// fully working. Showing it counts as a ✕ (so ignoring it never nags); "No
+// thanks" or a signup ends it for good. The only things ever sent are the
+// address the user types and, if they tick the box, the three counts shown.
+const EMAIL_ASK_KEY = "tb_email_ask_v1";
+
+async function setEmailAskState(state) {
+  try {
+    const st = (await chrome.storage.local.get(EMAIL_ASK_KEY))[EMAIL_ASK_KEY] || {};
+    await chrome.storage.local.set({ [EMAIL_ASK_KEY]: { ...st, state } });
+  } catch {}
+}
+
+async function initEmailAsk() {
+  const form = document.getElementById("emailAsk");
+  if (!form) return;
+  // One card at a time: a "What's new" card wins this open.
+  const wn = document.getElementById("whatsNew");
+  if (wn && wn.style.display !== "none") return;
+  let st;
+  try { st = (await chrome.storage.local.get(EMAIL_ASK_KEY))[EMAIL_ASK_KEY]; } catch { return; }
+  if (!st || st.state !== "due") return;
+
+  const retry = st.source === "ext-retry-10";
+  // Shown = as if closed with ✕: the first showing may come back once at the
+  // 10th result, the retry never does.
+  await setEmailAskState(retry ? "done" : "snoozed");
+
+  const counts = { audit: 0, ticket: 0, export: 0, ...(st.counts || {}) };
+  const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  document.getElementById("emailAskCounts").textContent =
+    `${plural(counts.audit, "audit")}, ${plural(counts.ticket, "saved ticket")}, ${plural(counts.export, "export")}`;
+
+  const msg = document.getElementById("emailAskMsg");
+  const hideSoon = (ms) => setTimeout(() => { form.style.display = "none"; }, ms);
+  document.getElementById("emailAskClose").addEventListener("click", () => { form.style.display = "none"; });
+  document.getElementById("emailAskNo").addEventListener("click", () => {
+    form.style.display = "none";
+    void setEmailAskState("done");
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("emailAskInput");
+    const btn = document.getElementById("emailAskSubmit");
+    const email = input.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msg.textContent = "That doesn't look like an email address.";
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = "Adding…";
+    msg.textContent = "";
+    const body = { email, source: st.source || "ext-audit-2" };
+    if (document.getElementById("emailAskUsage").checked) body.usage = counts;
+    await loadCloudEndpoint();
+    try {
+      const res = await fetch(`${cloudEndpoint}/api/notify-me`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      void setEmailAskState("done");
+      for (const el of form.querySelectorAll(".ea-text, .ea-row, .ea-usage, .ea-foot")) el.style.display = "none";
+      msg.textContent = "✓ Almost done: check your inbox for a link to confirm.";
+      hideSoon(5000);
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "Get early access";
+      msg.textContent = "";
+      msg.append("Couldn't reach tracebug.dev. Try again, or sign up at ");
+      const a = document.createElement("a");
+      a.href = "https://tracebug.dev/#updates";
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "tracebug.dev";
+      msg.append(a, ".");
+    }
+  });
+
+  form.style.display = "";
 }
 
 // Cross-site opt-in row (initCrossSiteOptIn) removed, T-13

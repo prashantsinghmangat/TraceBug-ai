@@ -2,6 +2,7 @@
 // Shared utility functions used across all dashboard modules.
 
 import type { TraceBugEvent } from "../types";
+import { signalSuccess } from "../success-signal";
 
 // ── Defensive style isolation (no Shadow DOM) ────────────────────────────
 // Returns a conservative, scoped CSS reset for an injected-widget root so
@@ -397,4 +398,5 @@ export function downloadFile(filename: string, content: string, mimeType: string
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+  signalSuccess("export");
 }

@@ -180,3 +180,14 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 ## 2026-11-13 — Audit-to-fix hand-off (Unreleased)
 - audit-panel.ts: Fix with AI (copy prompt first — clipboard needs the click's activation — then export; honest toast, beside the docked panel); Copy for AI unchanged but secondary. agent-workflow.ts: FIX_AUDIT_PROMPT + auditFixWorkflowSteps. mcp-server.ts: fix_site_audit prompt (prompts/get by name). METRICS.md: finding agreement + verified fix rate (definitions only).
 - Docs: site-audit.md, mcp.md, AGENT-BRIEF, CHANGELOG [Unreleased], website docs step. Tests: mcp-server prompt tests, e2e Fix with AI (download, clipboard via 127.0.0.1, toast). check.mjs --full green (1228/81, 80/80, 35/35).
+
+- 2026-11-13 — Monetization + email ask. `monetization-plan.md` approved (no licensing/Pro code until a Founder
+  pre-sale validates one feature). Built the popup email ask (src/success-signal.ts, content-script, background
+  `recordSuccess`, popup `initEmailAsk`, notify-me sources/usage, migration 0007, privacy page). 1.12.0 blog post +
+  posts kit. Verified: check.mjs --full green, ext-email-ask e2e 20/20, light/dark screenshots. Open: ESP, CWS answers.
+
+- **2026-11-13 email sending (uncommitted).** Resend free (100/day, checked live) via plain fetch: double opt-in in
+  `notify-me` + per-address/IP/daily caps, `/api/confirm`, `/api/unsubscribe` (GET + RFC 8058 POST), `/email` page,
+  migration 0008 + view `email_subscribers` (not applied), `website/scripts/email.mjs` (backlog confirms, resumable monthly send).
+  Copy aligned to "at most one email a month" + "check your inbox" (popup, SDK card, EmailCapture, pricing, blog); privacy, STORE-LISTINGS, plan.
+  Verified: `tsc -p website`, `check.mjs --full` green, `ext-email-ask` 20/20, mailer rendered with mocked fetch. Not run against live Supabase/Resend.
