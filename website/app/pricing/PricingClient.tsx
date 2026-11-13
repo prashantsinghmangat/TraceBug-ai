@@ -89,7 +89,7 @@ export default function PricingClient() {
                 <EmailCapture
                   source="pricing-pro"
                   tier="pro"
-                  heading="Get one email when cloud sharing ships"
+                  heading="Hear when cloud sharing ships"
                   sub="Shareable links, team workspaces, report history — the future paid tier. Joining this list is also how we measure whether to build it."
                 />
               </div>

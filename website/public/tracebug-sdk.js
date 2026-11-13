@@ -20408,6 +20408,19 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/success-signal.ts
+  function signalSuccess(kind) {
+    try {
+      window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind } }));
+    } catch (e2) {
+    }
+  }
+  var init_success_signal = __esm({
+    "src/success-signal.ts"() {
+      "use strict";
+    }
+  });
+
   // src/ui/helpers.ts
   function tbIsolationCss(root2) {
     return `
@@ -20549,6 +20562,7 @@ var TraceBugModule = (() => {
   var init_helpers = __esm({
     "src/ui/helpers.ts"() {
       "use strict";
+      init_success_signal();
     }
   });
 
@@ -28877,6 +28891,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     document.body.appendChild(a2);
     a2.click();
     document.body.removeChild(a2);
+    signalSuccess("export");
     setTimeout(() => {
       try {
         URL.revokeObjectURL(url);
@@ -28945,6 +28960,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_playwright_test();
       init_style_evidence();
       init_plugin_system();
+      init_success_signal();
     }
   });
 
@@ -28980,6 +28996,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   // src/ui/milestone-ask.ts
   function maybeShowMilestoneAsk(root2) {
     var _a2, _b, _c;
+    if (isExtensionMode()) return;
     try {
       if (localStorage.getItem(DONE_KEY)) return;
       const savedCount = getAllSessions().filter((s2) => s2.saved).length;
@@ -29019,7 +29036,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       <button data-act="close" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0">\u2715</button>
     </div>
     <p style="margin:6px 0 10px;font-size:12px;line-height:1.5;color:var(--tb-text-secondary,#aaa)">
-      Want release updates from the solo dev who builds TraceBug? A few emails a year, nothing else.
+      Want release updates from the solo dev who builds TraceBug? At most one email a month, nothing else.
     </p>
     <form data-act="form" style="display:flex;gap:6px">
       <input data-act="email" type="email" required placeholder="you@company.com" aria-label="Email address"
@@ -29063,7 +29080,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         body: JSON.stringify({ email, source: "milestone-5" })
       }).then((res) => {
         if (!res.ok) throw new Error(String(res.status));
-        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">\u2713 You're on the list \u2014 thanks for using TraceBug this much.</div>`);
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">\u2713 Almost done: check your inbox for a link to confirm.</div>`);
         setTimeout(close, 2500);
       }).catch(() => {
         setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
@@ -29080,6 +29097,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_storage();
       init_cloud_endpoint();
       init_helpers();
+      init_ext_transport();
       DONE_KEY = "tracebug_milestone_ask_done";
       CARD_ID = "tracebug-milestone-ask";
       MILESTONE = 5;
@@ -32342,6 +32360,7 @@ ${description}` : ""}`;
           return;
         }
         _clearDraft();
+        signalSuccess("ticket");
         setInnerHTML(saveTicketBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`);
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
@@ -34713,6 +34732,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_dashboard();
       init_storage();
       init_milestone_ask();
+      init_success_signal();
       init_review_ask();
       init_issue_signature();
       init_video_recorder();
@@ -71193,6 +71213,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     _sev = "all";
     _cat = "all";
     render(run);
+    signalSuccess("audit");
     return run;
   }
   async function ensureAxe() {
@@ -72082,6 +72103,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       init_ext_transport();
       init_agent_workflow();
       init_toast();
+      init_success_signal();
       PANEL_ID2 = "tracebug-audit-panel";
       STYLE_ID3 = "tracebug-audit-panel-styles";
       HIGHLIGHT_ID = "tracebug-audit-highlight";

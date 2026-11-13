@@ -1021,6 +1021,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // A real result in the page (audit / ticket / export) — count it for the
+  // popup's optional email ask. Kind only; nothing about the result.
+  if (message.type === "TB_SUCCESS") {
+    if (sender?.tab?.id) void recordSuccess(message.kind);
+    sendResponse({ ok: true });
+    return true;
+  }
+
   // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
   // it isn't re-injected on the next navigation. Hydration-await inside the
   // async block (sendResponse stays sync-safe via return true).
@@ -2141,3 +2149,33 @@ if (chrome.tabs && chrome.tabs.onRemoved) {
     }
   });
 }
+
+// ── Optional email ask: success counter ────────────────────────────────────
+// docs/launch/email-capture-plan.md. The popup shows the ask when `state` is
+// "due": after the 2nd real result, and once more at the 10th only if the
+// first was closed with ✕ ("snoozed"). "No thanks" or a signup → "done",
+// never shown again. Counts stay on this machine; the popup sends them only
+// if the user ticks the box under the email field.
+const EMAIL_ASK_KEY = "tb_email_ask_v1";
+const EMAIL_ASK_KINDS = ["audit", "ticket", "export"];
+let _emailAskChain = Promise.resolve();
+
+function recordSuccess(kind) {
+  if (!EMAIL_ASK_KINDS.includes(kind)) return Promise.resolve();
+  // Serialise: several results can land at once (export right after a save).
+  _emailAskChain = _emailAskChain.then(async () => {
+    try {
+      const st = (await chrome.storage.local.get(EMAIL_ASK_KEY))[EMAIL_ASK_KEY] || {};
+      const counts = { audit: 0, ticket: 0, export: 0, ...(st.counts || {}) };
+      counts[kind] = Math.min((counts[kind] || 0) + 1, 99999);
+      const total = counts.audit + counts.ticket + counts.export;
+      let state = st.state || "waiting";
+      let source = st.source || "";
+      if (state === "waiting" && total >= 2) { state = "due"; source = `ext-${kind}-2`; }
+      else if (state === "snoozed" && total >= 10) { state = "due"; source = "ext-retry-10"; }
+      await chrome.storage.local.set({ [EMAIL_ASK_KEY]: { ...st, counts, state, source } });
+    } catch {}
+  });
+  return _emailAskChain;
+}
+

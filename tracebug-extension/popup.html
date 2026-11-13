@@ -57,6 +57,24 @@
         <div class="wn-foot"><button class="wn-got" id="whatsNewGot" type="button">Got it</button></div>
       </div>
 
+      <!-- Optional email ask (docs/launch/email-capture-plan.md). Hidden
+           unless the worker marked it "due" (2nd real result; once more at the
+           10th if closed with ✕). Never blocks anything. -->
+      <form class="ea" id="emailAsk" style="display:none;" novalidate>
+        <div class="ea-head">
+          <div class="ea-title">Want the next features first?</div>
+          <button type="button" class="ea-x" id="emailAskClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="ea-text">Design Tokens and Visual Comparison are coming. One email a month, early access, unsubscribe anytime. TraceBug keeps working fully either way.</p>
+        <div class="ea-row">
+          <input class="ea-input" id="emailAskInput" type="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address" required maxlength="254">
+          <button type="submit" class="ea-go" id="emailAskSubmit">Get early access</button>
+        </div>
+        <label class="ea-usage"><input type="checkbox" id="emailAskUsage"> <span>Also send my usage counts: <span id="emailAskCounts"></span></span></label>
+        <div class="ea-foot"><button type="button" class="ea-no" id="emailAskNo">No thanks</button></div>
+        <div class="ea-msg" id="emailAskMsg" role="status"></div>
+      </form>
+
       <!-- PHASE2-CLOUD: account / cloud-sharing block disabled for Phase 1 offline release
       <div class="account" id="account">
         <div class="account-loading" id="accountLoading">

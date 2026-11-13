@@ -107,7 +107,10 @@ the same step.
 - **`chrome.storage.local`** (`tb_*`, extension-owned): `tb_record_opts` (Record options + `videoSetBy`) ·
   `tb_integrations_v1`, `tb_ai_config_v1` (**the secrets**) · `tb_llm_sites_v1`, `tb_llm_rates_v1` ·
   `tb_pending_sends_v1`, `tb_send*` (confirm-send) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
-  `tb_migration_notices` · `tracebug_cloud_endpoint`.
+  `tb_migration_notices` · `tracebug_cloud_endpoint` · `tb_email_ask_v1` (email ask: `counts`, `state`, `source`;
+  `background.js` `recordSuccess` ← `TB_SUCCESS` ← content-script `tracebug-success` ← `src/success-signal.ts`; popup `initEmailAsk`).
+  Website side: `website/app/api/notify-me` → `lib/mailer.mjs` (Resend) → `/api/confirm`, `/api/unsubscribe`, `/email`;
+  view `email_subscribers` (migration 0008); hand-run `website/scripts/email.mjs confirm|send`.
   (`tb_host_perm_declined` removed in 1.11.2, T-13 — the popup's cross-site opt-in row is gone.)
 - **`chrome.storage.session`**: `tb_sw_state_v1` only — worker state, awaited via `_hydrated`.
 - **`chrome.storage.sync`**: `tracebug_redact` only — redaction rules.

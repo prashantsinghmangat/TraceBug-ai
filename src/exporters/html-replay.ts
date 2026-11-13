@@ -15,6 +15,7 @@ import { generateGitHubIssue, generateGitHubIssueUrl } from "../github-issue";
 import { generatePlaywrightTest, playwrightTestFilename } from "./playwright-test";
 import { formatStyleSummary, type StyleEvidence } from "../style-evidence";
 import { runExportPlugins } from "../plugin-system";
+import { signalSuccess } from "../success-signal";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -414,6 +415,7 @@ export function triggerDownload(url: string, filename: string): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  signalSuccess("export");
   // Don't immediately revokeObjectURL — some browsers (Firefox) need the URL
   // alive briefly for the download to complete. Revoke after a 30s buffer.
   setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 30000);
