@@ -14,7 +14,7 @@ export default function EmailCapture({
   sub,
 }: {
   /** Must be in the API route's ALLOWED_SOURCES. */
-  source: "pricing-pro" | "pricing-team" | "viewer-footer" | "blog";
+  source: "pricing-pro" | "pricing-team" | "viewer-footer" | "blog" | "home";
   tier?: "pro" | "team";
   heading: string;
   sub?: string;
