@@ -21,8 +21,12 @@ export async function POST(req: Request) {
   try {
     const { error } = await anonClient().auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
     if (error) {
-      // Supabase's email limit (or Resend's) is ours to absorb, not the user's problem.
       console.error("[ext/otp/start]", error.status, error.code, error.message);
+      // Supabase allows one code per address per ~60 s ("you can only request this after
+      // N seconds"). That's the user asking twice, not an outage: tell them to wait.
+      const wait = /after (\d+) seconds?/i.exec(error.message ?? "");
+      if (wait) return json({ error: "too_soon", retryAfter: Number(wait[1]) }, 429);
+      // Supabase's project email limit (or Resend's) is ours to absorb: the extension fails open.
       return json({ error: "unavailable" }, 503);
     }
   } catch (e) {

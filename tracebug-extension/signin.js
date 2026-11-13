@@ -94,10 +94,14 @@ async function sendCode() {
     startResendTimer();
     return true;
   }
-  if (r.status === 400) msg("emailMsg", "That doesn't look like an email address.", true);
-  else if (r.status === 429) msg("emailMsg", "Too many tries from here. Wait a few minutes and try again.", true);
-  else if (intent === "delete") msg("emailMsg", "We couldn't reach TraceBug right now. Please try again later.", true);
-  else await failOpen("emailMsg");
+  // "Send a new code" runs this from the code step: show the message where the user is.
+  const where = $("stepCode").hidden ? "emailMsg" : "codeMsg";
+  const secs = r.body && Number(r.body.retryAfter);
+  if (r.status === 400) msg(where, "That doesn't look like an email address.", true);
+  else if (r.status === 429 && secs > 0) msg(where, `A code was just sent to this address. You can ask for a new one in ${secs} seconds.`, true);
+  else if (r.status === 429) msg(where, "Too many tries from here. Wait a few minutes and try again.", true);
+  else if (intent === "delete") msg(where, "We couldn't reach TraceBug right now. Please try again later.", true);
+  else await failOpen(where);
   return false;
 }
 

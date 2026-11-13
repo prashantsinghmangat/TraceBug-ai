@@ -210,3 +210,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   Audit card shows free audits left; welcome page optional skippable sign-in card; signin.html footer spacing + copy
   when audits remain; welcome chip "No account to capture". Files: popup.*, styles.css, signin.*, welcome.*. Verified:
   check.mjs --full green, local sign-in with Supabase templates + OTP length 6. Not covered by e2e: menu + welcome card.
+- 2026-11-13 — Live test fixes: confirm/unsubscribe redirects now relative (were leaking `…--tracebug.netlify.app`);
+  /email confirms in place then goes home (`app/email/EmailAction.tsx`); branded HTML email layout with logo
+  (`lib/mailer.mjs` `layout`, `public/email/tracebug-logo.png`) + Supabase code template
+  (`website/supabase/email-templates/sign-in-code.html`, owner pastes it); OTP "send again too soon" → 429 with
+  seconds (was 503 "couldn't reach"); signin.html buttons. Verified: gates, local fake-token flow, screenshots.

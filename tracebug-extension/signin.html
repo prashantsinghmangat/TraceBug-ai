@@ -25,9 +25,20 @@
     .si-check input { margin: 2px 0 0; }
     .si-go { width: 100%; margin-top: 16px; padding: 10px 14px; border: 0; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; background: var(--accent); color: var(--on-accent, #fff); }
     .si-go:disabled { opacity: 0.6; cursor: default; }
-    .si-links { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
-    .si-link { background: none; border: 0; padding: 4px 0; font-size: 12.5px; color: var(--accent); cursor: pointer; }
-    .si-link:hover:not(:disabled) { text-decoration: underline; }
+    /* Secondary actions: real buttons, side by side, under the main one. */
+    .si-links { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .si-link { padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent;
+      font: inherit; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+    .si-link:hover:not(:disabled) { background: var(--bg-3); border-color: var(--border-hover); }
+    .si-link:focus-visible, .si-go:focus-visible, .si-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .si-links-1 { grid-template-columns: 1fr; }
+    /* Delete: deliberately quiet, below everything else. */
+    .si-del { display: block; margin: 14px auto 0; padding: 4px 6px; background: none; border: 0; font: inherit; font-size: 12.5px;
+      color: var(--text-3); cursor: pointer; }
+    .si-del:hover { color: var(--error, #d33); text-decoration: underline; }
+    .si-ok { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-bottom: 12px;
+      border-radius: 50%; background: var(--success-bg, rgba(22,163,74,.12)); color: var(--success, #16a34a); }
+    .si-ok svg { width: 22px; height: 22px; }
     .si-link:disabled { color: var(--text-3); cursor: default; }
     .si-msg { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
     .si-msg:empty { display: none; }
@@ -35,7 +46,6 @@
     /* `.si .si-fine`, not `.si-fine`: `.si p` would otherwise win and drop the gap and small type. */
     .si .si-fine { margin: 20px 0 0; padding-top: 14px; border-top: 1px solid var(--border); font-size: 11.5px; line-height: 1.5; color: var(--text-3); }
     .si .si-fine a { color: inherit; }
-    .si-danger { color: var(--error, #d33) !important; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -70,12 +80,13 @@
 
     <!-- 3. Signed in / done -->
     <section id="stepDone" hidden>
+      <div class="si-ok" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
       <h1 id="doneTitle">You're signed in</h1>
       <p id="doneText">Site Audit is unlocked. Go back to your tab and press <b>Re-scan</b>.</p>
-      <div class="si-links">
+      <div class="si-links si-links-1">
         <button class="si-link" id="signOut" type="button">Sign out on this browser</button>
-        <button class="si-link si-danger" id="deleteAccount" type="button">Delete my account</button>
       </div>
+      <button class="si-del" id="deleteAccount" type="button">Delete my account</button>
       <div class="si-msg" id="doneMsg" role="status"></div>
     </section>
 
