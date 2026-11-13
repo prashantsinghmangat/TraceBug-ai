@@ -83,6 +83,9 @@ an account approval step) is the fallback. The 100/day is shared by confirms, th
 - Env (Netlify + `website/.env.local`): `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO` (required: the
   privacy page says "reply to be deleted"), optional `EMAIL_POSTAL_ADDRESS`, `CONFIRM_DAILY_CAP`.
 - Supabase Auth (parked `/auth`): custom SMTP `smtp.resend.com:465`, user `resend`, password = API key.
+- Done 2026-11-13: Resend domain verified (region ap-northeast-1; DKIM `resend._domainkey`, CNAMEs `send`/`rsend`,
+  DMARC `p=none`, receiving off), keys `tracebug-website` + `supabase-auth`. The Resend account is on a separate
+  address; Supabase and Netlify stay as they are (existing project: apply 0007 + 0008 there).
 
 ## Rollout
 

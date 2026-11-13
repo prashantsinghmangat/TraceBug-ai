@@ -191,3 +191,7 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   migration 0008 + view `email_subscribers` (not applied), `website/scripts/email.mjs` (backlog confirms, resumable monthly send).
   Copy aligned to "at most one email a month" + "check your inbox" (popup, SDK card, EmailCapture, pricing, blog); privacy, STORE-LISTINGS, plan.
   Verified: `tsc -p website`, `check.mjs --full` green, `ext-email-ask` 20/20, mailer rendered with mocked fetch. Not run against live Supabase/Resend.
+- **2026-11-13 email live-tested locally (uncommitted).** Resend domain verified (Netlify DNS), migrations 0007/0008 applied, Auth SMTP via Resend works.
+  Local end to end: popup + website signup → confirm email → confirmed → monthly send → one-click unsubscribe → view empty. Fixes from testing:
+  popup fetch `credentials: "omit"` (was sending tracebug.dev cookies), notify-me returns `status` (`subscribed`|`pending`) so forms say
+  "already on the list" instead of a false "check your inbox", skip reasons logged, dry-run preview link labelled. e2e email-ask 21/21, `check.mjs --full` green.

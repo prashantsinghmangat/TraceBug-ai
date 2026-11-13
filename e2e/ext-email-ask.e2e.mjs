@@ -88,9 +88,10 @@ try {
   // 2. Popup shows it; showing it counts as ✕ (snoozed); submit sends address + ticked counts.
   const popup = await ctx.newPage();
   let posted = null;
+  let reply = '{"ok":true,"status":"pending"}';
   await popup.route("**/api/notify-me", async (route) => {
     posted = JSON.parse(route.request().postData() || "{}");
-    await route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+    await route.fulfill({ status: 200, contentType: "application/json", body: reply });
   });
   await popup.goto(`chrome-extension://${extId}/popup.html`);
   await popup.waitForSelector("#emailAsk", { state: "visible", timeout: 5000 }).catch(() => {});
@@ -124,6 +125,17 @@ try {
   await popup.click("#emailAskSubmit");
   await popup.waitForFunction(() => /check your inbox/.test(document.getElementById("emailAskMsg").textContent), null, { timeout: 5000 }).catch(() => {});
   check("ticked: counts sent, nothing else", short(posted?.usage) === short({ audit: 3, ticket: 1, export: 2 }) && Object.keys(posted || {}).sort().join() === "email,source,usage", short(posted));
+
+  // 3b. Already confirmed: no email was sent, so the popup must not say "check your inbox".
+  await setState({ counts: { audit: 2, ticket: 0, export: 0 }, state: "due", source: "ext-audit-2" });
+  reply = '{"ok":true,"status":"subscribed"}';
+  await popup.reload();
+  await popup.waitForSelector("#emailAsk", { state: "visible", timeout: 5000 });
+  await popup.fill("#emailAskInput", "dev@example.com");
+  await popup.click("#emailAskSubmit");
+  await popup.waitForFunction(() => /already on the list/.test(document.getElementById("emailAskMsg").textContent), null, { timeout: 5000 }).catch(() => {});
+  check("already subscribed: says so, not \"check your inbox\"", /already on the list/.test(await popup.textContent("#emailAskMsg")));
+  reply = '{"ok":true,"status":"pending"}';
 
   // 4. No thanks → done.
   await setState({ counts: { audit: 2, ticket: 0, export: 0 }, state: "due", source: "ext-audit-2" });

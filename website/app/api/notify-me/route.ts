@@ -87,9 +87,11 @@ export async function POST(req: Request) {
   const latest = (k: string) => prior.reduce((m, r) => Math.max(m, r[k] ? Date.parse(r[k]!) : 0), 0);
   const subscribed = latest("confirmed_at") > latest("unsubscribed_at");
   const now = Date.now();
-  // Same answer as success, so the form can't be used to probe the list.
+  // Too many signups for this address today: store nothing more, send nothing.
+  // "pending" is still honest here: an earlier signup today got the confirm email.
   if (prior.filter((r) => now - Date.parse(r.created_at!) < DAY_MS).length >= MAX_SIGNUPS_PER_EMAIL_PER_DAY) {
-    return json({ ok: true });
+    console.info("[notify-me] signup not stored: 5 signups for this address in 24 h");
+    return json({ ok: true, status: subscribed ? "subscribed" : "pending" });
   }
 
   const row: Record<string, unknown> = {
@@ -119,9 +121,16 @@ export async function POST(req: Request) {
   // reached — those rows stay unsent and `scripts/email.mjs confirm` sends them.
   const token = (inserted as { id?: string; confirm_token?: string } | null)?.confirm_token;
   const recentlySent = now - latest("confirm_sent_at") < RESEND_CONFIRM_AFTER_MS;
-  if (token && !subscribed && !recentlySent && emailConfigured() && (await underDailyCap(admin))) {
+  const skip = !token ? "no confirm_token (migration 0008 not applied?)"
+    : subscribed ? "already subscribed"
+    : recentlySent ? "confirm sent <10 min ago"
+    : !emailConfigured() ? "RESEND_API_KEY / EMAIL_FROM / EMAIL_REPLY_TO not set"
+    : !(await underDailyCap(admin)) ? "daily cap reached"
+    : null;
+  if (skip) console.info(`[notify-me] confirm email not sent: ${skip}`);
+  if (!skip) {
     try {
-      await sendEmail({ to: email, ...confirmEmail(token) });
+      await sendEmail({ to: email, ...confirmEmail(token!) });
       await admin.from("email_signups").update({ confirm_sent_at: new Date().toISOString() }).eq("id", inserted!.id!);
     } catch (e) {
       // The signup is saved; the backlog command retries it.
@@ -129,7 +138,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return json({ ok: true });
+  // "subscribed": no email was sent, so the form must not say "check your inbox".
+  // This tells whoever typed the address that it is on the list; accepted for a
+  // product-update list (the alternative was copy that didn't match what happened).
+  return json({ ok: true, status: subscribed ? "subscribed" : "pending" });
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

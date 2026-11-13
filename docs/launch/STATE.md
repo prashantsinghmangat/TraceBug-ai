@@ -53,8 +53,9 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 4. Pricing (B4) decided 2026-11-13: `monetization-plan.md` (approved; no licensing/Pro code until a Founder
    pre-sale validates one feature). Email ask + sending: `email-capture-plan.md` (built; owner setup pending, Open #6).
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
-6. Email setup (owner): Resend account + tracebug.dev DNS (SPF/DKIM/MX on `send`, DMARC), Netlify env
-   (`RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`), migrations 0007 + 0008, Supabase Auth custom SMTP.
+6. Email setup (owner): Resend + DNS **done** 2026-11-13. Left: migrations 0007 + 0008 on the existing
+   project, Netlify env (`RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`), Supabase Auth custom SMTP, end-to-end
+   test (`email-capture-plan.md` *Sending*).
    Free Supabase pauses after 7 idle days: signups and unsubscribe links then fail until restored.
 
 ## Gotchas that are still true

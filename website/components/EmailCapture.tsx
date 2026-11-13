@@ -20,11 +20,11 @@ export default function EmailCapture({
   sub?: string;
 }) {
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "already" | "error">("idle");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (state === "busy" || state === "done") return;
+    if (state === "busy" || state === "done" || state === "already") return;
     setState("busy");
     try {
       const res = await fetch("/api/notify-me", {
@@ -32,16 +32,20 @@ export default function EmailCapture({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source, tier }),
       });
-      setState(res.ok ? "done" : "error");
+      if (!res.ok) return setState("error");
+      const data = await res.json().catch(() => ({}));
+      setState(data?.status === "subscribed" ? "already" : "done");
     } catch {
       setState("error");
     }
   };
 
-  if (state === "done") {
+  if (state === "done" || state === "already") {
     return (
       <div className="rounded-xl border border-success/30 bg-success/[0.06] px-5 py-4 text-sm text-text-primary">
-        ✓ Almost done: check your inbox for a link to confirm.
+        {state === "already"
+          ? "✓ You’re already on the list. Thanks!"
+          : "✓ Almost done: check your inbox for a link to confirm."}
       </div>
     );
   }
