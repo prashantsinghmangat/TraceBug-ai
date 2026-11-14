@@ -20,11 +20,11 @@ export default function EmailCapture({
   sub?: string;
 }) {
   const [email, setEmail] = useState("");
-  const [state, setState] = useState<"idle" | "busy" | "done" | "already" | "error">("idle");
+  const [state, setState] = useState<"idle" | "busy" | "done" | "already" | "queued" | "error" | "limited">("idle");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (state === "busy" || state === "done" || state === "already") return;
+    if (state === "busy" || state === "done" || state === "already" || state === "queued") return;
     setState("busy");
     try {
       const res = await fetch("/api/notify-me", {
@@ -32,20 +32,22 @@ export default function EmailCapture({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source, tier }),
       });
-      if (!res.ok) return setState("error");
+      if (!res.ok) return setState(res.status === 429 ? "limited" : "error");
       const data = await res.json().catch(() => ({}));
-      setState(data?.status === "subscribed" ? "already" : "done");
+      setState(data?.status === "subscribed" ? "already" : data?.status === "queued" ? "queued" : "done");
     } catch {
       setState("error");
     }
   };
 
-  if (state === "done" || state === "already") {
+  if (state === "done" || state === "already" || state === "queued") {
     return (
       <div className="rounded-xl border border-success/30 bg-success/[0.06] px-5 py-4 text-sm text-text-primary">
         {state === "already"
           ? "✓ You’re already on the list. Thanks!"
-          : "✓ Almost done: check your inbox for a link to confirm."}
+          : state === "queued"
+            ? "✓ Saved. Your confirmation email may take up to a day to arrive."
+            : "✓ Almost done: check your inbox for a link to confirm."}
       </div>
     );
   }
@@ -76,6 +78,9 @@ export default function EmailCapture({
         At most one email a month. We&apos;ll send a link to confirm first; unsubscribe in one click.
         {state === "error" && (
           <span className="text-error"> Something went wrong — try again?</span>
+        )}
+        {state === "limited" && (
+          <span className="text-error"> Too many sign-ups from here — try again in a few minutes.</span>
         )}
       </p>
     </form>

@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 export const metadata = {
   title: "Privacy Policy — TraceBug",
   description:
-    "TraceBug privacy policy. Nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider.",
+    "TraceBug privacy policy. Your bug reports never go to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -16,7 +16,7 @@ export default function PrivacyPage() {
 
         <h1 className="mb-2 text-h2 font-medium text-text-primary">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: November 13, 2026
+          Last updated: November 14, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
               during testing sessions and generates developer-ready bug reports.
               TraceBug is designed with privacy as a core principle:{" "}
               <strong className="text-text-primary">
-                nothing goes to TraceBug
+                your bug reports never go to TraceBug
               </strong>
               . There is no TraceBug server that receives your reports. A
               capture&apos;s content stays on your device until you choose to
@@ -177,8 +177,10 @@ export default function PrivacyPage() {
               What leaves your device, and when
             </h2>
             <p className="mb-3">
-              Four things can leave your device. All four are started by you,
-              and none of them goes to TraceBug.
+              Four things can leave your device, and each is started by you.
+              Reports only ever go to the services you choose. TraceBug itself
+              receives only the uninstall survey below and what you type into a
+              form described under This Website.
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -254,12 +256,30 @@ export default function PrivacyPage() {
                 Resend. We never receive your audits, the pages you audit or their addresses —
                 the extension only tells itself that you are signed in. A separate, unticked box
                 adds you to the email list above; signing in alone does not. You can delete the
-                account from the extension (Options → Site Audit account → Delete my account),
-                which also removes your address from the email list.
+                account from the extension (the account icon in the popup → Delete account, or
+                Options → Site Audit account), or by writing to us (see Contact). Deleting it
+                also removes your address from the email list. In Firefox, the browser asks for
+                your OK before your email address is first sent to us.
               </li>
               <li>
                 <strong className="text-text-primary">Feedback and uninstall forms</strong>{" "}
                 — what you type, plus the extension version on the uninstall form.
+                The feedback form is stored by our host, Netlify.
+              </li>
+              <li>
+                <strong className="text-text-primary">Hosting</strong> — like any
+                website, our host{" "}
+                <a href="https://www.netlify.com/privacy/" className="text-primary hover:underline">Netlify</a>{" "}
+                keeps standard request logs (IP address, page, time) under its own
+                policy. The Product Hunt badge on our pages is an image loaded from
+                Product Hunt, which therefore sees your IP address too.
+              </li>
+              <li>
+                <strong className="text-text-primary">If someone else types your address</strong>{" "}
+                — you get one confirmation email or one sign-in code and nothing
+                more unless you act on it. A sign-in code request can leave an
+                unused account holding only your address; write to us and we
+                delete it.
               </li>
             </ul>
           </section>
@@ -359,8 +379,15 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-text-primary mb-3">
               Contact
             </h2>
+            <p className="mb-3">
+              To have your data deleted or to ask what we hold about you, email{" "}
+              <a href="mailto:hello@tracebug.dev" className="text-primary hover:text-accent transition-colors underline">
+                hello@tracebug.dev
+              </a>
+              . We answer within 30 days.
+            </p>
             <p>
-              For privacy questions or concerns, please open an issue at{" "}
+              For other privacy questions you can also open a public issue at{" "}
               <a
                 href="https://github.com/prashantsinghmangat/TraceBug-ai/issues"
                 target="_blank"

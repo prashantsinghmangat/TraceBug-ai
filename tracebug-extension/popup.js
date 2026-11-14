@@ -1401,6 +1401,21 @@ async function setEmailAskState(state) {
   } catch {}
 }
 
+/**
+ * Firefox 140+: email (and the optional usage counts) are declared as optional
+ * data collection (build-ext.mjs); ask before they first leave the browser.
+ * Call before any await in the handler (needs the user gesture). Chrome and
+ * Firefox < 140: resolves true. Same helper in signin.js.
+ */
+function requestDataConsent(kinds) {
+  const api = globalThis.browser;
+  let declared = [];
+  try { declared = chrome.runtime.getManifest().browser_specific_settings?.gecko?.data_collection_permissions?.optional || []; } catch {}
+  const wanted = kinds.filter((k) => declared.includes(k));
+  if (!wanted.length || !api?.permissions?.request) return Promise.resolve(true);
+  return api.permissions.request({ data_collection: wanted }).catch(() => true);
+}
+
 async function initEmailAsk() {
   const form = document.getElementById("emailAsk");
   if (!form) return;
@@ -1446,11 +1461,17 @@ async function initEmailAsk() {
       input.focus();
       return;
     }
+    // Before any await: Firefox's consent prompt needs the submit gesture.
+    const withUsage = document.getElementById("emailAskUsage").checked;
+    if (!(await requestDataConsent(withUsage ? ["personallyIdentifyingInfo", "technicalAndInteraction"] : ["personallyIdentifyingInfo"]))) {
+      msg.textContent = "Firefox needs your OK to send your email address to TraceBug. Nothing was sent.";
+      return;
+    }
     btn.disabled = true;
     btn.textContent = "Adding…";
     msg.textContent = "";
     const body = { email, source: st.source || "ext-audit-2" };
-    if (document.getElementById("emailAskUsage").checked) body.usage = counts;
+    if (withUsage) body.usage = counts;
     await loadCloudEndpoint();
     try {
       const res = await fetch(`${cloudEndpoint}/api/notify-me`, {
@@ -1461,11 +1482,20 @@ async function initEmailAsk() {
         // the signup needs nothing but the body.
         credentials: "omit",
       });
+      if (res.status === 429) {
+        btn.disabled = false;
+        btn.textContent = "Get early access";
+        msg.textContent = "Too many sign-ups from here. Try again in a few minutes.";
+        return;
+      }
       if (!res.ok) throw new Error(String(res.status));
-      const already = (await res.json().catch(() => ({})))?.status === "subscribed";
+      const status = (await res.json().catch(() => ({})))?.status;
+      const already = status === "subscribed";
       void setEmailAskState("done");
       for (const el of form.querySelectorAll(".ea-text, .ea-row, .ea-usage, .ea-foot")) el.style.display = "none";
-      msg.textContent = already ? "✓ You're already on the list. Thanks!" : "✓ Almost done: check your inbox for a link to confirm.";
+      msg.textContent = already ? "✓ You're already on the list. Thanks!"
+        : status === "queued" ? "✓ Saved. Your confirmation email may take up to a day to arrive."
+        : "✓ Almost done: check your inbox for a link to confirm.";
       hideSoon(5000);
     } catch {
       btn.disabled = false;
