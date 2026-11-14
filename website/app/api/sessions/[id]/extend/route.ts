@@ -38,7 +38,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     .eq("user_id", user.id);
 
   if (updateErr) {
-    return NextResponse.json({ error: "db_error", detail: updateErr.message }, { status: 500 });
+    console.error("[sessions/[id]/extend]", "db_error", updateErr.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
 
   return NextResponse.json({ expiresAt: newExpires, extendedCount: row.extended_count + 1 });

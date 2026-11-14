@@ -98,7 +98,8 @@ export async function POST(req: Request) {
     .single();
 
   if (insertErr || !inserted) {
-    return NextResponse.json({ error: "db_insert_failed", detail: insertErr?.message }, { status: 500 });
+    console.error("[upload/init]", "db_insert_failed", insertErr?.message);
+    return NextResponse.json({ error: "db_insert_failed" }, { status: 500 });
   }
 
   // Best-effort thumbnail update — silently skip if the column doesn't exist
@@ -132,7 +133,8 @@ export async function POST(req: Request) {
   } catch (err: any) {
     // Roll back the session row so quota stays accurate.
     await supabase.from("sessions").delete().eq("id", inserted.id);
-    return NextResponse.json({ error: "signed_url_failed", detail: err?.message }, { status: 500 });
+    console.error("[upload/init]", "signed_url_failed", err?.message);
+    return NextResponse.json({ error: "signed_url_failed" }, { status: 500 });
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;

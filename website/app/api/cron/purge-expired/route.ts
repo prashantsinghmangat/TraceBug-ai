@@ -37,7 +37,8 @@ export async function POST(req: Request) {
     .limit(500);
 
   if (fetchErr) {
-    return NextResponse.json({ error: "db_error", detail: fetchErr.message }, { status: 500 });
+    console.error("[cron/purge-expired]", "db_error", fetchErr.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
 
   const keys = (rows ?? []).map((r) => r.storage_key).filter(Boolean);
@@ -45,7 +46,8 @@ export async function POST(req: Request) {
     const { error: removeErr } = await admin.storage.from(REPORTS_BUCKET).remove(keys);
     if (removeErr) {
       // Don't delete DB rows if Storage cleanup failed — try again next run.
-      return NextResponse.json({ error: "storage_remove_failed", detail: removeErr.message }, { status: 500 });
+      console.error("[cron/purge-expired]", "storage_remove_failed", removeErr.message);
+      return NextResponse.json({ error: "storage_remove_failed" }, { status: 500 });
     }
   }
 

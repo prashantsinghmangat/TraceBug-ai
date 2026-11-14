@@ -1,4 +1,4 @@
-import { LINKS } from "@/lib/site";
+import { CONTACT_EMAIL, LINKS } from "@/lib/site";
 import Link from "next/link";
 import { GitHubIcon, NpmIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
@@ -40,6 +40,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     title: "Community",
     links: [
       { label: "Send feedback", href: "/feedback" },
+      { label: "Email us", href: `mailto:${CONTACT_EMAIL}`, external: true },
       { label: "Review us on Product Hunt", href: "https://www.producthunt.com/products/tracebug/reviews", external: true },
       { label: "YouTube", href: YOUTUBE_CHANNEL_URL, external: true },
       { label: "Issues", href: `${LINKS.repo}/issues`, external: true },

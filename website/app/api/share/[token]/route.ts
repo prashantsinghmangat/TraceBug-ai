@@ -25,7 +25,8 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   try {
     downloadUrl = await createSignedDownloadUrl(admin, row.storage_key, 300);
   } catch (err: any) {
-    return NextResponse.json({ error: "signed_url_failed", detail: err?.message }, { status: 500 });
+    console.error("[share/[token]]", "signed_url_failed", err?.message);
+    return NextResponse.json({ error: "signed_url_failed" }, { status: 500 });
   }
 
   const response: SharePublicResponse = {

@@ -80,6 +80,11 @@ function requestDataConsent(kinds) {
   if (!wanted.length || !api?.permissions?.request) return Promise.resolve(true);
   return api.permissions.request({ data_collection: wanted }).catch(() => true);
 }
+/** 5 wrong codes in an hour lock the address; a new code doesn't unlock it. */
+function lockedMsg(secs) {
+  const mins = secs > 0 ? Math.ceil(secs / 60) : 60;
+  return `Too many wrong codes for this address. You can try again in ${mins} minute${mins === 1 ? "" : "s"}.`;
+}
 const CONSENT_DENIED = "Firefox needs your OK to send your email address to TraceBug for sign-in. Nothing is sent without it; bug capture and exports work without an account.";
 
 /** Sign-in unreachable: open audits for an hour and say so plainly. */
@@ -114,6 +119,7 @@ async function sendCode() {
   const where = $("stepCode").hidden ? "emailMsg" : "codeMsg";
   const secs = r.body && Number(r.body.retryAfter);
   if (r.status === 400) msg(where, "That doesn't look like an email address.", true);
+  else if (r.status === 429 && r.body.error === "locked") msg(where, lockedMsg(secs), true);
   else if (r.status === 429 && secs > 0) msg(where, `A code was just sent to this address. You can ask for a new one in ${secs} seconds.`, true);
   else if (r.status === 429) msg(where, "Too many tries from here. Wait a few minutes and try again.", true);
   else if (intent === "delete") msg(where, "We couldn't reach TraceBug right now. Please try again later.", true);
@@ -146,6 +152,7 @@ async function verify() {
     return;
   }
   if (r.status === 400) msg("codeMsg", "That code didn't work. Check the newest email, or send a new code.", true);
+  else if (r.status === 429 && r.body && r.body.error === "locked") msg("codeMsg", lockedMsg(Number(r.body.retryAfter)), true);
   else if (r.status === 429) msg("codeMsg", "Too many tries. Wait a few minutes and try again.", true);
   else if (intent === "delete") msg("codeMsg", "We couldn't reach TraceBug right now. Please try again later.", true);
   else await failOpen("codeMsg");

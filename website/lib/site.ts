@@ -14,6 +14,9 @@ export const SITE = {
   demoLength: "57-second",
 } as const;
 
+// The one inbox for help, sales, feedback and privacy requests (replies to our emails go here too).
+export const CONTACT_EMAIL = "nexgentalk@gmail.com";
+
 export const LINKS = {
   chrome: "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj",
   firefox: "https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/",

@@ -1,9 +1,9 @@
 node_modules/
 dist/
 .next/
-.env
-.env.local
-.env.*.local
+# Every env file (.env, .env.local, .env.production, ...) except committed examples.
+.env*
+!.env*.example
 *.log
 *.tgz
 

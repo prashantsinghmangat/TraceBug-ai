@@ -113,8 +113,14 @@ const SHARED_DIRS = ["icons"];
  */
 const AXE_SRC = createRequire(join(ROOT_DIR, "package.json")).resolve("axe-core/axe.min.js");
 const AXE_DEST = join("vendor", "axe.min.js");
+// axe-core is MPL-2.0: ship its licence next to it (the minified header alone
+// names it but does not carry the text). Same gitignored vendor/ folder.
+const AXE_LICENSE_SRC = join(dirname(AXE_SRC), "LICENSE");
+const AXE_LICENSE_DEST = join("vendor", "axe-core-LICENSE.txt");
+if (!existsSync(AXE_LICENSE_SRC)) console.warn("[warn] axe-core LICENSE not found; vendor/ ships without it");
 mkdirSync(join(EXT_DIR, "vendor"), { recursive: true });
 cpSync(AXE_SRC, join(EXT_DIR, AXE_DEST));
+if (existsSync(AXE_LICENSE_SRC)) cpSync(AXE_LICENSE_SRC, join(EXT_DIR, AXE_LICENSE_DEST));
 
 /**
  * Chrome MV3: service-worker background.
@@ -198,6 +204,7 @@ function buildTarget(name, manifest) {
   }
   mkdirSync(join(outDir, "vendor"), { recursive: true });
   cpSync(AXE_SRC, join(outDir, AXE_DEST));
+  if (existsSync(AXE_LICENSE_SRC)) cpSync(AXE_LICENSE_SRC, join(outDir, AXE_LICENSE_DEST));
   writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   console.log(`[OK] ${name}: dist/${name}/  (v${version})`);
 }

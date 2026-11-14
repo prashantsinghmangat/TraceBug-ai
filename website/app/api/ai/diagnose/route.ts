@@ -61,7 +61,8 @@ export async function POST(req: Request) {
     .eq("user_id", user.id)
     .gte("created_at", since);
   if (recentErr) {
-    return NextResponse.json({ error: "db_error", detail: recentErr.message }, { status: 500 });
+    console.error("[ai/diagnose]", "db_error", recentErr.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
   if ((recent ?? 0) >= AI_RATE_LIMIT_PER_MINUTE) {
     return NextResponse.json(
@@ -77,7 +78,8 @@ export async function POST(req: Request) {
     .eq("user_id", user.id)
     .gte("created_at", startOfMonthUtcISO());
   if (monthErr) {
-    return NextResponse.json({ error: "db_error", detail: monthErr.message }, { status: 500 });
+    console.error("[ai/diagnose]", "db_error", monthErr.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
   if ((monthCount ?? 0) >= AI_ANALYSES_FREE_PER_MONTH) {
     return NextResponse.json(
@@ -103,7 +105,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "refused" }, { status: 422 });
     }
     const detail = err instanceof Error ? err.message : "unknown";
-    return NextResponse.json({ error: "ai_error", detail }, { status: 502 });
+    console.error("[ai/diagnose]", "ai_error", detail);
+    return NextResponse.json({ error: "ai_error" }, { status: 502 });
   }
 
   // ── Record usage (consumes quota only on success) ────────────────────────────

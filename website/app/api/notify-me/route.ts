@@ -113,7 +113,8 @@ export async function POST(req: Request) {
   // before the 0003 migration is applied. The form still feels successful;
   // worst case we lose a few leads until migration runs.
   if (error && !/email_signups/i.test(error.message)) {
-    return json({ error: "db_error", detail: error.message }, 500);
+    console.error("[notify-me]", "db_error", error.message);
+    return json({ error: "db_error" }, 500);
   }
 
   // Double opt-in: the only email an unconfirmed address ever gets is this one.

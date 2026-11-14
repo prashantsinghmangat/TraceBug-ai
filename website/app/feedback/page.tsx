@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FeedbackForm from "./FeedbackForm";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Feedback — TraceBug",
@@ -22,6 +23,13 @@ export default function FeedbackPage() {
           <Suspense fallback={null}>
             <FeedbackForm />
           </Suspense>
+          <p className="mt-6 text-sm text-text-muted">
+            Prefer email? Write to{" "}
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary underline underline-offset-2">
+              {CONTACT_EMAIL}
+            </a>{" "}
+            for help, questions about teams or pricing, or anything else.
+          </p>
         </div>
       </section>
       <Footer />
