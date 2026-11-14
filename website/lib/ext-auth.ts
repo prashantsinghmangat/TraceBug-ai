@@ -68,22 +68,28 @@ const emailHash = (email: string) => createHash("sha256").update(email).digest("
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message);
 
 /**
- * Wrong-code lockout (migration 0010). True when this address has had
- * MAX_WRONG_CODES_PER_HOUR wrong codes in the last hour. Fails open (false) if
- * the table is missing or the DB errors.
+ * Wrong-code lockout (migration 0010). Seconds until this address may try a code
+ * again, or 0. Locked once it has had MAX_WRONG_CODES_PER_HOUR wrong codes in the
+ * last hour; a new code does not unlock it (that would give 5 more guesses per
+ * email). Fails open (0) if the table is missing or the DB errors.
  */
-export async function codeAttemptsBlocked(email: string): Promise<boolean> {
+export async function codeLockSeconds(email: string): Promise<number> {
+  const now = Date.now();
   try {
-    const { count, error } = await createSupabaseAdminClient()
+    const { data, error } = await createSupabaseAdminClient()
       .from("otp_fail_log")
-      .select("id", { count: "exact", head: true })
+      .select("created_at")
       .eq("email_hash", emailHash(email))
-      .gte("created_at", new Date(Date.now() - HOUR).toISOString());
+      .gte("created_at", new Date(now - HOUR).toISOString())
+      .order("created_at", { ascending: true });
     if (error) throw error;
-    return (count ?? 0) >= MAX_WRONG_CODES_PER_HOUR;
+    if (data.length < MAX_WRONG_CODES_PER_HOUR) return 0;
+    // Unlocked when enough failures age out to drop below the limit.
+    const freeAt = Date.parse(data[data.length - MAX_WRONG_CODES_PER_HOUR].created_at) + HOUR;
+    return Math.max(1, Math.ceil((freeAt - now) / 1000));
   } catch (e) {
     console.error("[ext/otp] fail log unavailable, allowing", errMsg(e));
-    return false;
+    return 0;
   }
 }
 

@@ -1,4 +1,4 @@
-import { anonClient, configured, ipLimited, json, normEmail, originAllowed, otpSendBudget, preflight } from "@/lib/ext-auth";
+import { anonClient, codeLockSeconds, configured, ipLimited, json, normEmail, originAllowed, otpSendBudget, preflight } from "@/lib/ext-auth";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -10,6 +10,7 @@ export const OPTIONS = preflight;
 //   400 { error: "invalid_email" }      ask again
 //   403 { error: "origin_not_allowed" } a web page (not the extension) called
 //   429 { error: "too_soon", retryAfter } this address asked recently; wait
+//   429 { error: "locked", retryAfter }   5 wrong codes this hour; no email sent
 //   429 { error: "rate_limited" }       too many tries from here; ask to wait
 //   503 { error: "unavailable" }        not configured / Supabase down / daily cap → the extension FAILS OPEN
 export async function POST(req: Request) {
@@ -22,6 +23,10 @@ export async function POST(req: Request) {
   if (!email) return json(req, { error: "invalid_email" }, 400);
   if (!configured()) return json(req, { error: "unavailable" }, 503);
   if (ipLimited(req, 6, 15 * 60 * 1000, "otp-start")) return json(req, { error: "rate_limited" }, 429);
+
+  // Locked by wrong codes: a new code couldn't be used yet, so don't spend an email on it.
+  const locked = await codeLockSeconds(email);
+  if (locked) return json(req, { error: "locked", retryAfter: locked }, 429);
 
   const budget = await otpSendBudget(email);
   if (!budget.ok) {

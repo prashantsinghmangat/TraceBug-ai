@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 import {
-  anonClient, clearCodeFailures, codeAttemptsBlocked, configured, ipLimited, json, normEmail, originAllowed, preflight, recordCodeFailure,
+  anonClient, clearCodeFailures, codeLockSeconds, configured, ipLimited, json, normEmail, originAllowed, preflight, recordCodeFailure,
 } from "@/lib/ext-auth";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,8 @@ export const OPTIONS = preflight;
 //   intent "delete": deletes the account and every email_signups row for the address.
 // No session token is returned or kept: the extension only needs to know the
 // address was verified. Responses:
-//   200 { ok, ... } · 400 { error: "invalid_code" | "invalid_email" } · 429 rate_limited · 503 unavailable (fail open)
+//   200 { ok, ... } · 400 { error: "invalid_code" | "invalid_email" } · 429 rate_limited
+//   · 429 { error: "locked", retryAfter } (5 wrong codes this hour) · 503 unavailable (fail open)
 export async function POST(req: Request) {
   if (!originAllowed(req)) return json(req, { error: "origin_not_allowed" }, 403);
   let body: { email?: unknown; code?: unknown; marketing?: unknown; intent?: unknown };
@@ -26,7 +27,8 @@ export async function POST(req: Request) {
   if (!configured()) return json(req, { error: "unavailable" }, 503);
   if (ipLimited(req, 12, 15 * 60 * 1000, "otp-verify")) return json(req, { error: "rate_limited" }, 429);
   // Per address, in the DB (migration 0010): 5 wrong codes an hour, then wait.
-  if (await codeAttemptsBlocked(email)) return json(req, { error: "rate_limited" }, 429);
+  const locked = await codeLockSeconds(email);
+  if (locked) return json(req, { error: "locked", retryAfter: locked }, 429);
 
   let userId: string;
   let accessToken: string | null;
