@@ -220,3 +220,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   check); OTP routes extension-origin only + DB send log `0009_otp_send_log.sql` (3/h/address, OTP_DAILY_CAP/day, fail
   open), last-XFF IP fallback. Verified: check.mjs, local curl (404s, 403 web origin, CORS echo), fake-PostgREST budget
   test. Open: owner applies 0009 + deploys; P1 policy/copy items before the gate's store release.
+- 2026-11-14 — P0 deployed (`main` e7c9e59) + live re-probe green; migration 0009 applied. P1 written (uncommitted):
+  Firefox optional data-collection consent (build-ext.mjs, signin.js, popup.js); privacy/pricing copy; sign-in template
+  drops ConfirmationURL; confirm-mail wording; email.mjs needs EMAIL_POSTAL_ADDRESS; notify-me `queued` + 429 UX;
+  migration 0010 (otp_fail_log lockout 5/h, cloud write policies dropped); verify revokes session. Verified: tsc,
+  fake-PostgREST lockout test, check.mjs --full. Open: owner applies 0010, pastes template, hello@ forwarding, DMARC rua.

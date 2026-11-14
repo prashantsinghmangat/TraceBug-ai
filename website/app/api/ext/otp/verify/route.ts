@@ -1,5 +1,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
-import { anonClient, configured, ipLimited, json, normEmail, originAllowed, preflight } from "@/lib/ext-auth";
+import {
+  anonClient, clearCodeFailures, codeAttemptsBlocked, configured, ipLimited, json, normEmail, originAllowed, preflight, recordCodeFailure,
+} from "@/lib/ext-auth";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -23,24 +25,37 @@ export async function POST(req: Request) {
   if (!/^\d{6,10}$/.test(code)) return json(req, { error: "invalid_code" }, 400);
   if (!configured()) return json(req, { error: "unavailable" }, 503);
   if (ipLimited(req, 12, 15 * 60 * 1000, "otp-verify")) return json(req, { error: "rate_limited" }, 429);
+  // Per address, in the DB (migration 0010): 5 wrong codes an hour, then wait.
+  if (await codeAttemptsBlocked(email)) return json(req, { error: "rate_limited" }, 429);
 
   let userId: string;
+  let accessToken: string | null;
   try {
     const { data, error } = await anonClient().auth.verifyOtp({ email, token: code, type: "email" });
     if (error || !data.user) {
       // 4xx from Supabase = wrong or expired code; anything else = the service.
       const st = error?.status ?? 0;
-      if (st >= 400 && st < 500 && st !== 429) return json(req, { error: "invalid_code" }, 400);
+      if (st >= 400 && st < 500 && st !== 429) {
+        await recordCodeFailure(email);
+        return json(req, { error: "invalid_code" }, 400);
+      }
       console.error("[ext/otp/verify]", st, error?.code, error?.message);
       return json(req, { error: "unavailable" }, 503);
     }
     userId = data.user.id;
+    accessToken = data.session?.access_token ?? null;
   } catch (e) {
     console.error("[ext/otp/verify]", e instanceof Error ? e.message : e);
     return json(req, { error: "unavailable" }, 503);
   }
 
   const admin = createSupabaseAdminClient();
+  await clearCodeFailures(email);
+  // verifyOtp opened a Supabase session nobody will use (the extension keeps no
+  // token): end it so sessions don't pile up. Best effort.
+  if (accessToken) {
+    try { await admin.auth.admin.signOut(accessToken); } catch {}
+  }
 
   if (intent === "delete") {
     const { error: delUser } = await admin.auth.admin.deleteUser(userId);

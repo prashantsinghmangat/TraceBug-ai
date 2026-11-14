@@ -47,10 +47,10 @@ export default function PricingClient() {
             <div className="rounded-2xl border border-border-strong bg-background p-8 shadow-card">
               <div className="flex items-baseline justify-between">
                 <h2 className="text-[20px] font-medium">Free</h2>
-                <span className="font-mono text-[13px] text-text-subtle">forever</span>
+                <span className="font-mono text-[13px] text-text-subtle">today</span>
               </div>
               <div className="mt-3 text-[48px] font-medium leading-none tracking-[-0.02em] tabular-nums">$0</div>
-              <p className="mt-3 text-[15px] text-text-muted">Local-first bug capture. Yours forever.</p>
+              <p className="mt-3 text-[15px] text-text-muted">Local-first bug capture. No account needed.</p>
 
               <ul className="mt-8 space-y-3 border-t border-border pt-6">
                 {FREE_FEATURES.map((f) => (
@@ -70,7 +70,7 @@ export default function PricingClient() {
               <h3 className="text-[16px] font-medium">Future cloud workflows</h3>
               <p className="mt-2 text-[15px] leading-[1.6] text-text-muted">
                 Optional cloud features (shared links, team workspaces) may be introduced later as paid
-                add-ons. If they are, local capture and export will remain free. That promise is{" "}
+                add-ons. If they are, local capture and export will remain free, and any change to what is free is announced first. That commitment is{" "}
                 <a
                   href={LINKS.repo}
                   target="_blank"
@@ -78,8 +78,8 @@ export default function PricingClient() {
                   className="text-text-primary underline underline-offset-2"
                 >
                   on GitHub
-                </a>{" "}
-                and won&apos;t change. Want to shape what gets built?{" "}
+                </a>
+                . Want to shape what gets built?{" "}
                 <a href="/feedback" className="text-text-primary underline underline-offset-2">
                   Tell us what your team needs
                 </a>

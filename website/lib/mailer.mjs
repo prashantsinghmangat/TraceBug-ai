@@ -104,7 +104,7 @@ ${url}
 
 What you'll get: at most one email a month about new features and early access. Every email has a one-click unsubscribe link.
 
-Didn't ask for this? Ignore this email. Nothing more will be sent to this address.
+Didn't ask for this? Ignore this email. You won't get any updates unless you confirm.
 
 TraceBug - ${siteUrl()}`;
   const html = layout({
@@ -113,7 +113,7 @@ TraceBug - ${siteUrl()}`;
     bodyHtml: `<p style="${P}">Someone (hopefully you) asked for TraceBug updates at this address.</p>
           <p style="${P}">You'll get <b>at most one email a month</b> about new features and early access, and every email has a one-click unsubscribe link.</p>`,
     button: { url, label: "Confirm my email" },
-    footerHtml: "Didn't ask for this? Ignore this email. Nothing more will be sent to this address.",
+    footerHtml: "Didn't ask for this? Ignore this email. You won't get any updates unless you confirm.",
   });
   return { subject: "Confirm your TraceBug updates", text, html };
 }
