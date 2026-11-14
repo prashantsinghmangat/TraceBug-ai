@@ -28,7 +28,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     .eq("user_id", user.id);
 
   if (updateErr) {
-    return NextResponse.json({ error: "db_error", detail: updateErr.message }, { status: 500 });
+    console.error("[sessions/[id]]", "db_error", updateErr.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
   }
 
   if (row.storage_key) {

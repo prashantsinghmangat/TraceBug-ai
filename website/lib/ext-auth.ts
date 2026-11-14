@@ -8,16 +8,15 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
+import { isOurExtensionOrigin } from "@/lib/ext-origin";
 
-// Only extension pages may call these routes from a browser. Firefox gives each
-// install a random moz-extension:// UUID, so the scheme is the check, not an ID.
-// A request with no Origin (curl, server) is let through: browsers always send
-// one on a cross-origin POST, and the DB limits in otpSendBudget cover scripts.
-const EXT_ORIGIN = /^(chrome-extension|moz-extension):\/\/[a-z0-9-]+$/i;
-
+// Only TraceBug's own extension pages may call these routes from a browser
+// (lib/ext-origin.ts: Chrome by ID, Firefox by scheme). A request with no Origin
+// (curl, server) is let through: browsers always send one on a cross-origin
+// POST, and the DB limits in otpSendBudget cover scripts.
 function extOrigin(req: Request): string | null {
   const o = req.headers.get("origin");
-  return o && EXT_ORIGIN.test(o) ? o : null;
+  return isOurExtensionOrigin(o) ? o : null;
 }
 
 /** False when a browser page that isn't one of ours is calling. */

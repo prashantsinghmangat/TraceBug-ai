@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PHASE2_CLOUD_LIVE, isCloudRoute } from "@/lib/flags";
+import { isOurExtensionOrigin } from "@/lib/ext-origin";
 
 // Two responsibilities, both API-scoped:
-//   1. CORS — allow chrome-extension://<id>/ + moz-extension://<id>/ origins
+//   1. CORS — allow TraceBug's own extension origins (lib/ext-origin.ts)
 //      to call /api/* with credentials. Same-origin browser callers (dashboard,
 //      sdk-bridge iframe) don't need CORS — they share the cookie domain.
 //   2. CSRF — reject mutating requests whose Origin header doesn't match an
@@ -50,7 +51,8 @@ export function middleware(req: NextRequest) {
   if (!isApi) return NextResponse.next();
 
   const origin = req.headers.get("origin") || "";
-  const isExtension = origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://");
+  // Only TraceBug's own extension (lib/ext-origin.ts); other extensions are treated like web pages.
+  const isExtension = isOurExtensionOrigin(origin);
   const isSameSite = !!origin && allowedSameSiteOrigins().includes(origin);
 
   // ── CSRF guard on mutating methods ─────────────────────────────────────

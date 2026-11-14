@@ -381,8 +381,8 @@ export default function PrivacyPage() {
             </h2>
             <p className="mb-3">
               To have your data deleted or to ask what we hold about you, email{" "}
-              <a href="mailto:prashantsinghmangat5@gmail.com" className="text-primary hover:text-accent transition-colors underline">
-                prashantsinghmangat5@gmail.com
+              <a href="mailto:nexgentalk@gmail.com" className="text-primary hover:text-accent transition-colors underline">
+                nexgentalk@gmail.com
               </a>
               . We answer within 30 days.
             </p>

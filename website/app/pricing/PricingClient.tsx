@@ -1,4 +1,4 @@
-import { LINKS } from "@/lib/site";
+import { CONTACT_EMAIL, LINKS } from "@/lib/site";
 import { Check } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -82,6 +82,10 @@ export default function PricingClient() {
                 . Want to shape what gets built?{" "}
                 <a href="/feedback" className="text-text-primary underline underline-offset-2">
                   Tell us what your team needs
+                </a>{" "}
+                or email{" "}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="text-text-primary underline underline-offset-2">
+                  {CONTACT_EMAIL}
                 </a>
                 .
               </p>

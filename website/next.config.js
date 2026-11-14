@@ -22,7 +22,17 @@ const nextConfig = {
           // and still claiming v1.6.0 and "No API keys").
           // Still blocks external clickjacking.
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'X-XSS-Protection', value: '1; mode=block' },
+          // A CSP that restricts no scripts or styles (that would need hashes for
+          // the inline theme/JSON-LD scripts — audit SEC-11), only the cheap,
+          // safe directives: no framing by other sites, no <base> hijack, no
+          // plugins, forms post only to us. /sdk-bridge and /share/:token below
+          // replace it with their own (later entries with the same key win).
+          // X-XSS-Protection is gone: browsers removed that filter, and "1"
+          // could itself be abused in the old ones.
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'",
+          },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },

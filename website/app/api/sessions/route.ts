@@ -39,6 +39,9 @@ export async function GET() {
     error = r.error;
   }
 
-  if (error) return NextResponse.json({ error: "db_error", detail: error.message }, { status: 500 });
+  if (error) {
+    console.error("[sessions]", "db_error", error.message);
+    return NextResponse.json({ error: "db_error" }, { status: 500 });
+  }
   return NextResponse.json({ sessions: data ?? [] });
 }
