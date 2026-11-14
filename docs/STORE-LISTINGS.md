@@ -194,6 +194,18 @@ arguably wrong already.
   email you control." AMO: same note; check the current add-on policies on features that need an account and
   say it in the listing.
 - Screenshots/slides that say "no account" for the whole product: recaption.
+- **AMO copy too** (added by the 2026-11-13 security audit — the lines above only covered CWS): the AMO
+  description's "No account. No upload. No telemetry." and "nothing goes to TraceBug", and the AMO reviewer note's
+  "Data is sent only when the user clicks Send…" — reword them the same way (bug capture: no account, nothing
+  uploaded; Site Audit sign-in and the optional email ask send the email address to tracebug.dev).
+- **Firefox data collection** (`build-ext.mjs`): the manifest now declares `required: ["none"]` plus
+  `optional: ["personallyIdentifyingInfo", "technicalAndInteraction"]`, requested at the moment of the first send
+  (`requestDataConsent` in `signin.js` and `popup.js`; Firefox 140+, ignored below). In the AMO reviewer note say:
+  "Bug capture collects nothing. Optional data collection is requested only when the user types an email for Site
+  Audit sign-in or the update list (and the usage counts only if they tick that box)." Check `web-ext lint` stays
+  at the baseline.
+- Privacy policy (tracebug.dev/privacy) already describes both, names the private contact hello@tracebug.dev and
+  the delete path — confirm hello@ receives mail before release (tracebug.dev has no MX record yet).
 
 **Disclose if they change** (found in a code review, 2026-10-26):
 - "Open in Claude" / "Open in ChatGPT" (`src/exporters/ai-prompt.ts`) puts the report text into the

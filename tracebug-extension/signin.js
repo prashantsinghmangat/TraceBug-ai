@@ -66,6 +66,22 @@ async function post(path, body) {
   }
 }
 
+/**
+ * Firefox 140+: the email is declared as optional data collection (build-ext.mjs),
+ * so ask before it first leaves the browser. Call it before any await in the
+ * submit/click handler — permissions.request needs the user gesture. Chrome and
+ * Firefox < 140 have no such permission: resolves true. Same helper in popup.js.
+ */
+function requestDataConsent(kinds) {
+  const api = globalThis.browser;
+  let declared = [];
+  try { declared = chrome.runtime.getManifest().browser_specific_settings?.gecko?.data_collection_permissions?.optional || []; } catch {}
+  const wanted = kinds.filter((k) => declared.includes(k));
+  if (!wanted.length || !api?.permissions?.request) return Promise.resolve(true);
+  return api.permissions.request({ data_collection: wanted }).catch(() => true);
+}
+const CONSENT_DENIED = "Firefox needs your OK to send your email address to TraceBug for sign-in. Nothing is sent without it; bug capture and exports work without an account.";
+
 /** Sign-in unreachable: open audits for an hour and say so plainly. */
 async function failOpen(msgId) {
   await writeGate({ graceUntil: Date.now() + GRACE_MS });
@@ -159,6 +175,7 @@ $("stepEmail").addEventListener("submit", async (e) => {
   e.preventDefault();
   const v = $("email").value.trim().toLowerCase();
   if (!EMAIL_RE.test(v)) { msg("emailMsg", "That doesn't look like an email address.", true); return; }
+  if (!(await requestDataConsent(["personallyIdentifyingInfo"]))) { msg("emailMsg", CONSENT_DENIED, true); return; }
   email = v;
   await sendCode();
 });

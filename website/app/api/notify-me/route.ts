@@ -129,6 +129,7 @@ export async function POST(req: Request) {
     : !(await underDailyCap(admin)) ? "daily cap reached"
     : null;
   if (skip) console.info(`[notify-me] confirm email not sent: ${skip}`);
+  let queued = skip === "daily cap reached";
   if (!skip) {
     try {
       await sendEmail({ to: email, ...confirmEmail(token!) });
@@ -136,13 +137,16 @@ export async function POST(req: Request) {
     } catch (e) {
       // The signup is saved; the backlog command retries it.
       console.error("[notify-me] confirm email failed:", e instanceof Error ? e.message : e);
+      queued = true;
     }
   }
 
   // "subscribed": no email was sent, so the form must not say "check your inbox".
   // This tells whoever typed the address that it is on the list; accepted for a
   // product-update list (the alternative was copy that didn't match what happened).
-  return json({ ok: true, status: subscribed ? "subscribed" : "pending" });
+  // "queued": saved, but the confirm email waits for the backlog run (daily cap or a
+  // send error), so the form must not promise it is already in the inbox.
+  return json({ ok: true, status: subscribed ? "subscribed" : queued ? "queued" : "pending" });
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

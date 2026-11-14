@@ -61,7 +61,50 @@ export function anonClient() {
 }
 
 const PER_EMAIL_PER_HOUR = 3;
+const MAX_WRONG_CODES_PER_HOUR = 5;
 const HOUR = 60 * 60 * 1000;
+
+const emailHash = (email: string) => createHash("sha256").update(email).digest("hex");
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message);
+
+/**
+ * Wrong-code lockout (migration 0010). True when this address has had
+ * MAX_WRONG_CODES_PER_HOUR wrong codes in the last hour. Fails open (false) if
+ * the table is missing or the DB errors.
+ */
+export async function codeAttemptsBlocked(email: string): Promise<boolean> {
+  try {
+    const { count, error } = await createSupabaseAdminClient()
+      .from("otp_fail_log")
+      .select("id", { count: "exact", head: true })
+      .eq("email_hash", emailHash(email))
+      .gte("created_at", new Date(Date.now() - HOUR).toISOString());
+    if (error) throw error;
+    return (count ?? 0) >= MAX_WRONG_CODES_PER_HOUR;
+  } catch (e) {
+    console.error("[ext/otp] fail log unavailable, allowing", errMsg(e));
+    return false;
+  }
+}
+
+/** Record a wrong code (and prune rows older than two days). Best effort. */
+export async function recordCodeFailure(email: string): Promise<void> {
+  try {
+    const db = createSupabaseAdminClient();
+    const ins = await db.from("otp_fail_log").insert({ email_hash: emailHash(email) });
+    if (ins.error) throw ins.error;
+    await db.from("otp_fail_log").delete().lt("created_at", new Date(Date.now() - 48 * HOUR).toISOString());
+  } catch (e) {
+    console.error("[ext/otp] could not record failure", errMsg(e));
+  }
+}
+
+/** A correct code clears the address's wrong-code count. Best effort. */
+export async function clearCodeFailures(email: string): Promise<void> {
+  try {
+    await createSupabaseAdminClient().from("otp_fail_log").delete().eq("email_hash", emailHash(email));
+  } catch {}
+}
 
 /**
  * DB-backed limit on sign-in code emails (migration 0009). Records the send
@@ -73,7 +116,7 @@ const HOUR = 60 * 60 * 1000;
 export async function otpSendBudget(
   email: string,
 ): Promise<{ ok: true } | { ok: false; reason: "email"; retryAfter: number } | { ok: false; reason: "global" }> {
-  const hash = createHash("sha256").update(email).digest("hex");
+  const hash = emailHash(email);
   const now = Date.now();
   const cap = Number(process.env.OTP_DAILY_CAP) || 50;
   try {
@@ -102,7 +145,7 @@ export async function otpSendBudget(
     // Keep the table tiny: nothing older than two days is needed.
     await db.from("otp_send_log").delete().lt("created_at", new Date(now - 48 * HOUR).toISOString());
   } catch (e) {
-    console.error("[ext/otp] send log unavailable, allowing", e instanceof Error ? e.message : (e as { message?: string })?.message);
+    console.error("[ext/otp] send log unavailable, allowing", errMsg(e));
   }
   return { ok: true };
 }

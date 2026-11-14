@@ -92,6 +92,8 @@ async function confirmBacklog() {
 
 async function sendUpdate() {
   if (!file) die("Usage: email.mjs send <file.txt> [--limit 80] [--send]");
+  // CAN-SPAM: every commercial email carries a valid postal address.
+  if (!process.env.EMAIL_POSTAL_ADDRESS?.trim()) die("EMAIL_POSTAL_ADDRESS is not set: updates must include a postal address (CAN-SPAM).");
   const limit = Number(opt("--limit", 80));
   const issue = basename(file, extname(file));
   const raw = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
