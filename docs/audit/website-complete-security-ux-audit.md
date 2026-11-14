@@ -24,6 +24,41 @@ dashboards I have no access to.
 >
 > **Owner steps:** apply migration 0009 (until then the limiter allows everything and logs it), deploy, then
 > re-probe the live redirect.
+>
+> **2026-11-14:** P0 is deployed (commit `e7c9e59` on `main`), migration 0009 is applied, and a live re-probe passed:
+> - the redirect and the cloud routes return 404;
+> - the OTP routes return 403 to web origins and send CORS headers only to extensions.
+>
+> **P1, written on `develop` (uncommitted, not deployed):**
+> - **POL-01:** Firefox `data_collection_permissions` gets optional `personallyIdentifyingInfo` and
+>   `technicalAndInteraction`, requested at the first send (`signin.js`, `popup.js`).
+> - **Privacy page:** no more "nothing goes to TraceBug". It adds Netlify, the Product Hunt badge, the "someone
+>   typed your address" case, a delete path that exists and the private contact `hello@tracebug.dev`.
+> - **Pricing:** no "forever" promise.
+> - **Email:**
+>   - the sign-in template drops `{{ .ConfirmationURL }}`;
+>   - the confirm email no longer says "nothing more will be sent";
+>   - `email.mjs send` refuses to run without `EMAIL_POSTAL_ADDRESS`;
+>   - `notify-me` returns `queued` when the confirm email is held back;
+>   - the site form and the popup handle 429 and `queued`.
+> - **SEC-06:** a per-address wrong-code lockout (5 per hour, migration 0010 `otp_fail_log`), and `verify` now
+>   revokes the throwaway Supabase session.
+> - **SEC-04:** migration 0010 drops the insert/update policies on the parked `sessions`, `ai_analyses` and
+>   storage `reports` tables.
+> - **STORE-LISTINGS:** the AMO wording and the Firefox data-collection items are added to the release list.
+>
+> **Not done, deliberately:**
+> - **POL-03** (remove the optional `<all_urls>`): the e2e suites pre-grant it, so it needs its own change.
+> - **SEC-09** (the SDK milestone card gets a 403 from customer origins): it degrades to a sign-up link.
+> - Re-confirm limits for unsubscribed addresses (Low).
+>
+> **Owner steps for P1:**
+> - apply migration 0010;
+> - paste the updated `sign-in-code.html` into **both** Supabase templates;
+> - set `EMAIL_POSTAL_ADDRESS` locally before the next monthly send;
+> - make `hello@tracebug.dev` receive mail (the apex has no MX: add forwarding);
+> - DMARC: add `rua=mailto:…`;
+> - Resend: confirm the `send.` domain shows Verified.
 
 ---
 
