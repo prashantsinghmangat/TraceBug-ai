@@ -106,9 +106,10 @@ For when you only want part of the page:
 When you're done reproducing the bug, click the **recording toggle** to stop, or call `TraceBug.stopRecording()`. This opens the **ticket-review modal**:
 
 - Header: "Bug Ticket — Review & Export"
-- Auto-filled title and description (root cause, steps, environment, errors, failed requests)
+- Auto-filled title and description (root cause, steps, environment, errors, failed requests). The description reads as formatted text; click it or **Edit Markdown** to change the raw Markdown that GitHub, Jira and the exports receive
 - **Primary preview** of the first screenshot
 - **Numbered thumbnail strip** of every other screenshot; click any thumbnail to swap it into the primary preview
+- **Trim** (screen recordings of 1.5 s or more): drag the two handles under the video to keep only the part that shows the bug — playback stays inside the kept range — then click **Cut**. The kept part plays once in the background, in real time, with a progress bar and **Cancel**. The cut replaces the recording for this ticket (download, export, Grab frame), keeps the sound, and shifts timestamped comments and the console/network timeline to match. It is not saved back to the extension: reload the page before exporting and the full recording returns. Not offered on sites whose security policy blocks in-page video (the recording then plays in the extension's own player).
 - Export actions: **Export .html** (interactive replay), **Export HAR**, **Fix with AI**, and under **More ▾** — **Download .zip** (attach to GitHub), **Download failing test (.spec.ts)** (a Playwright spec that fails until the bug is fixed), **Export for AI (.html)**, **Download report (.md)**, **Download screenshots**, and file a real GitHub / Linear / Slack / Jira issue. See [ticket-flow.md](ticket-flow.md#step-4--export).
 - Press `Ctrl+Shift+B` (or call `TraceBug.quickCapture()`) to open the same modal at any time
 
@@ -120,18 +121,25 @@ Programmatically: `await TraceBug.takeScreenshot()`  _(no arguments; region vari
 
 ### Annotation Editor
 
-After capturing, an annotation editor opens with:
+Click a screenshot in the ticket (or the pencil on the preview) to open the editor
+(`src/ui/screenshot-editor.ts`). Hover any button for its name and key.
 
-| Tool | Description |
-|------|-------------|
-| **Highlight** (rectangle) | Draw semi-transparent rectangles to highlight areas |
-| **Arrow** | Draw arrows with arrowheads to point at elements |
-| **Text** | Place text labels with dark background for readability |
-| **Colors** | Red, Yellow, Green, Blue |
-| **Undo** | Remove last drawn annotation |
-| **Clear** | Remove all drawn annotations |
+| Key | Tool | What it does |
+|-----|------|--------------|
+| V | Select & move | Click a mark, drag it; **Delete** removes it; double-click a label to edit it |
+| P | Pen | Freehand line |
+| R / O | Box / Ellipse | Outlines (Shift = square / circle) |
+| A / L | Arrow / Line | Shift keeps 45° steps |
+| T | Text | Click, type, Enter |
+| H | Highlighter | Wide translucent marker |
+| N | Numbered step | Click to drop 1, 2, 3… in the order things happen |
+| B | Pixelate | Drag over emails, names or tokens — the saved image is pixelated there |
+| E | Eraser | Click or drag across marks to remove just those |
 
-Click **Save Annotated** to merge annotations into the screenshot — the annotated image auto-downloads to your system. Or click **Download** to save the annotated version without merging.
+Also: 7 colours (picking one recolours the selected mark), 3 line sizes (`[` / `]`), Undo / Redo
+(Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z), Remove all. **Save** (Ctrl/Cmd+Enter) puts the annotated image back
+into the ticket at the screenshot's full resolution; **Download** saves a PNG; **Copy** puts it on the
+clipboard (where the browser allows it). Closing with unsaved marks asks first.
 
 ### Storage
 

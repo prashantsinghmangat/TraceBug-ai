@@ -463,6 +463,20 @@ export function captureRollingBuffer(): Promise<VideoRecording | null> {
 }
 
 /** Drop the cached recording and revoke its blob URL. */
+/**
+ * Swap the page's last recording for an edited copy (the ticket modal's trim).
+ * Page memory only: the extension's stored copy keeps the original, so a page
+ * reload before export brings the full recording back.
+ */
+export async function replaceLastVideoRecording(
+  next: Omit<VideoRecording, "url" | "dataUrl" | "sizeBytes">,
+): Promise<VideoRecording> {
+  const dataUrl = await blobToDataUrl(next.blob);
+  const recording: VideoRecording = { ...next, url: URL.createObjectURL(next.blob), dataUrl, sizeBytes: next.blob.size };
+  revokeAndStash(recording);
+  return recording;
+}
+
 export function clearVideoRecording(): void {
   if (_lastRecording) {
     try { URL.revokeObjectURL(_lastRecording.url); } catch {}

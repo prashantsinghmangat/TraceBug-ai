@@ -180,7 +180,10 @@ export async function startDomRecording(): Promise<boolean> {
       // The draw *SVG* overlay (data-tracebug="draw-svg") is deliberately NOT
       // matched here, so freehand pen/shape annotations still replay. With the
       // core Replayer, blocked nodes render as empty/transparent (no placeholder).
-      blockSelector: "#tracebug-root, #tracebug-draw-canvas",
+      // The annotate toolbar's in-progress layer is blocked too: a drag would
+      // otherwise record one attribute mutation per frame. The finished shape
+      // is moved into #tracebug-annot-layer, which IS recorded (one add).
+      blockSelector: "#tracebug-root, #tracebug-draw-canvas, #tracebug-annot-live",
       maskTextClass: "tb-mask",
       // maskAllInputs above covers <input>/<textarea>/<select> only. A
       // contenteditable is plain text nodes, so a chat composer or document

@@ -7,7 +7,11 @@ Always go through `node scripts/check.mjs`. Never run the npm gates one at a tim
 their full output — a passing `ext:lint` alone is 751 lines that have been byte-identical for phases.
 
 - Code only: `node scripts/check.mjs`  (typecheck, lint, test, build)
-- Extension files touched: `node scripts/check.mjs --full`  (adds build:ext, ext:lint, check:versions)
+- Extension files touched: `node scripts/check.mjs --full`  (adds build:ext, ext:lint, check:versions and
+  the wired-in e2e suites: quality, audit, audit-ext, audit-gate, email-ask, annotate, trim, video-cut,
+  ticket-view, shot-editor). Takes ~7 min — run it in the background and filter:
+  `node scripts/check.mjs --full 2>&1 | grep -E "^(PASS|FAIL)|gate"`.
+- Ending a change? The `finish` skill does build → gates → docs → report in one pass.
 - **Firefox is NOT a gate.** `npm run ext:firefox` is `web-ext run`: it opens Firefox and stays
   running until the browser is closed, so it returns no verdict and cannot be wrapped. check.mjs
   refuses it. At the end of a phase that touched the extension, run `npm run ext:firefox` directly
@@ -33,8 +37,9 @@ Report the summary lines it prints, verbatim. They already carry the counts
 
 ## e2e
 
-Not part of check.mjs — they launch real browsers and take minutes. Run only the suite related to the
-change: `node e2e/<name>.e2e.mjs`.
+The suites listed above run under `--full`; the rest (recording, feature matrix, redaction, …) don't —
+they launch real browsers and take minutes. Run only the suite related to the change:
+`node e2e/<name>.e2e.mjs`.
 
 - They are quiet while passing and print one totals line (`ALL CHECKS PASSED — 22/22 checks passed`).
   Report that line.

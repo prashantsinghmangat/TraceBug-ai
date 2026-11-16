@@ -10,7 +10,9 @@ import { maybeShowMilestoneAsk } from "./milestone-ask";
 import { signalSuccess } from "../success-signal";
 import { recordExport, showReviewAsk } from "./review-ask";
 import { issueSignatureEnabled, setIssueSignature } from "../integrations/issue-signature";
-import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
+import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen, replaceLastVideoRecording } from "../video-recorder";
+import { mountTrimBar, cutVideo, trimComments, trimBarCss, type TrimBarHandle } from "./video-trim";
+import { renderMarkdownView, mdViewCss } from "./md-view";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
@@ -620,6 +622,7 @@ function _openModal(
               Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}
             </button>
           </div>
+          ${video.durationMs >= 1500 ? `<div id="tb-qb-trim"></div>` : ""}
         ` : ""}
 
         ${!video && primary ? `
@@ -699,8 +702,17 @@ function _openModal(
         ` : ""}
 
         <details class="tb-qb-desc-wrap" open>
-          <summary class="tb-qb-desc-summary">Description — editable, included in exports</summary>
-          <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml(data.description)}</textarea>
+          <summary class="tb-qb-desc-summary">Description — included in exports</summary>
+          <!-- Read as formatted text; the raw Markdown (what GitHub / Jira /
+               exports receive) opens on click or with the button. -->
+          <div class="tb-qb-desc-bar">
+            <button type="button" class="tb-qb-desc-mode" data-action="desc-mode" aria-pressed="false" title="Edit the description as Markdown — the format GitHub, Jira and the exports receive">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>
+              <span>Edit Markdown</span>
+            </button>
+          </div>
+          <div id="tb-qb-desc-view" class="tb-qb-desc-view" role="button" tabindex="0" aria-label="Description. Click to edit">${_descViewHtml(data.description)}</div>
+          <textarea id="tb-qb-desc" class="tb-qb-textarea" hidden aria-label="Description (Markdown)">${escapeHtml(data.description)}</textarea>
         </details>
       </div>
 
@@ -920,12 +932,54 @@ function _openModal(
     saveTimer = setTimeout(saveDraft, 500);
   });
 
+  // Description: formatted read view by default, raw Markdown on demand.
+  const descTa = modal.querySelector<HTMLTextAreaElement>("#tb-qb-desc");
+  const descView = modal.querySelector<HTMLElement>("#tb-qb-desc-view");
+  const descModeBtn = modal.querySelector<HTMLButtonElement>('[data-action="desc-mode"]');
+  const showDescView = () => {
+    if (!descTa || !descView) return;
+    setInnerHTML(descView, _descViewHtml(descTa.value));
+    descView.hidden = false;
+    descTa.hidden = true;
+    descModeBtn?.setAttribute("aria-pressed", "false");
+    const lbl = descModeBtn?.querySelector("span");
+    if (lbl) lbl.textContent = "Edit Markdown";
+  };
+  const showDescEdit = () => {
+    if (!descTa || !descView) return;
+    descView.hidden = true;
+    descTa.hidden = false;
+    descModeBtn?.setAttribute("aria-pressed", "true");
+    const lbl = descModeBtn?.querySelector("span");
+    if (lbl) lbl.textContent = "Done";
+    try { descTa.focus({ preventScroll: true }); } catch { descTa.focus(); }
+  };
+  descModeBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (descTa?.hidden) showDescEdit(); else showDescView();
+  });
+  descView?.addEventListener("click", () => {
+    // Selecting text to copy is not a request to edit.
+    const sel = window.getSelection?.();
+    if (sel && !sel.isCollapsed && descView.contains(sel.anchorNode)) return;
+    showDescEdit();
+  });
+  descView?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showDescEdit(); }
+  });
+  descTa?.addEventListener("blur", (e) => {
+    // Clicking "Done" blurs first; let its click handler switch back.
+    if ((e as FocusEvent).relatedTarget === descModeBtn) return;
+    showDescView();
+  });
+
   // Discard a restored draft: reset both fields to this capture's auto values.
   modal.querySelector('[data-action="discard-draft"]')?.addEventListener("click", (e) => {
     const titleEl = modal.querySelector<HTMLInputElement>("#tb-qb-title");
     const descEl = modal.querySelector<HTMLTextAreaElement>("#tb-qb-desc");
     if (titleEl) titleEl.value = data.autoTitle ?? "";
     if (descEl) descEl.value = data.autoDesc ?? "";
+    showDescView();
     _clearDraft();
     (e.currentTarget as HTMLElement).remove();
     showToast("Draft discarded — using this capture's auto-fill", root);
@@ -1958,6 +2012,56 @@ ${report.steps}` : userDesc)
     if (videoEl.readyState >= 2) paintFirstFrame();
     else videoEl.addEventListener("loadeddata", paintFirstFrame, { once: true });
 
+    // ── Trim ────────────────────────────────────────────────────────────
+    // Cut the recording down to the part that shows the bug. The cut copy
+    // replaces the in-memory recording, then the modal re-renders with it.
+    const trimHost = modal.querySelector<HTMLElement>("#tb-qb-trim");
+    let trimBar: TrimBarHandle | null = null;
+    let trimAbort: AbortController | null = null;
+    if (trimHost && video.blob && video.blob.size > 0) {
+      trimBar = mountTrimBar(trimHost, videoEl, expectedS, {
+        onCancel: () => trimAbort?.abort(),
+        onCut: async (startS, endS) => {
+          if (trimAbort || !trimBar) return;
+          trimAbort = new AbortController();
+          trimBar.setError(null);
+          trimBar.setBusy(0);
+          try {
+            const blob = await cutVideo(video.blob, video.mimeType, startS, endS, {
+              signal: trimAbort.signal,
+              onProgress: (f) => trimBar?.setBusy(f),
+            });
+            // Modal closed mid-cut: leave the recording as it was.
+            if (!trimHost.isConnected) return;
+            await replaceLastVideoRecording({
+              blob,
+              mimeType: blob.type || video.mimeType,
+              durationMs: Math.round((endS - startS) * 1000),
+              comments: trimComments(video.comments, startS, endS),
+              // Keeps the console/network timeline lined up with the new start.
+              startedAt: video.startedAt + Math.round(startS * 1000),
+              rrwebEvents: video.rrwebEvents,
+            });
+            const titleEl = document.getElementById("tb-qb-title") as HTMLInputElement | null;
+            const descEl = document.getElementById("tb-qb-desc") as HTMLTextAreaElement | null;
+            if (titleEl || descEl) {
+              _saveDraft({ title: titleEl?.value ?? "", description: descEl?.value ?? "", timestamp: Date.now() });
+            }
+            showToast(`✓ Trimmed to ${_formatVideoTime(Math.round((endS - startS) * 1000))}`, root);
+            await refreshQuickBugCapture(root);
+          } catch (err) {
+            const cancelled = (err as Error)?.name === "AbortError";
+            trimBar?.setBusy(null);
+            trimBar?.setError(cancelled ? null : `Couldn't cut the video: ${(err as Error)?.message || "unknown error"}. The full recording is unchanged.`);
+          } finally {
+            trimAbort = null;
+          }
+        },
+      });
+    } else {
+      trimHost?.remove();
+    }
+
     // ── CSP fallback ────────────────────────────────────────────────────
     // On strict host pages (corporate sites, etc.) the page's CSP media-src
     // blocks blob:/data: video, so an INJECTED <video> renders controls but
@@ -2033,6 +2137,9 @@ ${report.steps}` : userDesc)
 
     const showBlockedNotice = () => {
       if (_blockedShown || !preview) return;
+      // The trim bar drives the in-page <video>, which this site's CSP blocks.
+      trimBar?.destroy();
+      trimBar = null;
       // networkState 3 = NETWORK_NO_SOURCE; a valid-but-slow local blob reaches
       // readyState>=1 well within the timeout, so this only trips on a real block.
       _blockedShown = true;
@@ -2076,6 +2183,11 @@ ${report.steps}` : userDesc)
 }
 
 // \u2500\u2500 Video block \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function _descViewHtml(md: string): string {
+  const html = renderMarkdownView(md);
+  return html || `<span class="md-empty">No description yet — click to write one.</span>`;
+}
 
 function _formatVideoTime(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -2299,67 +2411,90 @@ function _connectionIcon(name: string): string {
 }
 
 function _buildInfoTab(report: import("../types").BugReport | null, session: StoredSession | null): string {
+  // Essentials first; everything else folds into sections that say what is
+  // inside, so the tab reads at a glance instead of as a 60-row dump.
   const env = report?.environment || session?.environment || captureEnvironment();
   const ctx = report?.context || {};
-  const sevLabel = severityBadge(report?.severity || "low");
-  const rows: string[] = [];
-  rows.push(_kvRow("URL", env.url || redactUrl(window.location.href), _ic("link")));
-  if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
-  rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
-  rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
-  rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
-  rows.push(_kvRow("Viewport", env.viewport || "", _ic("ruler")));
-  rows.push(_kvRow("Screen", env.screenResolution || "", _ic("monitor")));
-  rows.push(_kvRow("Device", env.deviceType || "", _deviceIcon(env.deviceType)));
-  rows.push(_kvRow("Language", env.language || "", _ic("languages")));
-  rows.push(_kvRow("Timezone", env.timezone || "", _ic("globe")));
-  rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
-  rows.push(_kvRow("Session", (session?.sessionId || "").slice(0, 12), _ic("hash")));
-  rows.push(_kvRow("Severity (auto)", sevLabel));
+  const out: string[] = [];
+
+  const top: string[] = [];
+  top.push(_kvRow("URL", env.url || redactUrl(window.location.href), _ic("link")));
+  top.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
+  top.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
+  top.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
+  top.push(_kvRow("Viewport", env.viewport || "", _ic("ruler")));
+  top.push(_kvRow("Severity (auto)", severityBadge(report?.severity || "low")));
   // Priority appears only when the tester explicitly picked one — the
   // report-level fallback (derived from severity) is not their triage call.
-  if (session?.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
-  // Evidence integrity (evidence-summary.ts): what this ticket can and can't show.
+  if (session?.priority) top.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
   const evidence = report?.evidence;
-  if (evidence) {
-    rows.push(`<div class="tb-qb-sec-head">Evidence${evidence.complete ? "" : " (incomplete)"}</div>`);
-    rows.push(_kvRow("Captured", evidence.captured.join(" · ")));
-    if (evidence.redacted) rows.push(_kvRow("Masked", evidence.redacted));
-    if (evidence.dropped.length) rows.push(_kvRow("Dropped", `⚠ ${evidence.dropped.join(" · ")}`));
-    rows.push(_kvRow("Not captured", evidence.notCaptured.join(" · ")));
-  }
+  if (evidence) top.push(_kvRow(evidence.complete ? "Captured" : "Captured (partial)", evidence.captured.join(" · ")));
+  out.push(top.join(""));
+
+  // Custom context is what the app's developers chose to attach — keep it open.
   const ctxKeys = Object.keys(ctx);
   if (ctxKeys.length > 0) {
-    rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
-    for (const k of ctxKeys) {
-      rows.push(_kvRow(k, String(ctx[k])));
-    }
+    out.push(_infoSection(`Custom context`, String(ctxKeys.length), ctxKeys.map((k) => _kvRow(k, String(ctx[k]))).join(""), true));
   }
+
+  const more = [
+    env.startUrl ? _kvRow("Started on", env.startUrl, _ic("link")) : "",
+    _kvRow("Screen", env.screenResolution || "", _ic("monitor")),
+    _kvRow("Device", env.deviceType || "", _deviceIcon(env.deviceType)),
+    _kvRow("Language", env.language || "", _ic("languages")),
+    _kvRow("Timezone", env.timezone || "", _ic("globe")),
+    _kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)),
+    _kvRow("Session", (session?.sessionId || "").slice(0, 12), _ic("hash")),
+  ].join("");
+  if (more) out.push(_infoSection("More environment", "", more, false));
+
+  // Evidence integrity (evidence-summary.ts): what this ticket can't show.
+  if (evidence) {
+    const gaps = [
+      evidence.redacted ? _kvRow("Masked", evidence.redacted) : "",
+      evidence.dropped.length ? _kvRow("Dropped", `⚠ ${evidence.dropped.join(" · ")}`) : "",
+      _kvRow("Not captured", evidence.notCaptured.join(" · ")),
+    ].join("");
+    const hint = [
+      evidence.redacted ? "masked values" : "",
+      evidence.dropped.length ? `${evidence.dropped.length} dropped` : "",
+    ].filter(Boolean).join(" · ");
+    if (gaps) out.push(_infoSection("What's masked or missing", hint, gaps, false));
+  }
+
   // Web Storage snapshot (sensitive values already redacted at capture).
   const storage = report?.storage;
   if (storage) {
-    const renderArea = (label: string, entries: import("../types").StorageEntry[] | undefined, dropped?: number) => {
-      if (!entries || entries.length === 0) return;
-      rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
+    const area = (label: string, entries: import("../types").StorageEntry[] | undefined, dropped?: number) => {
+      if (!entries || entries.length === 0) return "";
       const shown = entries.slice(0, 20);
-      for (const e of shown) {
-        rows.push(_kvRow(e.key, e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value));
-      }
-      if (entries.length > shown.length) {
-        rows.push(_kvRow("…", `+${entries.length - shown.length} more`));
-      }
+      const rows = shown.map((e) => _kvRow(e.key, e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value)).join("")
+        + (entries.length > shown.length ? _kvRow("…", `+${entries.length - shown.length} more`) : "");
+      return `<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>${rows}`;
     };
-    renderArea("localStorage", storage.local, storage.localTruncated);
-    renderArea("sessionStorage", storage.session, storage.sessionTruncated);
-    renderArea("Cookies", storage.cookies, storage.cookiesTruncated);
+    const counts = [
+      storage.local?.length ? `${storage.local.length} local` : "",
+      storage.session?.length ? `${storage.session.length} session` : "",
+      storage.cookies?.length ? `${storage.cookies.length} cookie${storage.cookies.length === 1 ? "" : "s"}` : "",
+    ].filter(Boolean).join(" · ");
     // Say so explicitly when the page had nothing — an absent section reads
     // as "capture broken", not "storage empty".
-    const total = (storage.local?.length || 0) + (storage.session?.length || 0) + (storage.cookies?.length || 0);
-    if (total === 0) {
-      rows.push(`<div class="tb-qb-sec-head">Web storage — empty on this page</div>`);
-    }
+    const body = counts
+      ? area("localStorage", storage.local, storage.localTruncated)
+        + area("sessionStorage", storage.session, storage.sessionTruncated)
+        + area("Cookies", storage.cookies, storage.cookiesTruncated)
+      : `<div class="tb-qb-info-empty">This page had no web storage.</div>`;
+    out.push(_infoSection("Page storage & cookies", counts || "empty", body, false));
   }
-  return `<div class="tb-qb-info">${rows.join("")}</div>`;
+  return `<div class="tb-qb-info">${out.join("")}</div>`;
+}
+
+/** A collapsible Info-tab section. `hint` (escaped) sits next to the title. */
+function _infoSection(title: string, hint: string, body: string, open: boolean): string {
+  return `<details class="tb-qb-acc"${open ? " open" : ""}>
+    <summary class="tb-qb-acc-sum"><span class="tb-qb-acc-title">${escapeHtml(title)}</span>${hint ? `<span class="tb-qb-acc-hint">${escapeHtml(hint)}</span>` : ""}</summary>
+    <div class="tb-qb-acc-body">${body}</div>
+  </details>`;
 }
 
 // ── Unified Console feed (Jam-style) ────────────────────────────────────
@@ -3226,6 +3361,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-grab-frame svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
     #${MODAL_ID} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
+    ${trimBarCss(`#${MODAL_ID}`)}
     #${MODAL_ID} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
     #${MODAL_ID} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
@@ -3269,6 +3405,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-comment:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
     #${MODAL_ID} .tb-qb-comment-ts { font-variant-numeric:tabular-nums; font-weight:600; color:var(--tb-accent); min-width:42px; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-comment-tx { flex:1; }
+    ${mdViewCss(`#${MODAL_ID}`)}
     #${MODAL_ID} .tb-qb-desc-wrap { margin-top:8px; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); background:var(--tb-bg-secondary); }
     #${MODAL_ID} .tb-qb-desc-wrap[open] { background:var(--tb-bg-primary); }
     #${MODAL_ID} .tb-qb-desc-summary { padding:10px 14px; font-size:11px; color:var(--tb-text-muted); cursor:pointer; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; user-select:none; transition:color 0.15s; }
@@ -3288,6 +3425,17 @@ function _injectStyles(): void {
 
     /* ── Tab content ─────────────────────────────────── */
     #${MODAL_ID} .tb-qb-empty { font-size:13px; color:var(--tb-text-muted); padding:32px 16px; text-align:center; border:1px dashed var(--tb-border); border-radius:var(--tb-radius-md); }
+    #${MODAL_ID} .tb-qb-acc { margin-top:10px; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); background:var(--tb-bg-primary); }
+    #${MODAL_ID} .tb-qb-acc:first-of-type { margin-top:14px; }
+    #${MODAL_ID} .tb-qb-acc-sum { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; list-style:none; font-size:12px; font-weight:600; color:var(--tb-text-primary); user-select:none; }
+    #${MODAL_ID} .tb-qb-acc-sum::-webkit-details-marker { display:none; }
+    #${MODAL_ID} .tb-qb-acc-sum::before { content:""; width:6px; height:6px; border-right:1.5px solid var(--tb-text-muted); border-bottom:1.5px solid var(--tb-text-muted); transform:rotate(-45deg); transition:transform 0.15s; flex-shrink:0; margin-right:2px; }
+    #${MODAL_ID} .tb-qb-acc[open] > .tb-qb-acc-sum::before { transform:rotate(45deg); }
+    #${MODAL_ID} .tb-qb-acc-sum:hover { background:var(--tb-bg-secondary); border-radius:var(--tb-radius-md); }
+    #${MODAL_ID} .tb-qb-acc-hint { margin-left:auto; font-size:11px; font-weight:500; color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-acc-body { padding:2px 12px 12px; border-top:1px solid var(--tb-border); }
+    #${MODAL_ID} .tb-qb-acc-body > .tb-qb-sec-head:first-child { margin-top:10px; }
+    #${MODAL_ID} .tb-qb-info-empty { padding:10px 0 0; font-size:12px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-sec-head { font-size:10px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin:18px 0 8px; }
     #${MODAL_ID} .tb-qb-sec-head:first-child { margin-top:0; }
     #${MODAL_ID} .tb-qb-info { display:flex; flex-direction:column; gap:5px; }
@@ -3384,7 +3532,11 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-net-c-n { color:var(--tb-text-muted); text-align:right; }
     #${MODAL_ID} .tb-qb-net-c-name { color:var(--tb-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #${MODAL_ID} .tb-qb-net-c-meth { color:var(--tb-text-secondary); font-weight:600; font-size:10px; letter-spacing:0.4px; }
-    #${MODAL_ID} .tb-qb-net-c-stat { font-size:10px; font-weight:700; padding:1px 6px; border-radius:var(--tb-radius-sm); color:#fff; text-align:center; }
+    /* White only on a coloured badge: the header cell and badge-less statuses
+       ("—", "aborted", …) use theme text, or they vanish in light mode. */
+    #${MODAL_ID} .tb-qb-net-c-stat { font-size:10px; font-weight:700; padding:1px 6px; border-radius:var(--tb-radius-sm); color:var(--tb-text-secondary); text-align:center; }
+    #${MODAL_ID} .tb-qb-net-c-stat:is(.tb-qb-net-2xx, .tb-qb-net-3xx, .tb-qb-net-4xx, .tb-qb-net-5xx, .tb-qb-net-err) { color:#fff; }
+    #${MODAL_ID} .tb-qb-net-head .tb-qb-net-c-stat { color:inherit; }
     #${MODAL_ID} .tb-qb-net-c-stat.tb-qb-net-2xx { background:#16a34a; }
     #${MODAL_ID} .tb-qb-net-c-stat.tb-qb-net-3xx { background:#0891b2; }
     #${MODAL_ID} .tb-qb-net-c-stat.tb-qb-net-4xx { background:#d97706; }

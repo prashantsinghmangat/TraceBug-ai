@@ -101,7 +101,7 @@ Draw mode lets you draw rectangles or ellipses directly on the live page to mark
 
 ### How to Use
 
-1. **Activate** — Call `TraceBug.activateDrawMode()`, or use the recording HUD's ✎ **Pen** button (no dedicated toolbar button / shortcut in v1.0)
+1. **Activate** — Call `TraceBug.activateDrawMode()` (no toolbar button / shortcut in v1.0). Drawing *during a recording* is a different tool — see [Drawing while recording](#drawing-while-recording).
 2. A **purple toolbar** appears at the top with shape and color options
 3. **Drag** anywhere on the page to draw a shape
 4. A comment input appears — add a description or click **No comment** to save without one
@@ -137,6 +137,32 @@ Each draw region records:
 Saved regions display on the canvas with:
 - A **colored number pill** in the top-left corner
 - A **comment preview** next to the number (first 40 characters)
+
+## Drawing while recording
+
+The recording HUD's ✎ **Draw** button opens a second dark pill under the HUD
+(`src/ui/annotate-toolbar.ts`). What you draw shows up in the screen video,
+in screenshots you take during the recording, and in the DOM replay of an
+events-only capture.
+
+| Key | Tool | What it does |
+|-----|------|--------------|
+| 1 | Pen | Smooth freehand line |
+| 2 | Rectangle | Outlined box (Shift = square) |
+| 3 | Ellipse | Outlined ellipse (Shift = circle) |
+| 4 | Arrow | Line with a filled head (Shift = 45° steps) |
+| 5 | Line | Straight line (Shift = 45° steps) |
+| 6 | Text | Click, type, Enter. Esc cancels |
+| 7 | Highlighter | Wide translucent marker |
+| 8 | Eraser | Click a drawing (or drag across several) to remove just those |
+
+- Six **colour** swatches sit in the bar. **Undo / Redo** (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y) and **Clear** (undoable).
+- **Fade** (clock) makes new drawings fade out after 3 seconds — useful for "look here" moments.
+- **Clear** (bin) removes every drawing; the eraser removes one at a time. Both can be undone.
+- **Esc** puts the pen down (no tool lit) so the page takes clicks again; drawings stay. Press a number to pick up a tool. **✕** closes the toolbar and clears the drawings; stopping the recording does the same.
+- Shortcuts never fire while you type in a page field, and digits with Ctrl/Alt/Cmd are left alone.
+- Hover any button for its name and key (the keys are not printed on the buttons). The current tool is a filled coral circle, and the HUD's Draw button stays lit while the toolbar is open.
+- Drawings are anchored to the page, so they scroll with it and keep their place when the window is resized. The mouse wheel still scrolls while a drawing tool is on.
 
 ## Blur Tool (element-level redaction)
 

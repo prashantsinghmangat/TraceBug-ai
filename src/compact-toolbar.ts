@@ -1105,7 +1105,7 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
   _ensureToolbarBaseStyles();
 
   // Check for saved drag position
-  let savedPos: { x: number; y: number } | null = null;
+  let savedPos: { x: number; y: number; dir?: string } | null = null;
   try {
     const raw = localStorage.getItem(DRAG_POS_KEY);
     if (raw) savedPos = JSON.parse(raw);
@@ -1125,7 +1125,7 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
   if (savedPos) {
     _setToolbarPositionRule(`
       left: ${savedPos.x}px; top: ${savedPos.y}px;
-      flex-direction: column; padding: 8px 6px;
+      ${_orientationDecls(savedPos.dir === "row" ? "row" : "column")}
       transition: none; cursor: grab;
     `);
   } else if (isBottom) {
@@ -1143,6 +1143,10 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
   }
 }
 
+function _orientationDecls(dir: "row" | "column"): string {
+  return dir === "row" ? "flex-direction: row; padding: 6px 8px;" : "flex-direction: column; padding: 8px 6px;";
+}
+
 function _initDrag(toolbar: HTMLElement): () => void {
   let isDragging = false;
   let startX = 0;
@@ -1156,6 +1160,22 @@ function _initDrag(toolbar: HTMLElement): () => void {
   // _applyToolbarPosition: nothing here may write toolbar.style directly).
   let curLeft = 0;
   let curTop = 0;
+  // The rail keeps the orientation it had when the drag began. The drag rule
+  // REPLACES the position rule, so leaving flex-direction out of it used to
+  // flip a vertical rail into a clipped horizontal strip mid-drag.
+  let orient = "";
+  let dir: "row" | "column" = "column";
+  const beginDrag = () => {
+    dir = getComputedStyle(toolbar).flexDirection === "row" ? "row" : "column";
+    orient = _orientationDecls(dir);
+  };
+  const clampTo = (left: number, top: number) => {
+    curLeft = Math.max(0, Math.min(window.innerWidth - toolbar.offsetWidth, left));
+    curTop = Math.max(0, Math.min(window.innerHeight - toolbar.offsetHeight, top));
+  };
+  const save = () => {
+    try { localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop, dir })); } catch {}
+  };
 
   const onMouseDown = (e: MouseEvent) => {
     // Only drag from the toolbar itself (not buttons)
@@ -1167,7 +1187,10 @@ function _initDrag(toolbar: HTMLElement): () => void {
     const rect = toolbar.getBoundingClientRect();
     startLeft = rect.left;
     startTop = rect.top;
-    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
+    curLeft = startLeft;
+    curTop = startTop;
+    beginDrag();
+    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; ${orient} cursor: grabbing; transition: none;`);
     e.preventDefault();
   };
 
@@ -1178,21 +1201,15 @@ function _initDrag(toolbar: HTMLElement): () => void {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
     if (!hasMoved) return;
 
-    curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-    curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
+    clampTo(startLeft + dx, startTop + dy);
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; ${orient} cursor: grabbing; transition: none;`);
   };
 
   const onMouseUp = () => {
     if (!isDragging) return;
     isDragging = false;
-    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grab; transition: none;`);
-
-    if (hasMoved) {
-      try {
-        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
-      } catch {}
-    }
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; ${orient} cursor: grab; transition: none;`);
+    if (hasMoved) save();
   };
 
   // Touch support for mobile drag (named so we can detach on unmount)
@@ -1206,7 +1223,10 @@ function _initDrag(toolbar: HTMLElement): () => void {
     const rect = toolbar.getBoundingClientRect();
     startLeft = rect.left;
     startTop = rect.top;
-    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
+    curLeft = startLeft;
+    curTop = startTop;
+    beginDrag();
+    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; ${orient} transition: none;`);
   };
   const onTouchMove = (e: TouchEvent) => {
     if (!isDragging) return;
@@ -1216,18 +1236,13 @@ function _initDrag(toolbar: HTMLElement): () => void {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
     if (!hasMoved) return;
 
-    curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-    curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
+    clampTo(startLeft + dx, startTop + dy);
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; ${orient} transition: none;`);
   };
   const onTouchEnd = () => {
     if (!isDragging) return;
     isDragging = false;
-    if (hasMoved) {
-      try {
-        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
-      } catch {}
-    }
+    if (hasMoved) save();
   };
 
   toolbar.addEventListener("mousedown", onMouseDown);
