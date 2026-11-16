@@ -25,7 +25,16 @@
     "claude-code",
     "cursor",
     "ai-agents",
-    "tracebug"
+    "tracebug",
+    "mcp-server",
+    "windsurf",
+    "vscode",
+    "bug-report",
+    "session-replay",
+    "browser-debugging",
+    "playwright",
+    "accessibility",
+    "site-audit"
   ],
   "author": {
     "name": "Prashant Singh Mangat",

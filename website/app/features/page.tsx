@@ -6,12 +6,14 @@ import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 import InstallButtons from "@/components/InstallButtons";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Features — TraceBug",
   description:
     "TraceBug features: one-click bug capture, screenshots, console and network logs, replay, an MCP hand-off to your AI agent, and a Site Audit with fixes.",
   alternates: { canonical: "/features" },
+  ...social("TraceBug features", "One-click bug capture, screenshots, console and network logs, replay, an MCP hand-off to your AI agent, and a Site Audit with fixes.", { url: "https://tracebug.dev/features" }),
 };
 
 // Dedicated feature/deep-dive page. The homepage tells the core story; the full

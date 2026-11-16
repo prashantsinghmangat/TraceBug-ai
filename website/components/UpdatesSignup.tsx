@@ -9,8 +9,8 @@ export default function UpdatesSignup() {
       <div className="mx-auto max-w-xl px-4 sm:px-6 lg:px-8">
         <EmailCapture
           source="home"
-          heading="Want the next features first?"
-          sub="Design Tokens and Visual Comparison are coming. Early access and new releases, nothing else. TraceBug keeps working fully either way."
+          heading="Want a say in what TraceBug does next?"
+          sub="One email a month: what shipped, and sometimes one question about what slows you down. Reply and it shapes the next release. TraceBug keeps working fully either way."
         />
       </div>
     </section>

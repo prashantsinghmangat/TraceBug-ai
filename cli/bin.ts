@@ -11,9 +11,17 @@ const YELLOW = '\x1b[33m'
 const DIM = '\x1b[2m'
 const RESET = '\x1b[0m'
 
+const HELP_FLAGS = new Set(['help', '--help', '-h'])
+const VERSION_FLAGS = new Set(['version', '--version', '-v'])
+
 async function main() {
-  if (!command || command === 'help') {
+  if (!command || HELP_FLAGS.has(command)) {
     printHelp()
+    return
+  }
+
+  if (VERSION_FLAGS.has(command)) {
+    console.log(await readVersion())
     return
   }
 
@@ -23,16 +31,34 @@ async function main() {
   }
 
   if (command === 'mcp') {
+    // `mcp --help` used to start the server and sit waiting on stdin.
+    if (args.slice(1).some((a) => HELP_FLAGS.has(a))) {
+      printMcpHelp()
+      return
+    }
     await startMcpServer()
     return
   }
 
-  console.log(`Unknown command: ${command}. Run ${CYAN}npx tracebug help${RESET}`)
+  console.error(`Unknown command: ${command}. Run ${CYAN}npx tracebug --help${RESET}`)
+  process.exitCode = 1
+}
+
+// package.json lives one level up in the SDK layout (dist/bin.mjs) but is a
+// sibling in the standalone `tracebug` CLI package (packages/tracebug/bin.mjs).
+async function readVersion(): Promise<string> {
+  const fs = await import('fs')
+  for (const rel of ['./package.json', '../package.json']) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(new URL(rel, import.meta.url), 'utf8'))
+      if (pkg.version) return pkg.version
+    } catch { /* try next location */ }
+  }
+  return '0.0.0'
 }
 
 async function startMcpServer() {
   const { runMcpServer } = await import('./mcp-server')
-  const fs = await import('fs')
   const path = await import('path')
 
   // --dir <path> selects where exported bug reports live (default: cwd).
@@ -42,17 +68,7 @@ async function startMcpServer() {
   const hasExplicitDir = dirFlag !== -1 && !!args[dirFlag + 1]
   const baseDir = hasExplicitDir ? path.resolve(args[dirFlag + 1]) : process.cwd()
 
-  // package.json lives one level up in the SDK layout (dist/bin.mjs) but is a
-  // sibling in the standalone `tracebug` CLI package (packages/tracebug/bin.mjs).
-  let version = '0.0.0'
-  for (const rel of ['./package.json', '../package.json']) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(new URL(rel, import.meta.url), 'utf8'))
-      if (pkg.version) { version = pkg.version; break }
-    } catch { /* try next location — cosmetic only */ }
-  }
-
-  await runMcpServer(baseDir, version, !hasExplicitDir)
+  await runMcpServer(baseDir, await readVersion(), !hasExplicitDir)
 }
 
 function printHelp() {
@@ -61,15 +77,34 @@ ${BOLD}TraceBug CLI${RESET} — Debug bugs in seconds, not hours
 
 ${BOLD}Commands:${RESET}
   ${CYAN}init${RESET}    Print the exact TraceBug setup for your framework (incl. the gotcha)
-  ${CYAN}mcp${RESET}     Start the MCP server so AI agents (Claude Code, Cursor) can read
-          exported bug reports. Options: ${DIM}--dir <path>${RESET} (default: current dir)
-  ${CYAN}help${RESET}    Show this help message
+  ${CYAN}mcp${RESET}     Start the MCP server so AI agents (Claude Code, Cursor, Windsurf,
+          VS Code) can read exported bug reports and audits. ${DIM}tracebug mcp --help${RESET}
+  ${CYAN}help${RESET}    Show this help message (also ${DIM}--help${RESET}, ${DIM}-h${RESET})
+  ${CYAN}version${RESET} Print the version (also ${DIM}--version${RESET}, ${DIM}-v${RESET})
 
 ${BOLD}Quick Start:${RESET}
   ${DIM}$${RESET} npx tracebug init
   ${DIM}$${RESET} npm run dev
 
 ${BOLD}Docs:${RESET} https://tracebug.dev/docs
+`)
+}
+
+function printMcpHelp() {
+  console.log(`
+${BOLD}tracebug mcp${RESET} — local MCP server (stdio) for TraceBug exports
+
+Your AI agent starts it; you don't run it by hand. Add it once:
+  ${DIM}Claude Code:${RESET}  claude mcp add -s user tracebug -- npx -y tracebug mcp
+  ${DIM}  on Windows:${RESET} claude mcp add -s user tracebug -- cmd /c npx -y tracebug mcp
+  ${DIM}Cursor, Windsurf, VS Code:${RESET} https://tracebug.dev/docs/mcp
+
+${BOLD}Where it looks for reports${RESET}
+  Without --dir: the current folder (3 levels deep) plus your Downloads and
+  Desktop folders (files named tracebug-…). With ${DIM}--dir <path>${RESET}: only that folder.
+  If your browser saves somewhere else, pass that folder with --dir.
+
+Nothing is uploaded: the server reads files from disk and opens no connections.
 `)
 }
 

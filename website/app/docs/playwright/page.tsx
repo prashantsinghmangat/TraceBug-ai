@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Playwright Reporter — Bug reports from failed tests — TraceBug",
   description:
     "Every failed Playwright test becomes a self-contained TraceBug .html bug report — assertion error, step timeline, console, network failures, and screenshot. Upload the folder as a CI artifact and hand any failure straight to your coding agent. No cloud viewer, no account, no upload.",
-  openGraph: {
-    title: "TraceBug Playwright Reporter — Failed Tests Become Agent-Ready Reports",
-    description:
-      "Two lines in playwright.config.ts turn every failure into a self-contained .html report the MCP server reads. Upload as a CI artifact; debug with Claude Code / Cursor.",
-  },
+  ...social("TraceBug Playwright Reporter — Failed Tests Become Agent-Ready Reports", "Two lines in playwright.config.ts turn every failure into a self-contained .html report the MCP server reads. Upload as a CI artifact; debug with Claude Code / Cursor."),
   alternates: { canonical: "/docs/playwright" },
 };
 
@@ -163,6 +160,7 @@ export default function PlaywrightDocsPage() {
               <pre className="text-sm font-mono text-text-primary leading-relaxed">
 {`import { test as base } from "@playwright/test";
 import { traceBugPage } from "tracebug-sdk/playwright";
+import { social } from "@/lib/social";
 
 export const test = base.extend({ page: traceBugPage });
 export { expect } from "@playwright/test";`}

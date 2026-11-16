@@ -1,7 +1,10 @@
 // ── Recording HUD ─────────────────────────────────────────────────────────
 // Compact pill that appears while a capture is in progress. Layout:
 //
-//   [● stop]  [‖ pause]  00:08  [🎤 mic]  |  [✎ annotate]  [✕ close]
+//   [● stop]  [‖ pause]  00:08  [🎤 mic]  |  [📷 shot]  [✎ draw]  [💧 blur]
+//
+// The draw button opens the annotate toolbar (./annotate-toolbar.ts) under
+// the pill.
 //
 // Stop and Close both end the recording — Close is just visually paired with
 // the rest of the controls. Pause / mic toggles state on the underlying
@@ -29,7 +32,7 @@ import {
   hasMicrophoneTrack,
   isExtensionContext,
 } from "../video-recorder";
-import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "../draw-mode";
+import { openAnnotateToolbar, closeAnnotateToolbar, isAnnotateToolbarOpen, setAnnotateTool } from "./annotate-toolbar";
 import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes } from "./blur-tool";
 import { setInnerHTML, createStyleTag } from "./helpers";
 import { captureScreenshot } from "../screenshot";
@@ -206,7 +209,7 @@ export function showRecordingHUD(
     <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
+    <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page — pen, shapes, arrows, text" aria-label="Draw on the page" aria-pressed="false">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
     <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements — click to blur, click again to unblur (${eventsOnly ? "the element's text is masked in the DOM replay" : "captured in the recording"})" aria-label="Blur sensitive elements">
@@ -330,17 +333,18 @@ export function showRecordingHUD(
     setInnerHTML(micBtn, nextMuted ? MIC_OFF_SVG : MIC_ON_SVG);
   });
 
+  const setAnnotatePressed = (on: boolean) => {
+    if (!annotateBtn) return;
+    annotateBtn.dataset.active = on ? "1" : "";
+    annotateBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  };
   annotateBtn?.addEventListener("click", () => {
     const drawRoot = _root;
     if (!drawRoot) return;
-    if (isDrawModeActive()) {
-      deactivateDrawMode();
-      annotateBtn.dataset.active = "";
-      return;
-    }
+    if (isAnnotateToolbarOpen()) { closeAnnotateToolbar(); return; }
     if (isBlurModeActive()) { deactivateBlurMode(); if (blurBtn) blurBtn.dataset.active = ""; }
-    activateDrawMode(drawRoot, undefined, undefined, { ephemeralMs: 3000 });
-    annotateBtn.dataset.active = "1";
+    openAnnotateToolbar(drawRoot, { below: hud, onClose: () => setAnnotatePressed(false) });
+    setAnnotatePressed(true);
   });
 
   shotBtn?.addEventListener("click", async () => {
@@ -359,14 +363,15 @@ export function showRecordingHUD(
       blurBtn.dataset.active = "";
       return;
     }
-    // Blur and draw are mutually exclusive — only one capture overlay at a time.
-    if (isDrawModeActive()) { try { deactivateDrawMode(); } catch {} if (annotateBtn) annotateBtn.dataset.active = ""; }
+    // Blur needs the page's clicks: put the pen down (hand tool) but keep the
+    // drawings on screen.
+    if (isAnnotateToolbarOpen()) setAnnotateTool("move");
     activateBlurMode(_root || document.body, () => { blurBtn.dataset.active = ""; });
     blurBtn.dataset.active = "1";
   });
 
   const triggerStop = () => {
-    if (isDrawModeActive()) { try { deactivateDrawMode(); } catch {} }
+    closeAnnotateToolbar();
     _onStopRequested?.();
   };
   stopBtn.addEventListener("click", triggerStop);
@@ -390,9 +395,7 @@ export function hideRecordingHUD(): void {
     clearInterval(_timerInterval);
     _timerInterval = null;
   }
-  if (isDrawModeActive()) {
-    try { deactivateDrawMode(); } catch {}
-  }
+  closeAnnotateToolbar();
   // Recording is done — the video already captured any blur boxes, so take them
   // off the live page (keep the timestamped events for the timeline/report).
   if (isBlurModeActive()) { try { deactivateBlurMode(); } catch {} }

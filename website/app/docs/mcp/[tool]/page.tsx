@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FinalCTA from "@/components/FinalCTA";
 import { Button } from "@/components/ui/button";
+import { social } from "@/lib/social";
 
 // One dynamic route renders the setup guide for each MCP client. Each page
 // targets its own long-tail search ("cursor mcp bug reports", "windsurf mcp
@@ -136,12 +137,7 @@ export function generateMetadata({ params }: { params: { tool: string } }): Meta
     title: guide.metaTitle,
     description: guide.metaDescription,
     alternates: { canonical: `/docs/mcp/${params.tool}` },
-    openGraph: {
-      title: guide.metaTitle,
-      description: guide.metaDescription,
-      url: `https://tracebug.dev/docs/mcp/${params.tool}`,
-      images: [{ url: "/api/og/proof", width: 1200, height: 630 }],
-    },
+    ...social(guide.metaTitle, guide.metaDescription, { url: `https://tracebug.dev/docs/mcp/${params.tool}`, image: "/api/og/proof" }),
   };
 }
 

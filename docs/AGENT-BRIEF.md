@@ -50,7 +50,7 @@ VERIFY      bug: run the generated failing Playwright test (red → green)
 ## 3. Site Audit (new in 1.12.0)
 
 Popup's first and largest card, **Audit this page**, or the on-page toolbar's
-**Audit** button. Read-only: nothing is clicked or changed. Full guide:
+**Audit** button. It never clicks, types or submits anything; it reads robots.txt and sitemap.xml and loads the page once more, hidden, at 390px. Full guide:
 [site-audit.md](site-audit.md).
 
 **Scans:** All checks · Auto Review (layout, phone width, errors) ·

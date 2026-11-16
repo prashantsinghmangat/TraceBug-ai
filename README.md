@@ -149,7 +149,7 @@ Safari build — on Safari, use the npm SDK).
 
 ### 🩺 Site Audit — Score a Page, Then Let Your Agent Fix It (v1.12)
 
-One click (**Audit this page** in the extension popup, or the toolbar's **Audit** button) checks the page you are on for **accessibility** (axe-core, WCAG 2.0–2.2 A/AA, plus keyboard checks), **layout**, **phone width** (390px), **performance** (LCP, CLS, heavy images), **SEO** (tags, structured data, robots.txt, sitemap) and **runtime errors**. Read-only and local: nothing is clicked or uploaded.
+One click (**Audit this page** in the extension popup, or the toolbar's **Audit** button) checks the page you are on for **accessibility** (axe-core, WCAG 2.0–2.2 A/AA, plus keyboard checks), **layout**, **phone width** (390px), **performance** (LCP, CLS, heavy images), **SEO** (tags, structured data, robots.txt, sitemap) and **runtime errors**. Local: nothing is clicked, typed or uploaded (it reads the site's robots.txt and sitemap, and loads the page once more, hidden, at phone width).
 
 - A 0–100 score per category and overall, coloured good / fair / poor, with the formula shown.
 - One finding per real problem, grouped by rule: the WCAG criterion, found vs required values, how to fix it, and every element with **Locate** and **Copy selector**. Contrast findings suggest a passing colour.
@@ -228,7 +228,7 @@ Every export carries a runnable Playwright spec that **replays the captured sess
 
 ### 🎬 Pre-Recording Options + Element-Level Blur (v1.9)
 
-The extension popup's **⚙ Record options** panel offers **Record video too** (off by default — a capture is always console/network/replay, and screen recording is opt-in), an optional 3s/5s countdown, and **Blur before recording** — redact sensitive areas *before* the first frame is captured. The full set is also a public SDK API: `TraceBug.prepareRecording({ blurFirst, delaySec, surfaceMode, withMicrophone })`.
+The extension popup's **⚙ Record options** panel offers **Record video too** (on by default in Chrome, where Tab mode records the tab with no share picker; off by default in Firefox, which only has the share picker. A capture is always console/network/replay either way), an optional 3s/5s countdown, and **Blur before recording** — redact sensitive areas *before* the first frame is captured. The full set is also a public SDK API: `TraceBug.prepareRecording({ blurFirst, delaySec, surfaceMode, withMicrophone })`.
 
 Blur itself is element-level, click-to-blur: hover highlights, click applies `filter: blur(12px)` **to the element itself**, click again unblurs. Because the blur is part of the element's own rendering, it physically cannot lag behind scrolling. Blurred elements also get `tb-mask`, so the DOM replay masks their text, not just the video pixels.
 
@@ -389,7 +389,7 @@ TraceBug.init({
 |-------|----------|
 | `"auto"` | Enabled in dev/staging, disabled in production (default) |
 | `"development"` | Only when `NODE_ENV` is `"development"` |
-| `"staging"` | Dev + staging hosts (`staging`, `stg`, `uat`, `qa` in hostname) |
+| `"staging"` | Dev + staging hosts: `staging` anywhere in the hostname, or a `.stg.` / `.uat.` / `.qa.` / `.dev.` segment (e.g. `app.qa.example.com`; `qa-app.com` does not match) |
 | `"all"` | Always enabled, including production |
 | `"off"` | Completely disabled |
 | `string[]` | Custom hostnames, e.g. `["localhost", "staging.myapp.com"]` |
@@ -609,21 +609,25 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 
 ### How to Use
 
-1. Navigate to any website (staging, production, localhost, internal tools)
-2. Click the TraceBug extension icon in the toolbar
-3. Toggle **"Enable on this site"** — the page reloads with TraceBug active
-4. The floating bug button appears on the page
-5. Use all QA tools: screenshots, notes, GitHub/Jira issues, PDF reports
-6. Quick actions also available directly from the extension popup
+1. Open the page with the bug (staging, production, localhost, internal tools).
+2. Click the TraceBug icon → **Capture Bug** (or press the shortcut shown in the popup, default `Alt+B`).
+3. Reproduce the bug, then click **Stop** in the on-page bar. The ticket opens with the replay, console,
+   network and your steps.
+4. **Export replay (.html)** to hand it off, **Fix with AI** to copy a prompt, or send it to GitHub /
+   Linear / Slack (each send shows a confirmation window first). Jira gets copy-ready markup.
+5. Connect your AI agent once (`claude mcp add -s user tracebug -- npx -y tracebug mcp`) and it reads
+   the exported file from your Downloads folder.
+
+Nothing runs on a page until you pick an action; there is no per-site switch to turn on.
 
 ### Extension Features
 
-- **Site Audit** — *Audit this page* is the first popup action: score the page and get fixes for your AI ([guide](docs/site-audit.md))
-- **Per-site toggle** — enable only on sites you're testing
-- **Badge indicator** — shows "ON" in green when active on current tab
-- **Quick actions** — Annotate, Draw, Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup
-- **Active sites list** — manage all enabled sites from the popup
-- **Compact toolbar on page** — same full-featured toolbar as the npm SDK
+- **Capture Bug** (first card) — console, network, clicks and a DOM replay; video too where it records
+  the tab without a share picker (Chrome)
+- **Capture Screenshot** — visible area or a cropped region, with an editor for boxes, arrows, text and blur
+- **Audit this page** — score the page and get fixes for your AI ([guide](docs/site-audit.md))
+- **Tickets** — tickets you saved on the current site · **Inspect** — attach an element's computed styles
+- **Compact toolbar on page** — same toolbar as the npm SDK
 - **CSP-safe** — uses `chrome.scripting.executeScript` with `world: "MAIN"` to bypass Content Security Policy restrictions
 
 ### Browser Compatibility

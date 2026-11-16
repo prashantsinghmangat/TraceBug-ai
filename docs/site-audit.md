@@ -5,8 +5,12 @@ runtime problems. You get a 0–100 score, one finding per real problem with
 where it is and how to fix it, and a report your coding agent can read and
 fix from. New in **1.12.0**.
 
-The audit runs in the page you are on, in your browser. It is read-only: it
-clicks, types and changes nothing. Nothing is uploaded.
+The audit runs in the page you are on, in your browser. It clicks, types and
+submits nothing, and nothing is uploaded. It does make requests to the audited
+site: it reads `/robots.txt` and `/sitemap.xml`, and the All checks and Auto
+Review scans load the page once more in a hidden 390 px frame for the phone-width
+check. That second load runs the page's scripts again (the site sees one more
+visit), and the keyboard check moves focus through the page.
 
 **Free account after 3 audits (extension, from the release after 1.12.0).** The
 first 3 audits need nothing. After that, Site Audit asks for a free account:

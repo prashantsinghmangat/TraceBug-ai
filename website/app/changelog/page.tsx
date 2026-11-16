@@ -6,11 +6,13 @@ import Footer from "@/components/Footer";
 import FinalCTA from "@/components/FinalCTA";
 import SectionHeading from "@/components/SectionHeading";
 import { SDK_VERSION } from "@/lib/version";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Changelog — TraceBug",
   description: "Every TraceBug release: new capture features, MCP/agent workflow improvements, and fixes.",
   alternates: { canonical: "/changelog" },
+  ...social("TraceBug changelog", "Every TraceBug release: new capture features, MCP/agent workflow improvements, and fixes.", { url: "https://tracebug.dev/changelog" }),
 };
 
 // Linear-style changelog rendered straight from the repo's CHANGELOG.md at

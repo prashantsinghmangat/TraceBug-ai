@@ -26,6 +26,7 @@ TraceBug is a Chrome and Firefox extension plus an npm SDK (`tracebug-sdk`). Tes
 ## Optional
 - [Blog](https://tracebug.dev/blog)
 - [Changelog](https://tracebug.dev/changelog)
+- [All comparisons](https://tracebug.dev/compare)
 - [Compare: Jam alternative](https://tracebug.dev/compare/jam-alternative)
 - [Compare: Sentry alternative](https://tracebug.dev/compare/sentry-alternative)
 - [Privacy](https://tracebug.dev/privacy)

@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import InstallButtons from "@/components/InstallButtons";
+import { social } from "@/lib/social";
 
 // Solution landing page for the winnable, low-competition, high-intent cluster:
 // "ai bug fix", "fix bugs with AI", "AI debugging", "best MCP for bug fix",
@@ -16,13 +17,7 @@ export const metadata: Metadata = {
   description:
     "Fix bugs with AI: capture a browser bug into one file your coding agent reads over MCP — Claude Code, Cursor, Windsurf — then reproduces and fixes. Every report ships a failing test to verify the fix. Free, local-first.",
   alternates: { canonical: "/ai-bug-fix" },
-  openGraph: {
-    title: "AI Bug Fix — capture a bug, let your AI agent fix it",
-    description:
-      "Give your AI coding agent everything it needs to fix a browser bug: replay, console, network, repro timeline, and a generated failing test — over a local MCP server.",
-    url: "https://tracebug.dev/ai-bug-fix",
-    images: [{ url: "/api/og", width: 1200, height: 630 }],
-  },
+  ...social("AI Bug Fix — capture a bug, let your AI agent fix it", "Give your AI coding agent everything it needs to fix a browser bug: replay, console, network, repro timeline, and a generated failing test — over a local MCP server.", { url: "https://tracebug.dev/ai-bug-fix" }),
 };
 
 const STEPS = [

@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
 import { ToolBugReportPage, type ToolBugReportData } from "@/components/ToolBugReportPage";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Claude Code Bug Reports — capture a bug, let Claude fix it | TraceBug",
   description:
     "Give Claude Code the bug context it needs to fix frontend bugs: capture a browser session into one file Claude reads over MCP — console, network, replay, repro steps — then reproduces and fixes it with a generated failing test. Free, local-first.",
   alternates: { canonical: "/claude-code-bug-reports" },
-  openGraph: {
-    title: "Claude Code Bug Reports — capture a bug, let Claude fix it",
-    description:
-      "One command connects TraceBug to Claude Code. It reads the captured evidence over MCP and fixes the bug — verified by a generated failing test.",
-    url: "https://tracebug.dev/claude-code-bug-reports",
-    images: [{ url: "/api/og", width: 1200, height: 630 }],
-  },
+  ...social("Claude Code Bug Reports — capture a bug, let Claude fix it", "One command connects TraceBug to Claude Code. It reads the captured evidence over MCP and fixes the bug — verified by a generated failing test.", { url: "https://tracebug.dev/claude-code-bug-reports" }),
 };
 
 const data: ToolBugReportData = {

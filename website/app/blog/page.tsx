@@ -5,12 +5,14 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SectionHeading from "@/components/SectionHeading";
 import { getAllPosts } from "@/lib/blog";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Blog — TraceBug",
   description:
     "Practical writing on bug reporting, browser debugging, and giving AI coding agents real evidence to work from.",
   alternates: { canonical: "/blog" },
+  ...social("TraceBug blog", "Practical writing on bug reporting, browser debugging, and giving AI coding agents real evidence to work from.", { url: "https://tracebug.dev/blog" }),
 };
 
 // Pure renderer over the content layer (lib/blog.ts) — knows nothing about

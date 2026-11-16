@@ -8,11 +8,11 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "Is it really free? What's the catch?",
-    a: "Yes — free, MIT-licensed open source, no account, no credit card, and no server: everything runs in your browser and reports are saved as local files. There's no catch because there's no infrastructure to pay for. If paid team features ever appear, the local capture-and-export core stays free.",
+    a: "Yes — free, MIT-licensed open source, no account to capture or export, no credit card, and no server in the loop: everything runs in your browser and reports are saved as local files. (Site Audit may ask for a free email sign-in after 3 audits.) There's no catch because there's no infrastructure to pay for. If paid team features ever appear, the local capture-and-export core stays free.",
   },
   {
     q: "Does my data leave the browser?",
-    a: "Nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider. Captures are stored in your browser and exported as local files on your machine; there is no TraceBug backend, no analytics and no telemetry, and you can audit the source on GitHub. Sensitive inputs (passwords, tokens, card numbers) are redacted before storage.",
+    a: "No capture or report ever goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider. Captures are stored in your browser and exported as local files on your machine; there is no TraceBug backend, no analytics and no telemetry, and you can audit the source on GitHub. Sensitive inputs (passwords, tokens, card numbers) are redacted before storage. The only things TraceBug itself can receive are an email address you choose to give (the update list, or Site Audit sign-in) and the optional uninstall survey.",
   },
   {
     q: "How do AI coding agents use TraceBug reports?",

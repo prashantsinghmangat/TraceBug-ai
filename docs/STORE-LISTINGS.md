@@ -22,7 +22,7 @@ and `description` (not `short_name`).
 |---|---|---|---|
 | `name` | 75 | **45** (binding: one manifest feeds both) | `TraceBug: Bug Report Recorder & Replay` (38) |
 | `short_name` | 12 | 12 | `TraceBug` |
-| `description` | 132 | 132 | `Audit a page or record a bug: accessibility and SEO fixes, replay, console and network in one offline file. Free, no upload.` (124) |
+| `description` | 132 | 132 | `Record a browser bug: replay, console and network in one offline file your AI agent (Claude Code, Cursor) can fix. Free, no upload.` (131; leads with capture since 2026-11-16, growth audit) |
 
 A name over 45 characters passes Chrome but fails `npm run ext:lint` and AMO. The base manifest stores
 `—` raw, the dev manifest as `—`; keep each file's convention.
@@ -79,7 +79,7 @@ Click "Audit this page" for a 0–100 score and a list of real problems, each wi
 • SEO: title, description, canonical, headings, social tags, structured data, robots.txt and sitemap
 • Errors: console errors and failed requests on the page
 
-Locate each problem on the page, copy the fixes for your AI agent, or export the audit. Results the checks can't decide are listed for a person to check, not guessed. Read-only: the audit clicks and changes nothing.
+Locate each problem on the page, copy the fixes for your AI agent, or export the audit. Results the checks can't decide are listed for a person to check, not guessed. The audit never clicks, types or submits anything; it reads the site's robots.txt and sitemap.xml and loads the page once more, hidden, at phone width.
 
 ━━━━━━━━━━━━━━━━━━━━
 WHAT'S IN A REPORT
@@ -257,7 +257,7 @@ Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 4. Hand the file to a developer, attach it to an issue — or let an AI agent read it through TraceBug's local MCP server (`claude mcp add -s user tracebug -- npx -y tracebug mcp`) and fix the bug
 
 **Audit any page**
-Click **Audit this page** for a 0–100 score and real problems with fixes: accessibility (axe-core, WCAG 2.0–2.2 A/AA, keyboard checks), layout and phone width, speed (load timings, LCP, heavy and oversized images), SEO (tags, structured data, robots.txt, sitemap) and page errors. Locate each one on the page, copy the fixes for your AI agent, or export the audit. Read-only.
+Click **Audit this page** for a 0–100 score and real problems with fixes: accessibility (axe-core, WCAG 2.0–2.2 A/AA, keyboard checks), layout and phone width, speed (load timings, LCP, heavy and oversized images), SEO (tags, structured data, robots.txt, sitemap) and page errors. Locate each one on the page, copy the fixes for your AI agent, or export the audit. It never clicks, types or submits anything.
 
 **What makes it different**
 - **Local-first** — reports and settings stay on your device; nothing goes to TraceBug.

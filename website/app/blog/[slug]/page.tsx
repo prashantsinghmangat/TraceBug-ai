@@ -33,11 +33,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       publishedTime: post.date,
       modifiedTime: post.updated ?? post.date,
       url: `https://tracebug.dev/blog/${post.slug}`,
-      ...(post.cover ? { images: [{ url: post.cover, width: 1200, height: 630 }] } : {}),
+      // No cover yet: the site card, so the post still unfurls with an image.
+      images: [{ url: post.cover ?? "/api/og", width: 1200, height: 630 }],
     },
-    ...(post.cover
-      ? { twitter: { card: "summary_large_image" as const, title: post.title, description: post.description, images: [post.cover] } }
-      : {}),
+    twitter: { card: "summary_large_image", title: post.title, description: post.description, images: [post.cover ?? "/api/og"] },
   };
 }
 

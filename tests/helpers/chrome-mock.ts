@@ -63,6 +63,9 @@ export interface ChromeMockOptions {
   /** What getManifest() reports. Default '1.11.0'. Set it to test a version
    *  the popup has no "what's new" copy for. */
   version?: string;
+  /** Manifest `permissions`. Default: the Chrome build's (with tabCapture).
+   *  Pass [] for the Firefox build, which declares no tabCapture. */
+  permissions?: string[];
 }
 
 export function createChromeMock(opts: ChromeMockOptions = {}) {
@@ -123,7 +126,10 @@ export function createChromeMock(opts: ChromeMockOptions = {}) {
         return e;
       },
       getURL: (p: string) => `chrome-extension://abcdefghijklmnopabcdefghijklmnop/${p}`,
-      getManifest: () => ({ version: opts.version ?? '1.11.0' }),
+      getManifest: () => ({
+        version: opts.version ?? '1.11.0',
+        permissions: opts.permissions ?? ['activeTab', 'storage', 'scripting', 'alarms', 'offscreen', 'tabCapture'],
+      }),
       onInstalled: events.onInstalled,
       onMessage: events.onMessage,
       onUpdateAvailable: events.onUpdateAvailable,

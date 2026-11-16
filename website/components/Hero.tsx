@@ -1,4 +1,5 @@
 import InstallButtons from "@/components/InstallButtons";
+import MobileHeroActions from "@/components/MobileHeroActions";
 import { ArrowRight, TerminalSquare } from "lucide-react";
 import { Logo, type LogoName } from "@/components/ui/logos";
 import HeroStory from "@/components/HeroStory";
@@ -69,9 +70,10 @@ function TraceIcon() {
 // line of answer → one row of actions (install in Chrome or Firefox | MCP
 // setup, Product Hunt) → the trust line. Below it the story plays once: a bug
 // eats the checkout page, Page catches it, Claude fixes it (HeroStory).
-// Phones get a shorter hero so the story starts on the first screen: only
-// Chrome, Firefox, the trust line and the demo link. MCP setup is in the nav
-// ("AI agents") and the MCP section; Product Hunt is in the footer.
+// Phones get a shorter hero so the story starts on the first screen: the demo
+// and "send me the link" (an extension can't be installed from a phone), then
+// the trust line. MCP setup is in the nav ("AI agents") and the MCP section;
+// Product Hunt is in the footer.
 export default function Hero() {
   return (
     <section className="relative isolate overflow-hidden pt-24 pb-section sm:pt-28 lg:pt-32">
@@ -107,7 +109,8 @@ export default function Hero() {
             className="rise mt-7 grid w-full grid-cols-2 gap-3 sm:mt-9 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-center"
             style={{ "--i": 3 } as React.CSSProperties}
           >
-            <InstallButtons itemClassName="col-span-2" />
+            <InstallButtons itemClassName="col-span-2 hidden sm:inline-flex" />
+            <MobileHeroActions />
 
             {/* desktop only: on phones these push the story off the first screen */}
             <div className="hidden sm:contents">
@@ -126,7 +129,7 @@ export default function Hero() {
             className="rise mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] text-text-subtle"
             style={{ "--i": 4 } as React.CSSProperties}
           >
-            <span>No account</span>
+            <span>No account to capture</span>
             <span aria-hidden="true">·</span>
             <span>Works offline</span>
             <span aria-hidden="true">·</span>
@@ -134,7 +137,7 @@ export default function Hero() {
             <span aria-hidden="true">·</span>
             <span>Open source, MIT</span>
             <span aria-hidden="true" className="hidden sm:inline">·</span>
-            <a href="#demo" aria-label="Watch the 57-second demo video of TraceBug" className="group inline-flex min-h-[28px] basis-full items-center justify-center gap-1 font-medium text-text-primary sm:basis-auto">
+            <a href="#demo" aria-label="Watch the 57-second demo video of TraceBug" className="group hidden min-h-[28px] items-center justify-center gap-1 font-medium text-text-primary sm:inline-flex">
               Watch the 57-second demo
               <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-150 group-hover:translate-x-0.5" />
             </a>

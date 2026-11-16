@@ -7,17 +7,14 @@ import Footer from "@/components/Footer";
 import InstallButtons from "@/components/InstallButtons";
 import Shortcut from "@/components/Keycap";
 import { LINKS, MCP } from "@/lib/site";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Documentation — TraceBug",
   description:
     "Install TraceBug for Chrome or Firefox, capture your first bug, hand the report to Claude Code, Cursor or Windsurf over MCP, or add the SDK to your app.",
   alternates: { canonical: "/docs" },
-  openGraph: {
-    title: "TraceBug Documentation",
-    description:
-      "Install, capture a bug, hand it to your AI agent. Extension, MCP server and SDK guides.",
-  },
+  ...social("TraceBug Documentation", "Install, capture a bug, hand it to your AI agent. Extension, MCP server and SDK guides."),
 };
 
 // The docs hub. Extension first (most readers never touch code), then the AI
@@ -274,8 +271,9 @@ export default function DocsPage() {
 
             <Section id="audit" title="Audit a page">
               <p>
-                Site Audit checks the page you are on and tells you what to fix. It is read-only and runs in your
-                browser: nothing is clicked, changed or uploaded.
+                Site Audit checks the page you are on and tells you what to fix. It runs in your browser and never
+                clicks, types or uploads anything. It reads the site&apos;s robots.txt and sitemap.xml, and the
+                full scans load the page once more, hidden, at phone width.
               </p>
               <Steps items={AUDIT_STEPS} />
               <Rows rows={AUDIT_ROWS} />

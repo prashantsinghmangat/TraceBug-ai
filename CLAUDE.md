@@ -41,7 +41,8 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - No `Co-Authored-By` trailers.
 
 ## Working style (saves tokens)
-- Doing launch work? Use the **`phase`** skill. Verifying anything? Use **`gates`**.
+- Doing launch work? Use the **`phase`** skill. Verifying anything? Use **`gates`**. Ending a change
+  (build, run everything, update docs, report)? Use **`finish`**.
 - Before exploring, read `docs/launch/STATE.md`, then `docs/launch/CODEMAP.md` to find the code; don't re-investigate what they already answer.
 - Use `rg`/grep with paths; read specific line ranges, not whole large files (`docs/api-reference.md`, `ARCHITECTURE.md` and the built bundle are big).
 - Make small diffs. Run only the tests related to the change, then the full suite once at the end of a phase.

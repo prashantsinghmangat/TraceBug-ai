@@ -24,7 +24,7 @@ addition must be justified in review.
 
 ## Consequences
 
-- `npx -y tracebug mcp` installs one ~24 KB package with nothing else — the
+- `npx -y tracebug mcp` installs one ~70 KB package (24 KB when this was written) with nothing else — the
   security review is "read this one file."
 - Browser-native APIs do the heavy lifting (`CompressionStream`,
   `DecompressionStream`), with graceful fallbacks where they're missing.

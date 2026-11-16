@@ -12,6 +12,12 @@ import { Logo } from "@/components/ui/logos";
 
 export type Store = "chrome" | "firefox";
 
+// Both stores report traffic sources by utm_source, so site → install can be
+// told apart from store search. No personal data: a fixed label only.
+function withUtm(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}utm_source=tracebug.dev&utm_medium=install_button`;
+}
+
 export function useVisitorStore(): Store {
   const [store, setStore] = useState<Store>("chrome");
   useEffect(() => {
@@ -47,7 +53,7 @@ export default function InstallButtons({
       {order.map((store, i) => (
         <a
           key={store}
-          href={LINKS[store]}
+          href={withUtm(LINKS[store])}
           target="_blank"
           rel="noopener noreferrer"
           className={`${BTN} ${SIZE[size]} ${i === 0 ? PRIMARY : SECONDARY} ${itemClassName}`}
@@ -65,7 +71,7 @@ export function InstallButton({ className = "" }: { className?: string }) {
   const store = useVisitorStore();
   return (
     <a
-      href={LINKS[store]}
+      href={withUtm(LINKS[store])}
       target="_blank"
       rel="noopener noreferrer"
       className={`${BTN} ${SIZE.sm} ${PRIMARY} ${className}`}

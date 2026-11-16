@@ -1143,7 +1143,7 @@ These features were removed from the default toolbar in v1.0 to reduce noise. Th
 | Element Annotate Mode | `TraceBug.activateAnnotateMode()`, `deactivateAnnotateMode()`, `isAnnotateModeActive()` |
 | Draw Mode | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
 | Annotation list / export | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"\|"markdown")`, `clearAnnotations()` |
-| PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal) |
+| PDF report | `TraceBug.downloadPdf()` |
 | First-run attention cue | A one-time logo pulse on first mount (`src/onboarding.ts`); the original 4-step tooltip tour was removed in 1.7.0. Not a public export |
 | Plain text export | Build manually from `TraceBug.generateReport()` |
 

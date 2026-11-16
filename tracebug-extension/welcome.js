@@ -15,6 +15,7 @@ const PLAYGROUND_URL = `https://tracebug.dev/try.html?${UTM}`;
 const FEEDBACK_URL = `https://tracebug.dev/feedback?${UTM}&area=extension&type=other`;
 const GITHUB_URL = `https://github.com/prashantsinghmangat/TraceBug-ai?${UTM}`;
 const HOME_URL = `https://tracebug.dev?${UTM}`;
+const MCP_DOCS_URL = `https://tracebug.dev/docs/mcp?${UTM}`;
 // Empty until tracebug.dev/teams exists. A welcome page must never ship a 404,
 // so the card is simply absent rather than pointing somewhere unhelpful. Set
 // this and the card appears — no other change needed.
@@ -189,6 +190,30 @@ function wireCopy() {
   });
 }
 
+const MCP_CMD = {
+  unix: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
+  // On native Windows, npx is a .cmd script that Claude Code can't spawn directly.
+  win: "claude mcp add -s user tracebug -- cmd /c npx -y tracebug mcp",
+};
+
+/**
+ * macOS/Linux vs Windows command. The default guesses from the platform the
+ * browser reports (an OS hint, not browser detection); the user can switch.
+ */
+function wireOsToggle() {
+  const cmd = document.getElementById("mcpCmd");
+  const opts = Array.from(document.querySelectorAll(".ai-os-opt"));
+  if (!cmd || !opts.length) return;
+  const set = (os) => {
+    cmd.textContent = MCP_CMD[os] || MCP_CMD.unix;
+    for (const o of opts) o.setAttribute("aria-pressed", String(o.dataset.os === os));
+  };
+  // navigator.platform names the OS only ("Win32", "MacIntel", "Linux x86_64").
+  const platform = navigator.platform || "";
+  set(/^win/i.test(platform) ? "win" : "unix");
+  for (const o of opts) o.addEventListener("click", () => set(o.dataset.os));
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   void initAccountCard();
 
@@ -201,9 +226,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("playground").href = PLAYGROUND_URL;
   document.getElementById("github").href = GITHUB_URL;
+  document.getElementById("mcpDocs").href = MCP_DOCS_URL;
   document.getElementById("feedback").href = FEEDBACK_URL;
   document.getElementById("homeLogo").href = HOME_URL;
 
+  wireOsToggle();
   wireCopy();
 
   // Step 1 — Firefox arranges the same three clicks differently, so the

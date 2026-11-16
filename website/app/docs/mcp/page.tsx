@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import FinalCTA from "@/components/FinalCTA";
+import { social } from "@/lib/social";
 
 const REPO = "https://github.com/prashantsinghmangat/tracebug-ai";
 
@@ -9,11 +10,7 @@ export const metadata: Metadata = {
   title: "MCP Server — Let AI agents debug your bug reports — TraceBug",
   description:
     "TraceBug ships a local Model Context Protocol (MCP) server. Claude Code, Cursor, Windsurf, and VS Code read your exported bug reports — console errors, network failures, repro steps, screenshots — and propose the fix. Fully local, nothing uploaded.",
-  openGraph: {
-    title: "TraceBug MCP Server — AI Agents Debug Your Bug Reports",
-    description:
-      "The only bug-reporting MCP server that runs locally. Your coding agent reads the .html export from disk — no account, no cloud, no upload.",
-  },
+  ...social("TraceBug MCP Server — AI Agents Debug Your Bug Reports", "The only bug-reporting MCP server that runs locally. Your coding agent reads the .html export from disk — no account, no cloud, no upload."),
   alternates: { canonical: "/docs/mcp" },
 };
 
@@ -602,7 +599,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
                 },
                 {
                   symptom: "Which package am I running?",
-                  fix: "The tracebug package is the standalone ~24 KB CLI (MCP server + init) — all a developer receiving reports needs. tracebug-sdk (the full capture SDK) bundles the same CLI, so inside a project with the SDK installed, npx tracebug mcp resolves locally.",
+                  fix: "The tracebug package is the standalone ~70 KB CLI (MCP server + init) — all a developer receiving reports needs. tracebug-sdk (the full capture SDK) bundles the same CLI, so inside a project with the SDK installed, npx tracebug mcp resolves locally.",
                 },
                 {
                   symptom: "Report file not recognized",
