@@ -42,7 +42,7 @@ export const comparisons: Record<string, Comparison> = {
       "AI-agent ready — Claude Code or Cursor reads the report over a local MCP server and starts fixing; LogRocket's replay is built for human eyes",
       "Nothing leaves the browser — LogRocket streams every session to their servers; TraceBug captures only the bug you choose to export",
       "Reports with captured actions embed a generated failing Playwright test — red until the bug is fixed",
-      "Instant setup — npm install + 2 lines, or just the extension. No account",
+      "Instant setup — npm install + 2 lines, or just the extension. No account to capture",
       "Free and open source (MIT) — no per-seat, per-session, or retention pricing",
     ],
     disadvantages: [
@@ -100,7 +100,7 @@ export const comparisons: Record<string, Comparison> = {
     advantages: [
       "Local-first — the report is one self-contained offline .html; BetterBugs uploads captures to their cloud workspace",
       "AI-agent ready — a local MCP server hands the report to Claude Code, Cursor, or Windsurf; plus a generated failing Playwright test",
-      "No account, ever — capture and export without signing up; BetterBugs requires an account to share",
+      "No account to capture or export — no sign-up; BetterBugs requires an account to share",
       "Free and open source (MIT) — inspect exactly what's captured; no per-seat plans for core capture",
       "Secrets auto-masked at capture (tokens, keys) before they ever enter the file",
       "SDK + extension + MCP + CLI in one project — the whole workflow, not just the capture step",

@@ -158,6 +158,13 @@ The modal — header **"Bug Ticket — Review & Export"** — shows:
 
 Drafts auto-save to `localStorage` under `tracebug_last_bug_draft`; if you accidentally close the modal, the next open recovers the title + description.
 
+**Closing is deliberate.** A click on the dimmed background never closes the ticket (it shows a hint). ✕ or Esc on an
+unsaved ticket asks "Close this ticket?" (Keep editing / Close / Save and close); a saved or exported ticket closes at
+once, and so does a close triggered by code (a new session starting, opening a saved ticket). A closed, unsaved ticket
+is the latest session, so **Saved tickets** on the toolbar shows it at the top ("Unsaved · kept until your next
+capture") with **Reopen**. Only one is ever offered: the next capture replaces it. This adds no storage: it is the
+session that already exists, and the never-evict-saved-tickets rule is unchanged. e2e: `ticket-view`.
+
 ---
 
 ## Step 4 — Export

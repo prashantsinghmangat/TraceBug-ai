@@ -236,7 +236,7 @@ export default function DocsPage() {
 
           <div className="min-w-0 max-w-3xl">
             <Section id="install" title="Install the extension">
-              <p>Free, no account. One extension for Chrome and Firefox.</p>
+              <p>Free, no account to capture. One extension for Chrome and Firefox.</p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <InstallButtons />
               </div>

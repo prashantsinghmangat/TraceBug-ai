@@ -1,6 +1,6 @@
 # Store listings — Chrome Web Store and Firefox Add-ons
 
-The one place for every word and image the two stores show. Current for **1.12.0**. When a release
+The one place for every word and image the two stores show. Current for **1.13.0**. When a release
 changes what a listing says, update this file in the same commit. How to upload a release is in
 [RELEASING.md](RELEASING.md); images live in `assets/` (gitignored, see `assets/README.md`).
 
@@ -47,13 +47,13 @@ Dashboard → TraceBug → **Store listing**, **Privacy**, **Package**.
 short "New in x.y.z" block at the top (from the CHANGELOG), then take it out.
 
 ```text
-New in 1.12.0: Site Audit. Click "Audit this page" to score any page from 0 to 100 for accessibility (axe-core, WCAG 2.2 AA), layout, phone width, speed and SEO, plus the errors on the page. A side panel stays open while you locate each problem, and every finding says how to fix it and which WCAG criterion it fails — for low contrast, the nearest colour that passes. Re-run to see what you fixed. Copy the findings into your coding agent as a fix prompt, or export the audit for its three new MCP tools. Everything still runs on your device.
+New in 1.13.0: draw on the page while you record (pen, boxes, arrows, text, highlighter, eraser), trim the video in the ticket, and a rebuilt screenshot editor with numbered steps, pixelate and full-resolution saves. Site Audit now remembers its last result, shows the old and new score after a re-scan, and hands the findings to your coding agent with Fix with AI or Open in Claude. After 3 free audits it asks for a free account (just your email and a code). Bug capture still needs no account.
 
-Also new since the last store version: bug reports name the action that really caused the bug and list only real failures, an Evidence block says what was and wasn't captured, tokens in URLs and hidden form fields are masked everywhere a report goes, the clicks leading up to a bug are kept, and a new coral look.
+Also new: the welcome page shows the one-line command to connect Claude Code, Cursor or Windsurf, the popup leads with Capture Bug, and personal data hidden inside stored values (an analytics visitor's name and email) is masked in every report.
 
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
-Free and open source (MIT). No account, no upload, no TraceBug server.
+Free and open source (MIT). No account for bug capture, nothing uploaded. Site Audit asks for a free account (just your email) after 3 audits.
 
 Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 
@@ -111,7 +111,7 @@ EXPORT AND SHARE
 PRIVATE BY DEFAULT
 ━━━━━━━━━━━━━━━━━━━━
 
-• Reports and settings stay on your device. Nothing is sent to TraceBug.
+• Reports and settings stay on your device; your captures and reports never go to TraceBug. Only your email goes to tracebug.dev, and only if you sign in for Site Audit or join the update list.
 • Passwords, tokens, card numbers and secret URL parameters are masked as they're captured. Add your own redaction rules for anything else.
 • Blur any element before or during a recording.
 • No analytics, no telemetry, no remote code.
@@ -181,24 +181,24 @@ the popup ask until `/api/confirm` and `/api/unsubscribe` are live and a test si
 The SDK's 5th-ticket card already sent a typed email before this, so the old "leave PII unticked" answer was
 arguably wrong already.
 
-**Site Audit sign-in (ADR 009 — the release that ships it; change ALL of this before submitting):**
-- Description: replace "No account, no upload, no TraceBug server." with
+**Site Audit sign-in (ADR 009 — ships in 1.13.0).** Text applied 2026-11-16: the Chrome description and "New in 1.13.0", the AMO description, release notes and reviewer note. **Still to do in the dashboards at upload:** the CWS data-use ticks, the CWS reviewer note, AMO's add-on policy check, and screenshots that say "no account" (marked ☐ below).
+- ☑ Description: replace "No account, no upload, no TraceBug server." with
   "No account for bug capture, nothing uploaded. Site Audit asks for a free account (just your email) after 3 audits."
   Add to the 1.13 "New in" paragraph: "Site Audit remembers its last result, shows the old and new score after a
   re-scan, and opens findings in Claude. After 3 free audits it asks for a free account (email + code)."
-- CWS data-use: tick **Personally identifiable information** (email) and **Authentication information** (the
+- ☐ CWS data-use: tick **Personally identifiable information** (email) and **Authentication information** (the
   one-time code). Purpose: "account sign-in for Site Audit; product emails only if the user ticks a separate box".
   Not sold, not used for credit. The audit's results, pages and URLs are never sent.
-- CWS reviewer note: "Site Audit asks for a free account after 3 audits. Sign-in is email + 6-digit code on an
+- ☐ CWS reviewer note: "Site Audit asks for a free account after 3 audits. Sign-in is email + 6-digit code on an
   extension page (signin.html); the extension calls only tracebug.dev. No new permissions. Test account: any
   email you control." AMO: same note; check the current add-on policies on features that need an account and
   say it in the listing.
-- Screenshots/slides that say "no account" for the whole product: recaption.
-- **AMO copy too** (added by the 2026-11-13 security audit — the lines above only covered CWS): the AMO
+- ☐ Screenshots/slides that say "no account" for the whole product: recaption.
+- ☑ **AMO copy too** (added by the 2026-11-13 security audit — the lines above only covered CWS): the AMO
   description's "No account. No upload. No telemetry." and "nothing goes to TraceBug", and the AMO reviewer note's
   "Data is sent only when the user clicks Send…" — reword them the same way (bug capture: no account, nothing
   uploaded; Site Audit sign-in and the optional email ask send the email address to tracebug.dev).
-- **Firefox data collection** (`build-ext.mjs`): the manifest now declares `required: ["none"]` plus
+- ☑ **Firefox data collection** (`build-ext.mjs`): the manifest now declares `required: ["none"]` plus
   `optional: ["personallyIdentifyingInfo", "technicalAndInteraction"]`, requested at the moment of the first send
   (`requestDataConsent` in `signin.js` and `popup.js`; Firefox 140+, ignored below). In the AMO reviewer note say:
   "Bug capture collects nothing. Optional data collection is requested only when the user types an email for Site
@@ -246,7 +246,7 @@ Developer Hub → TraceBug → **Edit Product Page** (description, screenshots) 
 ```markdown
 **One capture. Everything a developer — or an AI coding agent — needs to fix the bug.**
 
-TraceBug records what actually happened in your browser: a DOM replay, console errors, network requests, screenshots and your repro steps, and bundles it into one self-contained .html file that stays on YOUR machine. No account. No upload. No telemetry.
+TraceBug records what actually happened in your browser: a DOM replay, console errors, network requests, screenshots and your repro steps, and bundles it into one self-contained .html file that stays on YOUR machine. No account for bug capture. No upload. No telemetry.
 
 Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 
@@ -260,7 +260,7 @@ Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 Click **Audit this page** for a 0–100 score and real problems with fixes: accessibility (axe-core, WCAG 2.0–2.2 A/AA, keyboard checks), layout and phone width, speed (load timings, LCP, heavy and oversized images), SEO (tags, structured data, robots.txt, sitemap) and page errors. Locate each one on the page, copy the fixes for your AI agent, or export the audit. It never clicks, types or submits anything.
 
 **What makes it different**
-- **Local-first** — reports and settings stay on your device; nothing goes to TraceBug.
+- **Local-first** — reports and settings stay on your device; your captures never go to TraceBug. Site Audit asks for a free account (just your email) after 3 audits.
 - **AI-native** — Claude Code, Cursor and any MCP client can read every report; TraceBug can also generate a *failing Playwright test* that goes green when the bug is fixed.
 - **Complete evidence** — screen recording with mic narration, interactive DOM replay, console, network, environment, annotated screenshots.
 - **Private by default** — passwords, tokens, card numbers and secret URL parameters are masked as they're captured.
@@ -279,26 +279,19 @@ Privacy policy: https://tracebug.dev/privacy
 **Release notes** (per version): the CHANGELOG section, minus Chrome-only items (Tab mode, `tabCapture`).
 Current:
 ```text
-- New: Site Audit. "Audit this page", the popup's first card, checks the page you are on for accessibility (axe-core 4.11, WCAG 2.0–2.2 A/AA, plus a keyboard pass), layout, phone width (390px), performance (this load's timings), SEO (tags, structured data, robots.txt, sitemap) and errors. Its arrow picks one of four scans. Each check says what it can't tell you; a check that could not run shows "Not run", never "no issues".
-- A 0–100 score per check and overall, with the formula one click away. Checks that didn't run are never scored.
-- The audit opens in a side panel that stays open: Locate on page highlights each problem without closing the list. The toolbar has an Audit button.
-- Every finding says how to fix it, where it is and which WCAG criterion it maps to; low-contrast text gets the nearest colour that passes.
-- Text that fades in on scroll is no longer silently skipped: the audit says so and can scroll the page and re-run.
-- Copy for AI: tick findings and copy them as one fix prompt for your coding agent.
-- Results the automated checks can't decide are listed under "Needs a person to check" and don't lower the score.
-- The panel can be dragged anywhere by its header or docked to either edge.
-- Re-run the audit to see what was fixed, what is still there, what is new and what regressed.
-- Export report saves the audit as one offline .html file; the MCP server reads it with three new tools (get_audit, get_finding, compare_audits).
-- axe-core is a separate packaged file, loaded only when you run an audit.
-
-Also in this version (1.11.6 went to npm only, so it reaches Firefox now):
-- Reports name the action that really caused the bug, and only real failures are reported (aborted requests, opaque responses and the favicon no longer count).
-- An Evidence block in every report says what was captured, what is never captured, what was masked and what was dropped.
-- Private by default: tokens in URLs (including inside error stacks), hidden form fields and cookie values are masked in every export and AI prompt.
-- The clicks that lead up to a bug are kept, typing right before a click is recorded in order, and slow typing is one step.
-- Reports show storage as it was when the bug happened, the page the bug happened on, and failed responses that survive a reload.
-- One MCP setup command everywhere, which also finds reports in Downloads and Desktop.
-- A new coral look, including the exported report.
+- New: draw on the page while you record. The pencil on the recording bar opens a toolbar: pen, box, ellipse, arrow, line, text, highlighter, eraser, six colours, undo/redo. Drawings stay anchored to the page and are never part of the replay.
+- New: trim the recording in the ticket. Pick the part to keep and Cut re-records it, also on sites like GitHub whose security policy blocks in-page video.
+- New: a rebuilt screenshot editor: select and move, arrows, boxes, text, marker, numbered steps, pixelate, eraser, undo/redo, copy; saves at full resolution.
+- Site Audit remembers its last result for the page, and Re-scan shows the old and new score with what was fixed, still there, new or regressed.
+- Site Audit: Fix with AI (downloads the audit and copies a one-line prompt for your coding agent) and Open in Claude.
+- Site Audit asks for a free account after 3 audits: your email and a 6-digit code on an extension page, no password. Bug capture, exports, tickets and the MCP server never need an account. If sign-in can't be reached, the audit runs anyway.
+- Optional: after your 2nd saved ticket or export the popup asks once if you want product updates by email (confirm email first, at most one a month).
+- The welcome page shows the one-line command to connect Claude Code, Cursor or Windsurf to TraceBug's local MCP server.
+- A ticket under review no longer closes on a stray click outside it; closing an unsaved one asks first, and it can be reopened from Saved tickets until the next capture.
+- The popup leads with Capture Bug.
+- Video is now off by default on Firefox (each recording would open the screen-share prompt). If you never changed it, it is turned off once; your own choice is kept.
+- Personal data inside stored values (an analytics visitor's name and email) is masked in every report and export.
+- Data collection (Firefox 140+): nothing is required. Your email, and usage counts only if you tick that box, are asked for at the moment you send them.
 ```
 
 **Notes to reviewer** (fill in the version):
@@ -330,7 +323,10 @@ Firefox manifest. innerHTML uses go through one setInnerHTML() helper (src/ui/he
 TraceBug's own templates, with page-derived values escaped, via a Trusted Types policy where the page
 requires one.
 
-No remote code, no eval of downloaded code, no analytics or telemetry. Data is sent only when the user
+No remote code, no eval of downloaded code, no analytics or telemetry. Bug capture collects nothing. Optional
+data collection is requested only when the user types an email for Site Audit sign-in (email + 6-digit
+code on the extension page signin.html, after 3 free audits; the extension calls only tracebug.dev) or for
+the update list (and the usage counts only if they tick that box). Report data is sent only when the user
 clicks Send to GitHub / Linear / Slack or asks for AI analysis with their own API key; each send shows
 a confirmation window first.
 

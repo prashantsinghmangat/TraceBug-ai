@@ -30461,7 +30461,27 @@ ${issueSignatureSlack()}`;
       signal == null ? void 0 : signal.addEventListener("abort", abort, { once: true });
     });
   }
-  function mountTrimBar(host2, video, durationS, handlers) {
+  function mediaOfVideo(v2) {
+    return {
+      get currentTime() {
+        return v2.currentTime;
+      },
+      get duration() {
+        return v2.duration;
+      },
+      get paused() {
+        return v2.paused;
+      },
+      pause: () => v2.pause(),
+      seek: (t2) => {
+        v2.currentTime = t2;
+      },
+      addEventListener: (t2, f2) => v2.addEventListener(t2, f2),
+      removeEventListener: (t2, f2) => v2.removeEventListener(t2, f2)
+    };
+  }
+  function mountTrimBar(host2, player, durationS, handlers) {
+    const video = typeof HTMLVideoElement !== "undefined" && player instanceof HTMLVideoElement ? mediaOfVideo(player) : player;
     const canCut = canCutVideo();
     let duration = durationS > 0 ? durationS : 0;
     let start = 0, end = duration;
@@ -30528,7 +30548,7 @@ ${issueSignatureSlack()}`;
     const seekPreview = (t2) => {
       try {
         video.pause();
-        video.currentTime = Math.min(Math.max(0, t2), Math.max(0, duration - 0.04));
+        video.seek(Math.min(Math.max(0, t2), Math.max(0, duration - 0.04)));
       } catch (e2) {
       }
     };
@@ -30587,7 +30607,7 @@ ${issueSignatureSlack()}`;
       if (!video.paused && video.currentTime >= end) {
         video.pause();
         try {
-          video.currentTime = end;
+          video.seek(end);
         } catch (e2) {
         }
       }
@@ -30596,7 +30616,7 @@ ${issueSignatureSlack()}`;
       if (busy || isWholeClip(start, end, duration)) return;
       if (video.currentTime < start - 0.05 || video.currentTime >= end - 0.05) {
         try {
-          video.currentTime = start;
+          video.seek(start);
         } catch (e2) {
         }
       }
@@ -33727,9 +33747,71 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       } catch (e2) {
       }
     };
-    modal.querySelector('[data-action="close"]').addEventListener("click", close);
+    const isKept = () => !!modal.querySelector('[data-action="save-ticket"].tb-qb-btn-saved') || _draftCleared;
+    const closeConfirmEl = () => modal.querySelector("#tb-qb-close-confirm");
+    const hideCloseConfirm = () => {
+      var _a3, _b2;
+      (_a3 = closeConfirmEl()) == null ? void 0 : _a3.remove();
+      try {
+        (_b2 = modal.querySelector('[data-action="close"]')) == null ? void 0 : _b2.focus();
+      } catch (e2) {
+      }
+    };
+    const showCloseConfirm = () => {
+      var _a3;
+      if (closeConfirmEl()) return;
+      const box2 = document.createElement("div");
+      box2.id = "tb-qb-close-confirm";
+      box2.className = "tb-qb-confirm";
+      setInnerHTML(box2, `
+      <div class="tb-qb-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="tb-qb-cc-title" aria-describedby="tb-qb-cc-body">
+        <h3 id="tb-qb-cc-title">Close this ticket?</h3>
+        <p id="tb-qb-cc-body">It isn't saved yet. Until your next capture you can reopen it from <b>Saved tickets</b> on the TraceBug toolbar.</p>
+        <div class="tb-qb-confirm-actions">
+          <button type="button" class="tb-qb-btn" data-cc="keep">Keep editing</button>
+          <button type="button" class="tb-qb-btn" data-cc="close">Close</button>
+          <button type="button" class="tb-qb-btn tb-qb-btn-primary" data-cc="save">Save and close</button>
+        </div>
+      </div>`);
+      modal.appendChild(box2);
+      box2.addEventListener("click", (e2) => {
+        var _a4;
+        const act = (_a4 = e2.target.closest("[data-cc]")) == null ? void 0 : _a4.dataset.cc;
+        if (e2.target === box2 || act === "keep") {
+          hideCloseConfirm();
+          return;
+        }
+        if (act === "close") {
+          close();
+          return;
+        }
+        if (act === "save") {
+          const btn = modal.querySelector('[data-action="save-ticket"]');
+          btn == null ? void 0 : btn.click();
+          if (isKept()) close();
+          else hideCloseConfirm();
+        }
+      });
+      try {
+        (_a3 = box2.querySelector('[data-cc="keep"]')) == null ? void 0 : _a3.focus();
+      } catch (e2) {
+      }
+    };
+    const requestClose = (trusted = true) => {
+      if (!trusted || isKept()) {
+        close();
+        return;
+      }
+      showCloseConfirm();
+    };
+    modal.querySelector('[data-action="close"]').addEventListener("click", (e2) => requestClose(e2.isTrusted));
+    let _bgHintAt = 0;
     overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) close();
+      if (e2.target !== overlay) return;
+      const now = Date.now();
+      if (now - _bgHintAt < 4e3) return;
+      _bgHintAt = now;
+      showToast("Your ticket stays open. Use \u2715 (or Esc) to close it.", root2);
     });
     (_v = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _v.addEventListener("click", () => {
       _cycleTheme();
@@ -33811,6 +33893,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (e2.key !== "Escape") return;
       if (e2.defaultPrevented) return;
       if (helpEl && helpEl.style.display !== "none") return;
+      if (closeConfirmEl()) {
+        hideCloseConfirm();
+        return;
+      }
       const child = document.getElementById("tb-ai-popover") || document.getElementById("tb-mcp-handoff") || document.getElementById("tb-ai-config") || document.getElementById("tb-int-config") || document.getElementById("tb-share-consent");
       if (child) {
         child.remove();
@@ -33822,7 +33908,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         (_a3 = modal.querySelector('[data-action="more-toggle"]')) == null ? void 0 : _a3.setAttribute("aria-expanded", "false");
         return;
       }
-      close();
+      requestClose(e2.isTrusted);
     };
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
@@ -34529,11 +34615,14 @@ ${report.steps}` : userDesc : void 0,
       else videoEl.addEventListener("loadedmetadata", handleMeta, { once: true });
       if (videoEl.readyState >= 2) paintFirstFrame();
       else videoEl.addEventListener("loadeddata", paintFirstFrame, { once: true });
-      const trimHost = modal.querySelector("#tb-qb-trim");
+      let trimHost = modal.querySelector("#tb-qb-trim");
       let trimBar = null;
       let trimAbort = null;
-      if (trimHost && video.blob && video.blob.size > 0) {
-        trimBar = mountTrimBar(trimHost, videoEl, expectedS, {
+      const trimSlot = trimHost ? { parent: trimHost.parentElement, next: trimHost.nextSibling } : null;
+      const mountTrim = (player, cutter) => {
+        if (!trimHost) return;
+        const host2 = trimHost;
+        trimBar = mountTrimBar(host2, player, expectedS, {
           onCancel: () => trimAbort == null ? void 0 : trimAbort.abort(),
           onCut: async (startS, endS) => {
             var _a3, _b2;
@@ -34542,11 +34631,9 @@ ${report.steps}` : userDesc : void 0,
             trimBar.setError(null);
             trimBar.setBusy(0);
             try {
-              const blob2 = await cutVideo(video.blob, video.mimeType, startS, endS, {
-                signal: trimAbort.signal,
-                onProgress: (f2) => trimBar == null ? void 0 : trimBar.setBusy(f2)
-              });
-              if (!trimHost.isConnected) return;
+              const blob2 = await cutter(startS, endS, trimAbort.signal, (f2) => trimBar == null ? void 0 : trimBar.setBusy(f2));
+              const trimHost2 = host2;
+              if (!trimHost2.isConnected) return;
               await replaceLastVideoRecording({
                 blob: blob2,
                 mimeType: blob2.type || video.mimeType,
@@ -34572,8 +34659,13 @@ ${report.steps}` : userDesc : void 0,
             }
           }
         });
+      };
+      const canTrim = !!(trimHost && video.blob && video.blob.size > 0);
+      if (canTrim) {
+        mountTrim(videoEl, (s2, e2, signal, onProgress) => cutVideo(video.blob, video.mimeType, s2, e2, { signal, onProgress }));
       } else {
         trimHost == null ? void 0 : trimHost.remove();
+        trimHost = null;
       }
       const preview = videoEl.closest(".tb-qb-preview");
       let _blockedShown = false;
@@ -34604,7 +34696,65 @@ ${report.steps}` : userDesc : void 0,
         iframe.title = "TraceBug recording";
         iframe.className = "tb-qb-player-iframe";
         host2.appendChild(iframe);
+        const post = (msg) => {
+          var _a3;
+          try {
+            (_a3 = iframe.contentWindow) == null ? void 0 : _a3.postMessage(msg, playerOrigin);
+          } catch (e2) {
+          }
+        };
+        const frameEvents = new EventTarget();
+        const frameState = { currentTime: 0, duration: NaN, paused: true };
+        const frameMedia = {
+          get currentTime() {
+            return frameState.currentTime;
+          },
+          get duration() {
+            return frameState.duration;
+          },
+          get paused() {
+            return frameState.paused;
+          },
+          pause: () => {
+            frameState.paused = true;
+            post({ type: "tb:player:pause" });
+          },
+          seek: (t2) => {
+            frameState.currentTime = t2;
+            post({ type: "tb:player:seek-to", seconds: t2 });
+          },
+          addEventListener: (t2, f2) => frameEvents.addEventListener(t2, f2),
+          removeEventListener: (t2, f2) => frameEvents.removeEventListener(t2, f2)
+        };
+        const cuts = /* @__PURE__ */ new Map();
+        const frameCutter = (startS, endS, signal, onProgress) => new Promise((resolve, reject) => {
+          const id = Math.random().toString(36).slice(2);
+          const abort = () => {
+            post({ type: "tb:player:cut-cancel", id });
+          };
+          signal.addEventListener("abort", abort, { once: true });
+          cuts.set(id, {
+            resolve: (b) => {
+              signal.removeEventListener("abort", abort);
+              resolve(b);
+            },
+            reject: (e2) => {
+              signal.removeEventListener("abort", abort);
+              reject(e2);
+            },
+            onProgress
+          });
+          post({ type: "tb:player:cut", id, start: startS, end: endS, mimeType: video.mimeType || "video/webm" });
+        });
+        if (canTrim && (trimSlot == null ? void 0 : trimSlot.parent) && video.blob) {
+          const h = document.createElement("div");
+          h.id = "tb-qb-trim";
+          trimSlot.parent.insertBefore(h, trimSlot.next && trimSlot.next.parentNode === trimSlot.parent ? trimSlot.next : null);
+          trimHost = h;
+          mountTrim(frameMedia, frameCutter);
+        }
         const onMsg = (e2) => {
+          var _a3;
           if (!iframe.isConnected) {
             window.removeEventListener("message", onMsg);
             return;
@@ -34613,13 +34763,13 @@ ${report.steps}` : userDesc : void 0,
           const t2 = e2.data && e2.data.type || "";
           if (t2 === "tb:player:ready") {
             bytesPromise.then((buf) => {
-              var _a3;
+              var _a4;
               if (!buf) {
                 console.warn("[TraceBug] could not get recording bytes for player");
                 return;
               }
               console.info("[TraceBug] sending", Math.round(buf.byteLength / 1024), "KB to player");
-              (_a3 = iframe.contentWindow) == null ? void 0 : _a3.postMessage(
+              (_a4 = iframe.contentWindow) == null ? void 0 : _a4.postMessage(
                 { type: "tb:player:load", buffer: buf, mimeType: video.mimeType || "video/webm", durationMs: video.durationMs },
                 playerOrigin,
                 [buf]
@@ -34627,6 +34777,31 @@ ${report.steps}` : userDesc : void 0,
             });
             _ifr.win = iframe.contentWindow;
             _ifr.origin = playerOrigin;
+          } else if (t2 === "tb:player:time") {
+            const d = e2.data;
+            const prevDur = frameState.duration;
+            const wasPaused = frameState.paused;
+            frameState.currentTime = Number(d.currentTime) || 0;
+            frameState.duration = Number(d.duration);
+            frameState.paused = !!d.paused;
+            if (frameState.duration !== prevDur) frameEvents.dispatchEvent(new Event("durationchange"));
+            frameEvents.dispatchEvent(new Event("timeupdate"));
+            if (wasPaused && !frameState.paused) frameEvents.dispatchEvent(new Event("play"));
+          } else if (t2 === "tb:player:cut-progress") {
+            (_a3 = cuts.get(String(e2.data.id))) == null ? void 0 : _a3.onProgress(Number(e2.data.fraction) || 0);
+          } else if (t2 === "tb:player:cut-done") {
+            const job = cuts.get(String(e2.data.id));
+            cuts.delete(String(e2.data.id));
+            if (job && e2.data.buffer instanceof ArrayBuffer) job.resolve(new Blob([e2.data.buffer], { type: String(e2.data.mimeType || video.mimeType || "video/webm") }));
+            else job == null ? void 0 : job.reject(new Error("the cut returned no video"));
+          } else if (t2 === "tb:player:cut-error") {
+            const job = cuts.get(String(e2.data.id));
+            cuts.delete(String(e2.data.id));
+            if (job) {
+              const err = new Error(String(e2.data.message || "cut failed"));
+              if (e2.data.aborted) err.name = "AbortError";
+              job.reject(err);
+            }
           } else if (t2 === "tb:player:frame" && _ifrFramePending) {
             _ifrFramePending(e2.data);
             _ifrFramePending = null;
@@ -36025,6 +36200,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} button:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
 
     /* \u2500\u2500 Help overlay (keyboard cheat sheet) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID} .tb-qb-confirm { position:absolute; inset:0; background:rgba(0,0,0,0.55); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:11; padding:24px; }
+    #${MODAL_ID} .tb-qb-confirm-card { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:20px 22px; max-width:420px; box-shadow:0 20px 50px rgba(0,0,0,0.4); }
+    #${MODAL_ID} .tb-qb-confirm-card h3 { margin:0 0 8px; font-size:16px; font-weight:600; }
+    #${MODAL_ID} .tb-qb-confirm-card p { margin:0 0 16px; font-size:13px; line-height:1.5; color:var(--tb-text-secondary); }
+    #${MODAL_ID} .tb-qb-confirm-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
     #${MODAL_ID} .tb-qb-help { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10; padding:24px; }
     #${MODAL_ID} .tb-qb-help-card { background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:24px 28px; max-width:420px; width:100%; box-shadow:var(--tb-shadow-md); }
     #${MODAL_ID} .tb-qb-help-title { font-size:14px; font-weight:600; margin-bottom:16px; color:var(--tb-text-primary); letter-spacing:-0.01em; }
@@ -41766,7 +41946,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     auditBtn.setAttribute("aria-pressed", "false");
     toolbar.appendChild(auditBtn);
     toolbar.appendChild(_createToolbarBtn(
-      "Saved tickets",
+      "Saved tickets (and your last unsaved one)",
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
       () => {
         _showOfflineTicketList(root2);
@@ -42253,6 +42433,41 @@ Response: ${match.response.slice(0, 160)}` : "";
     hdr.appendChild(hdrTitle);
     hdr.appendChild(closeX);
     pop.appendChild(hdr);
+    const latest = getAllSessions().slice().sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0))[0];
+    if (latest && !latest.saved && !isVideoRecording() && !_isTracking && ((latest.events || []).length > 0 || (latest.screenshots || []).length > 0)) {
+      const un = document.createElement("div");
+      un.dataset.tracebug = "unsaved-ticket";
+      setInlineStyle(un, "display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;border:1px dashed var(--tb-accent,#FF5C6C);margin-bottom:10px;background:var(--tb-bg-primary,#12121f)");
+      const unInfo = document.createElement("div");
+      setInlineStyle(unInfo, "flex:1;min-width:0");
+      const unTitle = document.createElement("div");
+      setInlineStyle(unTitle, "font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
+      let t2 = latest.title || latest.errorSummary || "";
+      if (!t2) {
+        try {
+          t2 = generateBugTitle(latest);
+        } catch (e2) {
+        }
+      }
+      unTitle.textContent = t2 || "Untitled ticket";
+      unTitle.title = t2;
+      const unSub = document.createElement("div");
+      setInlineStyle(unSub, "font-size:10px;color:var(--tb-text-secondary,#aaa);margin-top:2px");
+      unSub.textContent = `Unsaved \xB7 ${_fmtTime(latest.updatedAt || latest.createdAt || 0)} \xB7 kept until your next capture`;
+      unInfo.appendChild(unTitle);
+      unInfo.appendChild(unSub);
+      const reopen = document.createElement("button");
+      reopen.textContent = "Reopen";
+      setInlineStyle(reopen, "background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap;flex-shrink:0");
+      reopen.addEventListener("click", () => {
+        closePop();
+        if (!isQuickBugOpen()) showQuickBugCapture(root2).catch(() => {
+        });
+      });
+      un.appendChild(unInfo);
+      un.appendChild(reopen);
+      pop.appendChild(un);
+    }
     if (sessions.length === 0) {
       const empty = document.createElement("div");
       setInlineStyle(empty, "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6");
