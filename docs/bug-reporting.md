@@ -33,7 +33,7 @@ clipboard exports, or an AI agent reading the file over MCP.
 | **URLs** (requests, the page URL, links, form actions, the DOM replay) | Query and fragment params named `token`, `key`, `secret`, `auth`, `password`, `sig`, `signature`, … → `?api_key=[REDACTED]`, `#access_token=[REDACTED]` |
 | **Console output & error messages** | Token shapes: JWTs, `Bearer` headers, `sk-` keys, Stripe, GitHub PATs, AWS, Slack, Google API, Twilio, SendGrid, Mailgun, Postmark, Linear, Discord tokens, and labeled high-entropy hex secrets |
 | **Network response snippets** | Same token-shape patterns as console output |
-| **localStorage / sessionStorage** | Values under sensitive-looking keys (`token`, `jwt`, `session`, `auth`, …) and values that themselves look like tokens → first/last 4 chars kept, middle `[REDACTED]` |
+| **localStorage / sessionStorage** | Values under sensitive-looking keys (`token`, `jwt`, `session`, `auth`, …) and values that themselves look like tokens → first/last 4 chars kept, middle `[REDACTED]`. Every other value is scrubbed inside: email addresses anywhere → `j***@e***.com`; in JSON values, fields named like personal data (`email`, `first_name`, `last_name`, `phone`, `address`, `dob`, …) or secrets → `[REDACTED]`; embedded token shapes masked. IDs, flags and settings stay readable. (Same for cookie values when `captureCookieValues` is on.) |
 | **Cookies** | Names only by default; values with [`captureCookieValues: true`](configuration.md#capturecookievalues), masked like storage |
 | **Voice notes** | Same token-shape patterns as console output |
 
@@ -106,7 +106,7 @@ For when you only want part of the page:
 When you're done reproducing the bug, click the **recording toggle** to stop, or call `TraceBug.stopRecording()`. This opens the **ticket-review modal**:
 
 - Header: "Bug Ticket — Review & Export"
-- Auto-filled title and description (root cause, steps, environment, errors, failed requests). The description reads as formatted text; click it or **Edit Markdown** to change the raw Markdown that GitHub, Jira and the exports receive
+- Auto-filled title and description (root cause, steps, environment, errors, failed requests). The description reads as formatted text (read-only); **Edit Markdown** opens the raw Markdown, and **Done** closes it. That Markdown is what GitHub, Jira and the exports receive.
 - **Primary preview** of the first screenshot
 - **Numbered thumbnail strip** of every other screenshot; click any thumbnail to swap it into the primary preview
 - **Trim** (screen recordings of 1.5 s or more): drag the two handles under the video to keep only the part that shows the bug — playback stays inside the kept range — then click **Cut**. The kept part plays once in the background, in real time, with a progress bar and **Cancel**. The cut replaces the recording for this ticket (download, export, Grab frame), keeps the sound, and shifts timestamped comments and the console/network timeline to match. It is not saved back to the extension: reload the page before exporting and the full recording returns. Not offered on sites whose security policy blocks in-page video (the recording then plays in the extension's own player).

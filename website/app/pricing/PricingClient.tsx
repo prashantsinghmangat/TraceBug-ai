@@ -19,6 +19,7 @@ const FREE_FEATURES = [
   "GitHub / Linear / Slack / PDF export",
   "Chrome and Firefox extension + npm SDK",
   "Local MCP server for AI coding agents",
+  "Site Audit (may ask for a free email sign-in after 3 audits)",
   "Open source (MIT)",
 ];
 
@@ -50,7 +51,7 @@ export default function PricingClient() {
                 <span className="font-mono text-[13px] text-text-subtle">today</span>
               </div>
               <div className="mt-3 text-[48px] font-medium leading-none tracking-[-0.02em] tabular-nums">$0</div>
-              <p className="mt-3 text-[15px] text-text-muted">Local-first bug capture. No account needed.</p>
+              <p className="mt-3 text-[15px] text-text-muted">Local-first bug capture. No account needed to capture.</p>
 
               <ul className="mt-8 space-y-3 border-t border-border pt-6">
                 {FREE_FEATURES.map((f) => (

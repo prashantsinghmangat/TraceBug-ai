@@ -34,6 +34,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "Browser extension", href: "/#install" },
       { label: "Sentry alternative", href: "/compare/sentry-alternative" },
       { label: "Jam alternative", href: "/compare/jam-alternative" },
+      { label: "All comparisons", href: "/compare" },
     ],
   },
   {

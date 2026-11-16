@@ -104,6 +104,21 @@ describe('the worker seeds the video default — on, for both install and update
     expect(mock.localStore[KEY]).toBeUndefined();
   });
 
+  it('seeds video OFF on a build without tabCapture (Firefox: no share picker on the first capture)', async () => {
+    const ff = createChromeMock({ permissions: ['activeTab', 'storage', 'scripting', 'alarms'] });
+    loadBackground(ff);
+    expect(await install(ff, 'install')).toMatchObject({ video: false, videoSetBy: 'default' });
+  });
+
+  it('turns off a default-ON an earlier Firefox build seeded, but never a user choice', async () => {
+    const ff = createChromeMock({ permissions: ['activeTab', 'storage'] });
+    loadBackground(ff);
+    ff.localStore[KEY] = { video: true, videoSetBy: 'default', delaySec: 3 };
+    expect(await install(ff, 'update')).toMatchObject({ video: false, videoSetBy: 'default', delaySec: 3 });
+    ff.localStore[KEY] = { video: true, videoSetBy: 'user' };
+    expect(await install(ff, 'update')).toMatchObject({ video: true, videoSetBy: 'user' });
+  });
+
   it('still opens the welcome page on install, and only on install', async () => {
     // The URL is asserted in tests/first-run.test.ts; counting tabs here is
     // about the seed not disturbing the first-run tab, in either direction.

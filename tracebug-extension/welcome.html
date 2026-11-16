@@ -282,7 +282,7 @@
       border: 1px solid var(--border); border-radius: var(--radius-lg);
       padding: 28px; box-shadow: var(--card-shadow);
     }
-    .privacy-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 32px; align-items: start; }
+    .privacy-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; }
     .privacy-h { display: flex; align-items: center; gap: 8px; font-size: 19px; letter-spacing: -0.01em; margin-bottom: 14px; }
     .privacy p { color: var(--text-2); font-size: 14px; margin: 0 0 12px; max-width: 640px; }
     .privacy p:last-of-type { margin-bottom: 0; }
@@ -301,6 +301,13 @@
       border-radius: var(--radius-md); padding: 18px;
     }
     .ai-t { font-size: 14.5px; font-weight: 650; color: var(--ai-title); margin-bottom: 5px; }
+    .ai-step { margin-top: 28px; padding: 22px 24px; }
+    .ai-step .ai-t { font-size: 16px; }
+    .ai-l a { color: var(--ai-title); }
+    .ai-os { display: inline-flex; gap: 4px; margin: 0 0 10px; padding: 3px; border-radius: 8px; background: var(--ai-code-bg); border: 1px solid var(--ai-code-border); }
+    .ai-os-opt { cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--ai-text); background: transparent; border: 0; border-radius: 6px; padding: 4px 10px; }
+    .ai-os-opt[aria-pressed="true"] { background: var(--ai-btn-bg); color: var(--ai-title); }
+    .ai-os-opt:focus-visible { outline: 2px solid var(--ai-accent); outline-offset: 1px; }
     .ai-l { font-size: 13px; color: var(--ai-text); margin: 0 0 14px; line-height: 1.5; }
     .ai-cmd {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -493,18 +500,22 @@
 
     </section>
 
-    <!-- ── Optional Site Audit sign-in (ADR 009) ──────────────
-         Skippable: Site Audit gives 3 free audits first, and nothing else
-         needs an account. welcome.js hides it when already signed in or
-         after "Skip for now" (remembered). Sign-in itself is signin.html. -->
-    <section class="acct" id="acctCard" hidden>
-      <div class="acct-txt">
-        <h2 class="acct-t">Optional: sign in for Site Audit</h2>
-        <p class="acct-h">Site Audit is free for 3 audits, then needs a free account: just your email and a 6-digit code, no password. Sign in now and you won't be asked later. Capture, tickets and exports never need an account.</p>
+
+    <!-- ── Connect your agent ─────────────────────────────────
+         The step the product exists for (growth audit 2026-11-16): it used to
+         sit beside the privacy note, below an optional sign-in card. welcome.js
+         swaps the command for Windows (cmd /c) and wires Copy. -->
+    <section class="ai ai-step" aria-labelledby="aiTitle">
+      <div class="ai-t" id="aiTitle">4 · Connect your AI coding agent</div>
+      <p class="ai-l">Let Claude Code read your reports locally. Run this once, then restart Claude Code; it finds reports in your Downloads folder. Cursor, Windsurf and VS Code: <a id="mcpDocs" href="#" target="_blank" rel="noopener noreferrer">tracebug.dev/docs/mcp</a></p>
+      <div class="ai-os" role="group" aria-label="Your operating system">
+        <button type="button" class="ai-os-opt" data-os="unix" aria-pressed="true">macOS / Linux</button>
+        <button type="button" class="ai-os-opt" data-os="win" aria-pressed="false">Windows</button>
       </div>
-      <div class="acct-btns">
-        <a class="btn" id="acctSignIn" href="signin.html" target="_blank" rel="noopener">Sign in free</a>
-        <button class="btn-sec" id="acctSkip" type="button">Skip for now</button>
+      <div class="ai-cmd">
+        <span class="ai-cmd-l"><span class="ai-dollar">$</span><span id="mcpCmd">claude mcp add -s user tracebug -- npx -y tracebug mcp</span></span>
+        <!-- Wired by welcome.js; the CSP forbids an inline handler. -->
+        <button class="ai-copy" id="copyMcp" type="button" title="Copy to clipboard">Copy</button>
       </div>
     </section>
 
@@ -526,19 +537,24 @@
             <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No telemetry</span>
           </div>
           <p>Only the tab you're capturing, only after you press Capture: clicks, console errors, network requests and a replay of the page. Passwords and tokens are masked as they're captured.</p>
-          <p>Nothing goes to TraceBug. Reports stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider.</p>
+          <p>Your captures and reports never go to TraceBug. They stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider.</p>
         </div>
 
-        <div class="ai">
-          <div class="ai-t">Using an AI coding agent?</div>
-          <p class="ai-l">Let Claude Code read your reports locally. Run once, then restart Claude Code; it finds reports in your Downloads folder. Cursor and others: tracebug.dev/docs/mcp</p>
-          <div class="ai-cmd">
-            <span class="ai-cmd-l"><span class="ai-dollar">$</span><span id="mcpCmd">claude mcp add -s user tracebug -- npx -y tracebug mcp</span></span>
-            <!-- Wired by welcome.js; the CSP forbids an inline handler. -->
-            <button class="ai-copy" id="copyMcp" type="button" title="Copy to clipboard">Copy</button>
-          </div>
-        </div>
+      </div>
+    </section>
 
+    <!-- ── Optional Site Audit sign-in (ADR 009) ──────────────
+         Skippable: Site Audit gives 3 free audits first, and nothing else
+         needs an account. welcome.js hides it when already signed in or
+         after "Skip for now" (remembered). Sign-in itself is signin.html. -->
+    <section class="acct" id="acctCard" hidden>
+      <div class="acct-txt">
+        <h2 class="acct-t">Optional: sign in for Site Audit</h2>
+        <p class="acct-h">Site Audit is free for 3 audits, then needs a free account: just your email and a 6-digit code, no password. Sign in now and you won't be asked later. Capture, tickets and exports never need an account.</p>
+      </div>
+      <div class="acct-btns">
+        <a class="btn" id="acctSignIn" href="signin.html" target="_blank" rel="noopener">Sign in free</a>
+        <button class="btn-sec" id="acctSkip" type="button">Skip for now</button>
       </div>
     </section>
 

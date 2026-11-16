@@ -42,7 +42,7 @@ const POSTS: BlogPost[] = [
     tag: "Site Audit",
     seoTitle: "Site Audit for AI coding agents — TraceBug 1.12",
     seoDescription:
-      "Free browser audit for accessibility (axe-core, WCAG 2.2), layout, mobile, performance and SEO. Hand the findings to Claude Code or Cursor over MCP. No account.",
+      "Free browser audit for accessibility (axe-core, WCAG 2.2), layout, mobile, performance and SEO. Hand the findings to Claude Code or Cursor over MCP. Free.",
     content: `
 Most audit tools end with a list. You read it, open your editor, and start translating "Elements must meet minimum color contrast ratio thresholds" into the one CSS rule you need to change. That last step is where the time goes — and it's exactly the step an AI coding agent is good at, if it gets the evidence.
 
@@ -87,14 +87,14 @@ Your agent gets \`get_audit\`, \`get_finding\` (evidence plus search hints into 
 
 ## Why it's local
 
-The audit runs in your browser and is read-only — it clicks, types and changes nothing. The report is a file on your disk; the MCP server reads it from there. No account, no upload, MIT-licensed. The only requests the audit makes are to the site's own \`/robots.txt\` and sitemap.
+The audit runs in your browser and never clicks, types or submits anything. The report is a file on your disk; the MCP server reads it from there. Nothing is uploaded, and it's MIT-licensed. The only requests the audit makes go to the audited site itself: its \`/robots.txt\` and sitemap, and one more hidden, phone-width load of the page for the mobile check. Newer extension versions ask for a free email sign-in after 3 audits; the account holds your email only, never your audits or pages.
 
 [Full Site Audit guide →](/docs#audit)
 `.trim(),
     faq: [
       {
         q: "Is TraceBug Site Audit free?",
-        a: "Yes. It's part of the free Chrome and Firefox extension and needs no account. The audit runs in your browser and uploads nothing.",
+        a: "Yes. It's part of the free Chrome and Firefox extension. Newer versions ask for a free email sign-in after 3 audits (no password, and the account never sees your audits). The audit runs in your browser and uploads nothing.",
       },
       {
         q: "How is it different from Lighthouse?",

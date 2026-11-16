@@ -500,122 +500,51 @@ var TraceBugExtensionModule = (() => {
     }
   });
 
-  // src/storage-capture.ts
-  function setCookieValueCapture(on2) {
-    _cookieValues = on2;
+  // src/sanitize/pii.ts
+  function maskEmail(email) {
+    const at = email.indexOf("@");
+    const user = email.slice(0, at);
+    const domain = email.slice(at + 1);
+    const dot = domain.lastIndexOf(".");
+    return `${user.charAt(0)}***@${domain.charAt(0)}***${dot > 0 ? domain.slice(dot) : ""}`;
   }
-  function maskValue(raw) {
-    if (!raw) return "";
-    if (raw.length <= 8) return "[REDACTED]";
-    return `${raw.slice(0, 4)}\u2026${raw.slice(-4)} [REDACTED]`;
+  function maskEmails(s2) {
+    return s2.replace(EMAIL_RE, maskEmail);
   }
-  function readArea(area) {
-    var _a2;
-    const entries = [];
-    let truncated = 0;
-    let len = 0;
-    try {
-      len = area.length;
-    } catch (e2) {
-      return { entries, truncated: 0 };
+  function _scrubJson(v2, isSecretKey, depth) {
+    if (depth > 12) return v2;
+    if (typeof v2 === "string") return maskEmails(v2);
+    if (Array.isArray(v2)) return v2.map((x) => _scrubJson(x, isSecretKey, depth + 1));
+    if (v2 && typeof v2 === "object") {
+      const out = {};
+      for (const [k, val] of Object.entries(v2)) {
+        const leaf = typeof val === "string" && val !== "" || typeof val === "number";
+        out[k] = leaf && (PII_FIELD.test(k) || isSecretKey(k)) ? REDACTED2 : _scrubJson(val, isSecretKey, depth + 1);
+      }
+      return out;
     }
-    for (let i2 = 0; i2 < len; i2++) {
-      let key = null;
-      let value = "";
+    return v2;
+  }
+  function scrubStoredValue(raw, isSecretKey) {
+    if (!raw) return raw;
+    const t2 = raw.trimStart();
+    if ((t2[0] === "{" || t2[0] === "[") && raw.length <= 2e5) {
       try {
-        key = area.key(i2);
-        if (key == null) continue;
-        value = (_a2 = area.getItem(key)) != null ? _a2 : "";
+        const parsed = JSON.parse(raw);
+        const scrubbed = JSON.stringify(_scrubJson(parsed, isSecretKey, 0));
+        return scrubbed === JSON.stringify(parsed) ? raw : scrubbed;
       } catch (e2) {
-        continue;
       }
-      if (INTERNAL_KEY.test(key)) continue;
-      if (entries.length >= MAX_ENTRIES_PER_AREA) {
-        truncated++;
-        continue;
-      }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
-      let outValue;
-      let redacted = false;
-      if (sensitive) {
-        outValue = maskValue(value);
-        redacted = true;
-      } else if (value.length > MAX_VALUE_LEN) {
-        outValue = value.slice(0, MAX_VALUE_LEN) + "\u2026";
-      } else {
-        outValue = value;
-      }
-      entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
     }
-    return { entries, truncated };
+    return maskEmails(raw);
   }
-  function readCookies() {
-    const entries = [];
-    let truncated = 0;
-    let raw = "";
-    try {
-      raw = document.cookie || "";
-    } catch (e2) {
-      return { entries, truncated };
-    }
-    if (!raw) return { entries, truncated };
-    for (const part of raw.split(/;\s*/)) {
-      const eq = part.indexOf("=");
-      if (eq <= 0) continue;
-      const key = part.slice(0, eq).trim();
-      const value = part.slice(eq + 1);
-      if (INTERNAL_KEY.test(key)) continue;
-      if (entries.length >= MAX_ENTRIES_PER_AREA) {
-        truncated++;
-        continue;
-      }
-      if (!_cookieValues) {
-        entries.push({ key, value: "", valueOmitted: true });
-        continue;
-      }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
-      if (sensitive) {
-        entries.push({ key, value: maskValue(value), redacted: true });
-      } else {
-        entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "\u2026" : value });
-      }
-    }
-    return { entries, truncated };
-  }
-  function captureStorageSnapshot() {
-    const snapshot2 = { local: [], session: [] };
-    if (typeof window === "undefined") return snapshot2;
-    try {
-      const ls = readArea(window.localStorage);
-      snapshot2.local = ls.entries;
-      if (ls.truncated > 0) snapshot2.localTruncated = ls.truncated;
-    } catch (e2) {
-    }
-    try {
-      const ss = readArea(window.sessionStorage);
-      snapshot2.session = ss.entries;
-      if (ss.truncated > 0) snapshot2.sessionTruncated = ss.truncated;
-    } catch (e2) {
-    }
-    try {
-      const ck = readCookies();
-      if (ck.entries.length > 0) snapshot2.cookies = ck.entries;
-      if (ck.truncated > 0) snapshot2.cookiesTruncated = ck.truncated;
-    } catch (e2) {
-    }
-    return snapshot2;
-  }
-  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY, _cookieValues;
-  var init_storage_capture = __esm({
-    "src/storage-capture.ts"() {
+  var REDACTED2, PII_FIELD, EMAIL_RE;
+  var init_pii = __esm({
+    "src/sanitize/pii.ts"() {
       "use strict";
-      init_custom_redaction();
-      MAX_ENTRIES_PER_AREA = 50;
-      MAX_VALUE_LEN = 300;
-      SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
-      SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
-      INTERNAL_KEY = /^tracebug[_-]/i;
-      _cookieValues = false;
+      REDACTED2 = "[REDACTED]";
+      PII_FIELD = /^(?:.*[_-])?(?:e-?mail(?:_?address)?|phone(?:_?number)?|mobile|tel|telephone|first_?name|last_?name|full_?name|given_?name|family_?name|middle_?name|surname|display_?name|user_?name|birth_?date|date_?of_?birth|dob|ssn|national_?id|passport|address(?:_?line\d?)?|street|post_?code|postal_?code|zip(?:_?code)?)$/i;
+      EMAIL_RE = /[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}\b/g;
     }
   });
 
@@ -715,6 +644,289 @@ var TraceBugExtensionModule = (() => {
       NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
       SEGMENT_MAX = 24;
       PATH_MAX = 60;
+    }
+  });
+
+  // src/sanitize/cloud-upload.ts
+  function mask(s2) {
+    if (s2.length <= 12) return REDACTED3;
+    return `${s2.slice(0, 4)}\u2026${REDACTED3}\u2026${s2.slice(-4)}`;
+  }
+  function sanitizeUrl(url) {
+    if (typeof url !== "string" || url.length === 0) return url;
+    try {
+      const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
+      const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
+      let changed = false;
+      u2.searchParams.forEach((_v, k) => {
+        if (isSensitiveParamName(k) || isCustomSensitiveKey(k)) {
+          u2.searchParams.set(k, REDACTED3);
+          changed = true;
+        }
+      });
+      if (!changed) return sanitizeText(url);
+      const out = isAbs ? u2.toString() : u2.pathname + u2.search + u2.hash;
+      return sanitizeText(out);
+    } catch (e2) {
+      return sanitizeText(url);
+    }
+  }
+  function sanitizeText(s2) {
+    if (s2 == null) return s2;
+    let out = String(s2);
+    for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
+    out = redactUrlsInText(out);
+    return applyCustomRedaction(out);
+  }
+  function sanitizeTokenShapes(s2) {
+    return sanitizeText(s2);
+  }
+  function sanitizeReportForUpload(report) {
+    var _a2;
+    const out = typeof structuredClone === "function" ? structuredClone(report) : JSON.parse(JSON.stringify(report));
+    if (out.consoleErrors) {
+      out.consoleErrors = out.consoleErrors.map((e2) => {
+        var _a3;
+        return {
+          ...e2,
+          message: sanitizeText(e2.message),
+          stack: sanitizeText((_a3 = e2.stack) != null ? _a3 : void 0)
+        };
+      });
+    }
+    if (out.consoleLogs) {
+      out.consoleLogs = out.consoleLogs.map((e2) => {
+        var _a3;
+        return {
+          ...e2,
+          message: sanitizeText(e2.message),
+          stack: sanitizeText((_a3 = e2.stack) != null ? _a3 : void 0)
+        };
+      });
+    }
+    if (out.networkErrors) {
+      out.networkErrors = out.networkErrors.map((e2) => {
+        var _a3;
+        return {
+          ...e2,
+          url: sanitizeUrl(e2.url),
+          response: sanitizeText((_a3 = e2.response) != null ? _a3 : void 0)
+        };
+      });
+    }
+    if (out.networkRequests) {
+      out.networkRequests = out.networkRequests.map((e2) => {
+        var _a3;
+        return {
+          ...e2,
+          url: sanitizeUrl(e2.url),
+          response: sanitizeText((_a3 = e2.response) != null ? _a3 : void 0)
+        };
+      });
+    }
+    if (out.steps) out.steps = sanitizeText(out.steps);
+    if (out.summary) out.summary = sanitizeText(out.summary);
+    if (out.title) out.title = sanitizeText(out.title);
+    if (Array.isArray(out.sessionSteps)) out.sessionSteps = out.sessionSteps.map((s2) => sanitizeText(s2));
+    if (out.actionChips) {
+      out.actionChips = out.actionChips.map((c2) => {
+        var _a3, _b;
+        return {
+          ...c2,
+          target: sanitizeText((_a3 = c2.target) != null ? _a3 : void 0),
+          detail: sanitizeText((_b = c2.detail) != null ? _b : void 0)
+        };
+      });
+    }
+    if (out.storage) {
+      const scrub = (entries) => entries.map((e2) => ({ ...e2, value: sanitizeText(e2.value) }));
+      out.storage.local = scrub(out.storage.local || []);
+      out.storage.session = scrub(out.storage.session || []);
+      if (out.storage.cookies) out.storage.cookies = scrub(out.storage.cookies);
+    }
+    if ((_a2 = out.environment) == null ? void 0 : _a2.url) out.environment.url = sanitizeUrl(out.environment.url);
+    if (out.context && typeof out.context === "object") {
+      const ctx = {};
+      for (const [k, v2] of Object.entries(out.context)) {
+        ctx[k] = typeof v2 === "string" ? sanitizeText(v2) : v2;
+      }
+      out.context = ctx;
+    }
+    return out;
+  }
+  var REDACTED3, TOKEN_PATTERNS;
+  var init_cloud_upload = __esm({
+    "src/sanitize/cloud-upload.ts"() {
+      "use strict";
+      init_custom_redaction();
+      init_url_hygiene();
+      REDACTED3 = "[REDACTED]";
+      TOKEN_PATTERNS = [
+        // Bearer <token> in headers, console output, anywhere
+        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED3 },
+        // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
+        { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
+        // OpenAI / Stripe sk_*
+        { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
+        // Stripe secret + publishable (live/test, secret + publishable + restricted)
+        { name: "stripe", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
+        // GitHub PATs (classic + fine-grained + OAuth + server tokens)
+        { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
+        { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
+        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
+        { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
+        // Slack — broader than before (xoxa-z covers all known prefixes)
+        { name: "slack", re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
+        // Google API keys
+        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
+        // Twilio — Account SID + Auth tokens
+        { name: "twilio_sid", re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
+        // SendGrid
+        { name: "sendgrid", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
+        // Mailgun
+        { name: "mailgun", re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
+        // Postmark
+        { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
+        // Linear / Vercel / Cloudflare / Discord
+        { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+        { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
+        // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
+        // session IDs, etc. that don't carry a recognizable prefix. Conservative:
+        // only triggers when preceded by a common secret-y keyword to avoid
+        // mangling legitimate hex like git SHAs.
+        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED3) }
+      ];
+    }
+  });
+
+  // src/storage-capture.ts
+  function setCookieValueCapture(on2) {
+    _cookieValues = on2;
+  }
+  function scrubInside(value) {
+    const scrubbed = sanitizeTokenShapes(scrubStoredValue(value, isSecretName));
+    return { value: scrubbed, redacted: scrubbed !== value };
+  }
+  function maskValue(raw) {
+    if (!raw) return "";
+    if (raw.length <= 8) return "[REDACTED]";
+    return `${raw.slice(0, 4)}\u2026${raw.slice(-4)} [REDACTED]`;
+  }
+  function readArea(area) {
+    var _a2;
+    const entries = [];
+    let truncated = 0;
+    let len = 0;
+    try {
+      len = area.length;
+    } catch (e2) {
+      return { entries, truncated: 0 };
+    }
+    for (let i2 = 0; i2 < len; i2++) {
+      let key = null;
+      let value = "";
+      try {
+        key = area.key(i2);
+        if (key == null) continue;
+        value = (_a2 = area.getItem(key)) != null ? _a2 : "";
+      } catch (e2) {
+        continue;
+      }
+      if (INTERNAL_KEY.test(key)) continue;
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
+      let outValue;
+      let redacted = false;
+      if (sensitive) {
+        outValue = maskValue(value);
+        redacted = true;
+      } else {
+        const inner = scrubInside(value);
+        outValue = cap(inner.value);
+        redacted = inner.redacted;
+      }
+      entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
+    }
+    return { entries, truncated };
+  }
+  function readCookies() {
+    const entries = [];
+    let truncated = 0;
+    let raw = "";
+    try {
+      raw = document.cookie || "";
+    } catch (e2) {
+      return { entries, truncated };
+    }
+    if (!raw) return { entries, truncated };
+    for (const part of raw.split(/;\s*/)) {
+      const eq = part.indexOf("=");
+      if (eq <= 0) continue;
+      const key = part.slice(0, eq).trim();
+      const value = part.slice(eq + 1);
+      if (INTERNAL_KEY.test(key)) continue;
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      if (!_cookieValues) {
+        entries.push({ key, value: "", valueOmitted: true });
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
+      if (sensitive) {
+        entries.push({ key, value: maskValue(value), redacted: true });
+      } else {
+        const inner = scrubInside(value);
+        entries.push(inner.redacted ? { key, value: cap(inner.value), redacted: true } : { key, value: cap(value) });
+      }
+    }
+    return { entries, truncated };
+  }
+  function captureStorageSnapshot() {
+    const snapshot2 = { local: [], session: [] };
+    if (typeof window === "undefined") return snapshot2;
+    try {
+      const ls = readArea(window.localStorage);
+      snapshot2.local = ls.entries;
+      if (ls.truncated > 0) snapshot2.localTruncated = ls.truncated;
+    } catch (e2) {
+    }
+    try {
+      const ss = readArea(window.sessionStorage);
+      snapshot2.session = ss.entries;
+      if (ss.truncated > 0) snapshot2.sessionTruncated = ss.truncated;
+    } catch (e2) {
+    }
+    try {
+      const ck = readCookies();
+      if (ck.entries.length > 0) snapshot2.cookies = ck.entries;
+      if (ck.truncated > 0) snapshot2.cookiesTruncated = ck.truncated;
+    } catch (e2) {
+    }
+    return snapshot2;
+  }
+  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY, _cookieValues, isSecretName, cap;
+  var init_storage_capture = __esm({
+    "src/storage-capture.ts"() {
+      "use strict";
+      init_custom_redaction();
+      init_pii();
+      init_cloud_upload();
+      MAX_ENTRIES_PER_AREA = 50;
+      MAX_VALUE_LEN = 300;
+      SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
+      SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
+      INTERNAL_KEY = /^tracebug[_-]/i;
+      _cookieValues = false;
+      isSecretName = (k) => SENSITIVE_KEY.test(k) || isCustomSensitiveKey(k);
+      cap = (v2) => v2.length > MAX_VALUE_LEN ? v2.slice(0, MAX_VALUE_LEN) + "\u2026" : v2;
     }
   });
 
@@ -2492,161 +2704,6 @@ var TraceBugExtensionModule = (() => {
       screenshotCounter = 0;
       screenshots = [];
       _captureLock = Promise.resolve();
-    }
-  });
-
-  // src/sanitize/cloud-upload.ts
-  function mask(s2) {
-    if (s2.length <= 12) return REDACTED2;
-    return `${s2.slice(0, 4)}\u2026${REDACTED2}\u2026${s2.slice(-4)}`;
-  }
-  function sanitizeUrl(url) {
-    if (typeof url !== "string" || url.length === 0) return url;
-    try {
-      const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
-      const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
-      let changed = false;
-      u2.searchParams.forEach((_v, k) => {
-        if (isSensitiveParamName(k) || isCustomSensitiveKey(k)) {
-          u2.searchParams.set(k, REDACTED2);
-          changed = true;
-        }
-      });
-      if (!changed) return sanitizeText(url);
-      const out = isAbs ? u2.toString() : u2.pathname + u2.search + u2.hash;
-      return sanitizeText(out);
-    } catch (e2) {
-      return sanitizeText(url);
-    }
-  }
-  function sanitizeText(s2) {
-    if (s2 == null) return s2;
-    let out = String(s2);
-    for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
-    out = redactUrlsInText(out);
-    return applyCustomRedaction(out);
-  }
-  function sanitizeTokenShapes(s2) {
-    return sanitizeText(s2);
-  }
-  function sanitizeReportForUpload(report) {
-    var _a2;
-    const out = typeof structuredClone === "function" ? structuredClone(report) : JSON.parse(JSON.stringify(report));
-    if (out.consoleErrors) {
-      out.consoleErrors = out.consoleErrors.map((e2) => {
-        var _a3;
-        return {
-          ...e2,
-          message: sanitizeText(e2.message),
-          stack: sanitizeText((_a3 = e2.stack) != null ? _a3 : void 0)
-        };
-      });
-    }
-    if (out.consoleLogs) {
-      out.consoleLogs = out.consoleLogs.map((e2) => {
-        var _a3;
-        return {
-          ...e2,
-          message: sanitizeText(e2.message),
-          stack: sanitizeText((_a3 = e2.stack) != null ? _a3 : void 0)
-        };
-      });
-    }
-    if (out.networkErrors) {
-      out.networkErrors = out.networkErrors.map((e2) => {
-        var _a3;
-        return {
-          ...e2,
-          url: sanitizeUrl(e2.url),
-          response: sanitizeText((_a3 = e2.response) != null ? _a3 : void 0)
-        };
-      });
-    }
-    if (out.networkRequests) {
-      out.networkRequests = out.networkRequests.map((e2) => {
-        var _a3;
-        return {
-          ...e2,
-          url: sanitizeUrl(e2.url),
-          response: sanitizeText((_a3 = e2.response) != null ? _a3 : void 0)
-        };
-      });
-    }
-    if (out.steps) out.steps = sanitizeText(out.steps);
-    if (out.summary) out.summary = sanitizeText(out.summary);
-    if (out.title) out.title = sanitizeText(out.title);
-    if (Array.isArray(out.sessionSteps)) out.sessionSteps = out.sessionSteps.map((s2) => sanitizeText(s2));
-    if (out.actionChips) {
-      out.actionChips = out.actionChips.map((c2) => {
-        var _a3, _b;
-        return {
-          ...c2,
-          target: sanitizeText((_a3 = c2.target) != null ? _a3 : void 0),
-          detail: sanitizeText((_b = c2.detail) != null ? _b : void 0)
-        };
-      });
-    }
-    if (out.storage) {
-      const scrub = (entries) => entries.map((e2) => ({ ...e2, value: sanitizeText(e2.value) }));
-      out.storage.local = scrub(out.storage.local || []);
-      out.storage.session = scrub(out.storage.session || []);
-      if (out.storage.cookies) out.storage.cookies = scrub(out.storage.cookies);
-    }
-    if ((_a2 = out.environment) == null ? void 0 : _a2.url) out.environment.url = sanitizeUrl(out.environment.url);
-    if (out.context && typeof out.context === "object") {
-      const ctx = {};
-      for (const [k, v2] of Object.entries(out.context)) {
-        ctx[k] = typeof v2 === "string" ? sanitizeText(v2) : v2;
-      }
-      out.context = ctx;
-    }
-    return out;
-  }
-  var REDACTED2, TOKEN_PATTERNS;
-  var init_cloud_upload = __esm({
-    "src/sanitize/cloud-upload.ts"() {
-      "use strict";
-      init_custom_redaction();
-      init_url_hygiene();
-      REDACTED2 = "[REDACTED]";
-      TOKEN_PATTERNS = [
-        // Bearer <token> in headers, console output, anywhere
-        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED2 },
-        // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
-        { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
-        // OpenAI / Stripe sk_*
-        { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
-        // Stripe secret + publishable (live/test, secret + publishable + restricted)
-        { name: "stripe", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
-        // GitHub PATs (classic + fine-grained + OAuth + server tokens)
-        { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
-        { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
-        { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
-        { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
-        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
-        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
-        { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
-        // Slack — broader than before (xoxa-z covers all known prefixes)
-        { name: "slack", re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
-        // Google API keys
-        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
-        // Twilio — Account SID + Auth tokens
-        { name: "twilio_sid", re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
-        // SendGrid
-        { name: "sendgrid", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
-        // Mailgun
-        { name: "mailgun", re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
-        // Postmark
-        { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
-        // Linear / Vercel / Cloudflare / Discord
-        { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
-        { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
-        // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
-        // session IDs, etc. that don't carry a recognizable prefix. Conservative:
-        // only triggers when preceded by a common secret-y keyword to avoid
-        // mangling legitimate hex like git SHAs.
-        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED2) }
-      ];
     }
   });
 
@@ -23659,14 +23716,14 @@ var TraceBugExtensionModule = (() => {
     for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
       if (ev.type === "input") {
         const el = (_d = ev.data) == null ? void 0 : _d.element;
-        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
-        else if (typeof (el == null ? void 0 : el.value) === "string" && el.value.includes(REDACTED3)) scrubbedValues.add(el.value);
+        if ((el == null ? void 0 : el.value) === REDACTED4) seenFields.add(`input:${el.name || el.id || "field"}`);
+        else if (typeof (el == null ? void 0 : el.value) === "string" && el.value.includes(REDACTED4)) scrubbedValues.add(el.value);
       } else if (ev.type === "form_submit") {
         const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
         if (fields && typeof fields === "object") {
           for (const [name, v2] of Object.entries(fields)) {
-            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
-            else if (typeof v2 === "string" && v2.includes(REDACTED3)) scrubbedValues.add(v2);
+            if (v2 === REDACTED4) seenFields.add(`form:${name}`);
+            else if (typeof v2 === "string" && v2.includes(REDACTED4)) scrubbedValues.add(v2);
           }
         }
       }
@@ -23698,11 +23755,11 @@ var TraceBugExtensionModule = (() => {
     ].filter(Boolean);
     return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
   }
-  var REDACTED3, TOKEN_RE, PARAM_RE;
+  var REDACTED4, TOKEN_RE, PARAM_RE;
   var init_redaction_summary = __esm({
     "src/redaction-summary.ts"() {
       "use strict";
-      REDACTED3 = "[REDACTED]";
+      REDACTED4 = "[REDACTED]";
       TOKEN_RE = /\[REDACTED\]/g;
       PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
     }
@@ -30742,8 +30799,7 @@ ${issueSignatureSlack()}`;
   function mdViewCss(scope) {
     const V = `${scope} .tb-qb-desc-view`;
     return `
-    ${V} { padding:12px 14px; font-size:13px; line-height:1.55; color:var(--tb-text-primary); border-top:1px solid var(--tb-border); max-height:320px; overflow:auto; cursor:text; word-break:break-word; }
-    ${V}:hover { background:var(--tb-bg-secondary); }
+    ${V} { padding:12px 14px; font-size:13px; line-height:1.55; color:var(--tb-text-primary); border-top:1px solid var(--tb-border); max-height:320px; overflow:auto; cursor:auto; user-select:text; word-break:break-word; }
     ${V} p { margin:0 0 8px; }
     ${V} ul, ${V} ol { margin:0 0 8px; padding-left:20px; }
     ${V} li { margin:2px 0; }
@@ -33410,15 +33466,15 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
 
         <details class="tb-qb-desc-wrap" open>
           <summary class="tb-qb-desc-summary">Description \u2014 included in exports</summary>
-          <!-- Read as formatted text; the raw Markdown (what GitHub / Jira /
-               exports receive) opens on click or with the button. -->
+          <!-- Read-only formatted text. The raw Markdown (what GitHub / Jira /
+               exports receive) opens only with the Edit Markdown button. -->
           <div class="tb-qb-desc-bar">
             <button type="button" class="tb-qb-desc-mode" data-action="desc-mode" aria-pressed="false" title="Edit the description as Markdown \u2014 the format GitHub, Jira and the exports receive">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>
               <span>Edit Markdown</span>
             </button>
           </div>
-          <div id="tb-qb-desc-view" class="tb-qb-desc-view" role="button" tabindex="0" aria-label="Description. Click to edit">${_descViewHtml(data.description)}</div>
+          <div id="tb-qb-desc-view" class="tb-qb-desc-view" role="region" aria-label="Description">${_descViewHtml(data.description)}</div>
           <textarea id="tb-qb-desc" class="tb-qb-textarea" hidden aria-label="Description (Markdown)">${escapeHtml(data.description)}</textarea>
         </details>
       </div>
@@ -33636,22 +33692,6 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       e2.preventDefault();
       if (descTa == null ? void 0 : descTa.hidden) showDescEdit();
       else showDescView();
-    });
-    descView == null ? void 0 : descView.addEventListener("click", () => {
-      var _a3;
-      const sel = (_a3 = window.getSelection) == null ? void 0 : _a3.call(window);
-      if (sel && !sel.isCollapsed && descView.contains(sel.anchorNode)) return;
-      showDescEdit();
-    });
-    descView == null ? void 0 : descView.addEventListener("keydown", (e2) => {
-      if (e2.key === "Enter" || e2.key === " ") {
-        e2.preventDefault();
-        showDescEdit();
-      }
-    });
-    descTa == null ? void 0 : descTa.addEventListener("blur", (e2) => {
-      if (e2.relatedTarget === descModeBtn) return;
-      showDescView();
     });
     (_u = modal.querySelector('[data-action="discard-draft"]')) == null ? void 0 : _u.addEventListener("click", (e2) => {
       var _a3, _b2;
@@ -34643,7 +34683,7 @@ ${report.steps}` : userDesc : void 0,
   }
   function _descViewHtml(md) {
     const html = renderMarkdownView(md);
-    return html || `<span class="md-empty">No description yet \u2014 click to write one.</span>`;
+    return html || `<span class="md-empty">No description yet \u2014 use Edit Markdown to write one.</span>`;
   }
   function _formatVideoTime(ms) {
     const total = Math.max(0, Math.floor(ms / 1e3));

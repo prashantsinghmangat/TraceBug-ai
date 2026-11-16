@@ -2,7 +2,7 @@
 
 The TraceBug CLI — a **local MCP server** that lets AI coding agents debug [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai) bug-report exports, plus one-command framework setup.
 
-Zero dependencies. ~24 KB. Node ≥ 18.
+Zero dependencies. ~70 KB unpacked. Node ≥ 18.
 
 **See it work first:** the [1-minute demo video](https://www.youtube.com/watch?v=-U64GIPfeiQ) (capture a bug, Claude Code fixes it), or [tracebug.dev/proof](https://tracebug.dev/proof), an unedited transcript of Claude going from crash to root cause in five tool calls, reading a real export through this server.
 
@@ -36,7 +36,7 @@ For Site Audit exports:
 - `get_finding` — one finding's evidence, help link and codebase search hints
 - `compare_audits` — before/after a fix: fixed, still present, new, regressed
 
-Text taken from the captured page is marked `untrusted`: agents treat it as data, never as instructions.
+Text taken from the captured page is marked untrusted (audit tools: under `untrusted`; bug tools: named in `untrustedFields`): agents treat it as data, never as instructions.
 
 **Everything stays on your machine.** The server binds to stdio only, opens zero network connections, and reads the report files from your disk. No account, no cloud, no upload.
 

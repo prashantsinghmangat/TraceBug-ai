@@ -86,3 +86,55 @@ describe('captureStorageSnapshot', () => {
     expect(snap.localTruncated).toBeUndefined();
   });
 });
+
+describe('personal data inside harmless-looking keys', () => {
+  it('masks personal and secret fields inside JSON values (analytics visitor blobs)', () => {
+    localStorage.setItem('analyticsConfig', JSON.stringify({
+      key: '1_17849_17851',
+      value: { visitor: { id: 5633785, email: 'jane.doe@example.com', first_name: 'Jane', last_name: 'Doe',
+        timezone: 'America/New_York', newsletter: false, sessionId: 'abc123def456' } },
+    }));
+    const e = captureStorageSnapshot().local.find((x) => x.key === 'analyticsConfig')!;
+    expect(e.redacted).toBe(true);
+    expect(e.value).not.toContain('jane.doe@example.com');
+    expect(e.value).not.toContain('"Jane"');
+    expect(e.value).not.toContain('"Doe"');
+    expect(e.value).not.toContain('abc123def456');
+    // What helps debugging survives: ids, flags, settings.
+    expect(e.value).toContain('5633785');
+    expect(e.value).toContain('America/New_York');
+    expect(e.value).toContain('"newsletter":false');
+  });
+
+  it('masks emails in plain text values, keeping a recognisable shape', () => {
+    localStorage.setItem('lastContact', 'sent to jane.doe@example.com on Monday');
+    const e = captureStorageSnapshot().local.find((x) => x.key === 'lastContact')!;
+    expect(e.redacted).toBe(true);
+    expect(e.value).toBe('sent to j***@e***.com on Monday');
+  });
+
+  it('masks token shapes embedded in a value', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    sessionStorage.setItem('cache', JSON.stringify({ items: 3, note: `jwt ${jwt}` }));
+    const e = captureStorageSnapshot().session.find((x) => x.key === 'cache')!;
+    expect(e.redacted).toBe(true);
+    expect(e.value).not.toContain(jwt);
+    expect(e.value).toContain('"items":3');
+  });
+
+  it('leaves ordinary values untouched and unmarked', () => {
+    localStorage.setItem('prefs', '{ "theme": "light", "accessible": true, "sort": "most-used" }');
+    localStorage.setItem('calendarId', '"primary"');
+    const snap = captureStorageSnapshot();
+    const prefs = snap.local.find((x) => x.key === 'prefs')!;
+    expect(prefs.redacted).toBeUndefined();
+    expect(prefs.value).toBe('{ "theme": "light", "accessible": true, "sort": "most-used" }');
+    expect(snap.local.find((x) => x.key === 'calendarId')?.redacted).toBeUndefined();
+  });
+
+  it('scrubs before capping, so a cut never keeps half an email', () => {
+    localStorage.setItem('log', 'x'.repeat(290) + ' jane.doe@example.com');
+    const e = captureStorageSnapshot().local.find((x) => x.key === 'log')!;
+    expect(e.value).not.toContain('jane.do');
+  });
+});

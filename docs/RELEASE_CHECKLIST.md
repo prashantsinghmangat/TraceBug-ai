@@ -326,6 +326,17 @@ Capture a session with clicks, typing, a page error and a fetch. **Pass:** Conso
 only; Actions has only what you did plus recording start/stop, in order; neither repeats Network rows.
 In a narrow (undocked) window, Info and Network values don't stack one character per line.
 
+### 20. No "no account" claim sits next to a gated feature (the Site Audit sign-in release, ADR 009)
+
+Only for a release whose build contains the Site Audit sign-in gate. Grep the shipped and published copy for
+`no account`, `No account`, `nothing goes to TraceBug` and `read-only`: `tracebug-extension/*.html`,
+`docs/STORE-LISTINGS.md` (CWS **and** AMO text, plus its "Site Audit sign-in" list), the screenshots and slide
+captions, `website/components/faq-data.ts`, `Hero.tsx`, `FinalCTA.tsx`, `pricing/PricingClient.tsx`,
+`website/lib/blog.ts`. **Pass:** every remaining "no account" is scoped to capture or export ("No account to
+capture"), Site Audit's sign-in after 3 audits is stated wherever Site Audit is described as free, and no copy
+calls the audit "read-only" (it loads the page once more in a hidden phone-width frame and reads robots.txt and
+sitemap.xml, as `/privacy` says).
+
 ### 10. Diagnostics
 
 Open TraceBug settings (it moved out of the popup in 1.11.3) and find the **Having trouble?** card. **Pass:** the summary says "no errors" on a clean session.

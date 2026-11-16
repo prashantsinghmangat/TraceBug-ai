@@ -22,7 +22,7 @@ export default function FinalCTA() {
             The next bug is one <Shortcut className="text-[0.62em] align-middle" /> away from fixed
           </h2>
           <p className="mt-4 max-w-xl text-lead text-text-muted">
-            Free, no account. Works with any front-end framework. Your data stays on your machine.
+            Free, no account to capture. Works with any front-end framework. Your data stays on your machine.
           </p>
           <div className="mt-8 grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center">
             <InstallButtons />

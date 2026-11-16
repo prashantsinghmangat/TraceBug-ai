@@ -71,16 +71,20 @@ try {
   if (SHOTS) { mkdirSync(SHOTS, { recursive: true }); await page.locator(".tb-qb-desc-wrap").screenshot({ path: join(SHOTS, "desc-view.png") }); }
 
   await page.click("#tb-qb-desc-view");
-  let st = await page.evaluate(() => ({ ta: !document.getElementById("tb-qb-desc").hidden, focus: document.activeElement?.id, btn: document.querySelector('[data-action="desc-mode"]').getAttribute("aria-pressed") }));
-  check("clicking the text opens the Markdown editor, focused", st.ta && st.focus === "tb-qb-desc" && st.btn === "true", JSON.stringify(st));
+  let st = await page.evaluate(() => ({ ta: !document.getElementById("tb-qb-desc").hidden, view: !document.getElementById("tb-qb-desc-view").hidden }));
+  check("clicking the text does NOT start editing", !st.ta && st.view, JSON.stringify(st));
+  await page.click('[data-action="desc-mode"]');
+  st = await page.evaluate(() => ({ ta: !document.getElementById("tb-qb-desc").hidden, focus: document.activeElement?.id, btn: document.querySelector('[data-action="desc-mode"]').getAttribute("aria-pressed") }));
+  check("Edit Markdown opens the editor, focused", st.ta && st.focus === "tb-qb-desc" && st.btn === "true", JSON.stringify(st));
   await page.keyboard.press("Control+End");
   await page.keyboard.type("\n\n**Extra:** typed by the tester");
   await page.click('[data-action="desc-mode"]');
   st = await page.evaluate(() => ({ view: !document.getElementById("tb-qb-desc-view").hidden, text: document.getElementById("tb-qb-desc-view").innerText }));
   check("Done returns to the read view with the edit rendered", st.view && /Extra: typed by the tester/.test(st.text) && !/\*\*Extra/.test(st.text));
   await page.click('[data-action="desc-mode"]');
+  await page.click("#tb-qb-title");
   st = await page.evaluate(() => !document.getElementById("tb-qb-desc").hidden);
-  check("Edit Markdown button opens the editor too", st);
+  check("clicking elsewhere keeps the editor open until Done", st);
   await page.click('[data-action="desc-mode"]');
 
   // Info tab: essentials visible, the rest folded with a count.

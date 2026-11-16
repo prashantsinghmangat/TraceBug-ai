@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "HAR Export — Portable network captures — TraceBug",
   description:
     "Export a session's captured network activity as a standard HAR 1.2 (HTTP Archive) file — the interchange format every browser DevTools, Charles, Fiddler, and Postman reads. A capture drops straight into any existing network-debugging workflow.",
-  openGraph: {
-    title: "TraceBug HAR Export — Your Network Capture Is a File You Own",
-    description:
-      "TraceBug already captures the request/response data and runs zero-backend, so exporting it as a portable HAR 1.2 file is a natural fit.",
-  },
+  ...social("TraceBug HAR Export — Your Network Capture Is a File You Own", "TraceBug already captures the request/response data and runs zero-backend, so exporting it as a portable HAR 1.2 file is a natural fit."),
   alternates: { canonical: "/docs/har-export" },
 };
 

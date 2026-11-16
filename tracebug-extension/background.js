@@ -75,20 +75,26 @@ async function flagWhatsNew() {
 /**
  * Seed the video default once, without ever overriding a choice.
  *
- * Video defaults ON for everyone — fresh installs and updates alike. The one
- * guard that matters: `videoSetBy: "user"` is never touched. A stored `video`
- * boolean with no user flag means a previous install/update already seeded
- * this default once, so it is not re-applied on every subsequent update.
+ * Video defaults ON where the build can record the current tab with no share
+ * dialog (it declares `tabCapture`: the Chrome build). The Firefox build has
+ * Desktop mode only, so video ON there opened the screen-share picker on a
+ * new user's very first Capture Bug; it defaults OFF instead, and a default
+ * ON that an earlier Firefox build seeded is turned off once. Feature test on
+ * the manifest, no browser-name check. `videoSetBy: "user"` is never touched,
+ * and a stored default is otherwise not re-applied on later updates.
  */
 async function seedRecordOptsDefault() {
   try {
     const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY];
     if (stored && stored.videoSetBy === "user") return;
-    if (stored && typeof stored.video === "boolean") return;
+    const tabCapture = (chrome.runtime.getManifest().permissions || []).includes("tabCapture");
+    if (stored && typeof stored.video === "boolean") {
+      if (tabCapture || stored.video !== true) return;
+    }
     await chrome.storage.local.set({
       [RECORD_OPTS_KEY]: {
         ...(stored || {}),
-        video: true,
+        video: tabCapture,
         videoSetBy: "default",
       },
     });

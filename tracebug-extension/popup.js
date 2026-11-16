@@ -565,7 +565,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (surfaceDesktopBtn) surfaceDesktopBtn.setAttribute("aria-pressed", String(surfaceMode === "desktop"));
     if (surfaceModeHelp) {
       surfaceModeHelp.textContent = surfaceMode === "desktop"
-        ? "Chrome asks which tab, window or screen to share"
+        ? (TAB_CAPTURE_DECLARED
+          ? "Chrome asks which tab, window or screen to share"
+          : "Your browser asks which window or screen to share")
         : "Records this tab — no share dialog";
     }
   }
@@ -1423,7 +1425,7 @@ async function initEmailAsk() {
       });
       if (res.status === 429) {
         btn.disabled = false;
-        btn.textContent = "Get early access";
+        btn.textContent = "Keep me posted";
         msg.textContent = "Too many sign-ups from here. Try again in a few minutes.";
         return;
       }
@@ -1438,7 +1440,7 @@ async function initEmailAsk() {
       hideSoon(5000);
     } catch {
       btn.disabled = false;
-      btn.textContent = "Get early access";
+      btn.textContent = "Keep me posted";
       msg.textContent = "";
       msg.append("Couldn't reach tracebug.dev. Try again, or sign up at ");
       const a = document.createElement("a");
@@ -1489,10 +1491,15 @@ async function initAccount() {
     try { p = await chrome.runtime.sendMessage({ type: "TB_AUDIT_PERMIT" }); } catch {}
     try { account = ((await chrome.storage.local.get("tb_audit_gate_v1")).tb_audit_gate_v1 || {}).account || null; } catch {}
     const signedIn = !!(account && account.email);
+    const left = p && typeof p.remaining === "number" ? p.remaining : null;
+    // The icon is account chrome for a feature that needs it only after the
+    // free audits; until then it only advertised a gate (growth audit E2).
+    // Shown once signed in (to sign out / delete) or once the free audits are used.
+    btn.hidden = !(signedIn || left === 0);
+    if (btn.hidden) setOpen(false);
     btn.querySelector(".hd-acct-dot").hidden = !signedIn;
     btn.title = signedIn ? `Signed in as ${account.email}` : "Site Audit account: not signed in";
     $id("acctTitle").textContent = signedIn ? account.email : "Not signed in";
-    const left = p && typeof p.remaining === "number" ? p.remaining : null;
     $id("acctSub").textContent = signedIn ? "Site Audit unlocked"
       : left === null ? "Site Audit: 3 free audits, then a free account"
       : left > 0 ? `${left} of ${p.free} free audits left`

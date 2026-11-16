@@ -703,15 +703,15 @@ function _openModal(
 
         <details class="tb-qb-desc-wrap" open>
           <summary class="tb-qb-desc-summary">Description — included in exports</summary>
-          <!-- Read as formatted text; the raw Markdown (what GitHub / Jira /
-               exports receive) opens on click or with the button. -->
+          <!-- Read-only formatted text. The raw Markdown (what GitHub / Jira /
+               exports receive) opens only with the Edit Markdown button. -->
           <div class="tb-qb-desc-bar">
             <button type="button" class="tb-qb-desc-mode" data-action="desc-mode" aria-pressed="false" title="Edit the description as Markdown — the format GitHub, Jira and the exports receive">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>
               <span>Edit Markdown</span>
             </button>
           </div>
-          <div id="tb-qb-desc-view" class="tb-qb-desc-view" role="button" tabindex="0" aria-label="Description. Click to edit">${_descViewHtml(data.description)}</div>
+          <div id="tb-qb-desc-view" class="tb-qb-desc-view" role="region" aria-label="Description">${_descViewHtml(data.description)}</div>
           <textarea id="tb-qb-desc" class="tb-qb-textarea" hidden aria-label="Description (Markdown)">${escapeHtml(data.description)}</textarea>
         </details>
       </div>
@@ -958,20 +958,9 @@ function _openModal(
     e.preventDefault();
     if (descTa?.hidden) showDescEdit(); else showDescView();
   });
-  descView?.addEventListener("click", () => {
-    // Selecting text to copy is not a request to edit.
-    const sel = window.getSelection?.();
-    if (sel && !sel.isCollapsed && descView.contains(sel.anchorNode)) return;
-    showDescEdit();
-  });
-  descView?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showDescEdit(); }
-  });
-  descTa?.addEventListener("blur", (e) => {
-    // Clicking "Done" blurs first; let its click handler switch back.
-    if ((e as FocusEvent).relatedTarget === descModeBtn) return;
-    showDescView();
-  });
+  // Editing starts and ends only with the button: clicking the text (to read,
+  // select or copy it) never switches modes, and leaving the editor to click
+  // elsewhere keeps it open until Done.
 
   // Discard a restored draft: reset both fields to this capture's auto values.
   modal.querySelector('[data-action="discard-draft"]')?.addEventListener("click", (e) => {
@@ -2186,7 +2175,7 @@ ${report.steps}` : userDesc)
 
 function _descViewHtml(md: string): string {
   const html = renderMarkdownView(md);
-  return html || `<span class="md-empty">No description yet — click to write one.</span>`;
+  return html || `<span class="md-empty">No description yet — use Edit Markdown to write one.</span>`;
 }
 
 function _formatVideoTime(ms: number): string {

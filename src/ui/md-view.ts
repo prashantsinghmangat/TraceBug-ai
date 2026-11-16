@@ -80,8 +80,7 @@ export function renderMarkdownView(md: string): string {
 export function mdViewCss(scope: string): string {
   const V = `${scope} .tb-qb-desc-view`;
   return `
-    ${V} { padding:12px 14px; font-size:13px; line-height:1.55; color:var(--tb-text-primary); border-top:1px solid var(--tb-border); max-height:320px; overflow:auto; cursor:text; word-break:break-word; }
-    ${V}:hover { background:var(--tb-bg-secondary); }
+    ${V} { padding:12px 14px; font-size:13px; line-height:1.55; color:var(--tb-text-primary); border-top:1px solid var(--tb-border); max-height:320px; overflow:auto; cursor:auto; user-select:text; word-break:break-word; }
     ${V} p { margin:0 0 8px; }
     ${V} ul, ${V} ol { margin:0 0 8px; padding-left:20px; }
     ${V} li { margin:2px 0; }

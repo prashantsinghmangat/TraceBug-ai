@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "AI Debugger — Bring-your-own-key AI analysis — TraceBug",
   description:
     "Run LLM-powered root-cause analysis on a bug report using your own API key — Anthropic, OpenAI, or a local Ollama. The call goes directly from the browser to the provider; TraceBug never sees your key, your prompt, or the response.",
-  openGraph: {
-    title: "TraceBug AI Debugger — Private, BYO-Key LLM Analysis",
-    description:
-      "The privacy-preserving counterpart to cloud AI debuggers. Your key stays on your machine, the prompt is scrubbed, and the request never touches a TraceBug backend.",
-  },
+  ...social("TraceBug AI Debugger — Private, BYO-Key LLM Analysis", "The privacy-preserving counterpart to cloud AI debuggers. Your key stays on your machine, the prompt is scrubbed, and the request never touches a TraceBug backend."),
   alternates: { canonical: "/docs/ai-debugger" },
 };
 

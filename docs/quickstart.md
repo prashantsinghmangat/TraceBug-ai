@@ -10,11 +10,13 @@ matches you.
 
 1. **Install** the extension from the
    [Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)
-   (works in Chrome, Edge, Brave, Opera).
+   (works in Chrome, Edge, Brave, Opera) or
+   [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/).
 2. Open the site with the bug and click the **TraceBug** icon → **Capture Bug**
    (or press the shortcut shown in the popup — default `Alt+B`). Nothing asks to
    share your screen: TraceBug records the console, network, your clicks and an
-   interactive replay of the page.
+   interactive replay of the page (in Chrome, plus a video of the tab; in
+   Firefox, video stays off until you turn it on).
 3. **Reproduce the bug** — click, type, navigate as you normally would. TraceBug
    records the DOM, console, network, and clicks. Clicking a link to another page
    keeps recording.
@@ -48,7 +50,7 @@ matches you.
    session** (events-only) or **🔴 Record** (with video) to arm a session.
 4. Reproduce the bug, then press `Ctrl+Shift+B` to open the **Quick Bug** modal.
 5. **Export replay (.html)** to hand off, or **Export HAR** / file a real GitHub / Linear /
-   Slack / Jira issue.
+   Slack issue / copy it for Jira.
 
 ### Debug it with an AI agent
 

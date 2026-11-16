@@ -1,12 +1,16 @@
 // ── Web Storage snapshot ──────────────────────────────────────────────────
 // Captures localStorage + sessionStorage at report-build time. Values under
 // sensitive-looking keys (or that look like tokens) are redacted here, at the
-// source, so secrets never enter the report object in the first place. The
+// source, so secrets never enter the report object in the first place. Every
+// other value is scrubbed INSIDE as well (sanitize/pii.ts): emails anywhere,
+// personal-data and secret fields in JSON, embedded token shapes. The
 // cloud-upload sanitizer (sanitize/cloud-upload.ts) runs a second pass for
 // defense-in-depth.
 
 import { StorageEntry, StorageSnapshot } from "./types";
 import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
+import { scrubStoredValue } from "./sanitize/pii";
+import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
 // Cap per storage area so a page with thousands of keys can't bloat the report.
 const MAX_ENTRIES_PER_AREA = 50;
@@ -32,6 +36,17 @@ let _cookieValues = false;
 export function setCookieValueCapture(on: boolean): void {
   _cookieValues = on;
 }
+
+const isSecretName = (k: string) => SENSITIVE_KEY.test(k) || isCustomSensitiveKey(k);
+
+/** Mask personal data and tokens inside a value whose key looked harmless.
+ *  `redacted` is true when anything was masked, so the UI shows the lock. */
+function scrubInside(value: string): { value: string; redacted: boolean } {
+  const scrubbed = sanitizeTokenShapes(scrubStoredValue(value, isSecretName));
+  return { value: scrubbed, redacted: scrubbed !== value };
+}
+
+const cap = (v: string) => (v.length > MAX_VALUE_LEN ? v.slice(0, MAX_VALUE_LEN) + "…" : v);
 
 function maskValue(raw: string): string {
   if (!raw) return "";
@@ -71,10 +86,11 @@ function readArea(area: Storage): { entries: StorageEntry[]; truncated: number }
     if (sensitive) {
       outValue = maskValue(value);
       redacted = true;
-    } else if (value.length > MAX_VALUE_LEN) {
-      outValue = value.slice(0, MAX_VALUE_LEN) + "…";
     } else {
-      outValue = value;
+      // Scrub BEFORE capping, so a cut never leaves half an email behind.
+      const inner = scrubInside(value);
+      outValue = cap(inner.value);
+      redacted = inner.redacted;
     }
     entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
   }
@@ -111,7 +127,8 @@ function readCookies(): { entries: StorageEntry[]; truncated: number } {
     if (sensitive) {
       entries.push({ key, value: maskValue(value), redacted: true });
     } else {
-      entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "…" : value });
+      const inner = scrubInside(value);
+      entries.push(inner.redacted ? { key, value: cap(inner.value), redacted: true } : { key, value: cap(value) });
     }
   }
   return { entries, truncated };

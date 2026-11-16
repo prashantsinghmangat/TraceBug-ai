@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
 import { ToolBugReportPage, type ToolBugReportData } from "@/components/ToolBugReportPage";
+import { social } from "@/lib/social";
 
 export const metadata: Metadata = {
   title: "Cursor Bug Reports — capture a bug, let Cursor's agent fix it | TraceBug",
   description:
     "Give Cursor's agent the bug context it needs to fix frontend bugs: capture a browser session into one file Cursor reads over MCP — console, network, replay, repro steps — then reproduces and fixes it with a generated failing test. Free, local-first.",
   alternates: { canonical: "/cursor-bug-reports" },
-  openGraph: {
-    title: "Cursor Bug Reports — capture a bug, let Cursor's agent fix it",
-    description:
-      "A small .cursor/mcp.json connects TraceBug to Cursor. Its agent reads the captured evidence over MCP and fixes the bug — verified by a generated failing test.",
-    url: "https://tracebug.dev/cursor-bug-reports",
-    images: [{ url: "/api/og", width: 1200, height: 630 }],
-  },
+  ...social("Cursor Bug Reports — capture a bug, let Cursor's agent fix it", "A small .cursor/mcp.json connects TraceBug to Cursor. Its agent reads the captured evidence over MCP and fixes the bug — verified by a generated failing test.", { url: "https://tracebug.dev/cursor-bug-reports" }),
 };
 
 const data: ToolBugReportData = {

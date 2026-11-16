@@ -28,7 +28,7 @@ const DROP_LINES: Record<string, string> = {
   report: "This is what I hand over: steps, console, network, screenshot",
   integrations: "GitHub, Linear, Slack, Jira, your AI. I go wherever you send me",
   mcp: "Your agent opens me through this. One command, nothing uploaded",
-  faq: "Ask away. Short version: free, local, no account",
+  faq: "Ask away. Short version: free, local, no account to capture",
   install: "Right here. One click and I live in your browser",
 };
 const DEFAULT_DROP = "I'll catch bugs anywhere you put me. Double-click and I go back to walking";

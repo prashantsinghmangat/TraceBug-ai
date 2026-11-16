@@ -1,11 +1,13 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { social } from "@/lib/social";
 
 export const metadata = {
   title: "Privacy Policy — TraceBug",
   description:
     "TraceBug privacy policy. Your bug reports never go to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider.",
   alternates: { canonical: "/privacy" },
+  ...social("TraceBug privacy policy", "Your bug reports never go to TraceBug. You choose what is sent to GitHub, Linear, Slack or your AI provider.", { url: "https://tracebug.dev/privacy" }),
 };
 
 export default function PrivacyPage() {
@@ -16,7 +18,7 @@ export default function PrivacyPage() {
 
         <h1 className="mb-2 text-h2 font-medium text-text-primary">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: November 14, 2026
+          Last updated: November 16, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -220,6 +222,17 @@ export default function PrivacyPage() {
                 up to you.
               </li>
             </ul>
+            <p className="mt-3">
+              <strong className="text-text-primary">Site Audit</strong> sends
+              nothing to TraceBug or anyone else, but it does make requests to the
+              site you audit, the way the page itself would: it reads that site&apos;s{" "}
+              <code className="text-accent">/robots.txt</code> and{" "}
+              <code className="text-accent">/sitemap.xml</code>, and the All checks
+              and Auto Review scans load the page once more in a hidden, phone-width
+              frame to check the mobile layout. That second load runs the page&apos;s
+              own scripts again, so the site sees it as one more visit. The audit
+              never clicks, types or submits anything.
+            </p>
           </section>
 
           <section>

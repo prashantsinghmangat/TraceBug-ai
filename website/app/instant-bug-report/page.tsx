@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import InstallButtons from "@/components/InstallButtons";
+import { social } from "@/lib/social";
 
 // Exact-match landing page for the primary keyword "instant bug report".
 // Same programmatic-SEO play as /compare/* — real, honest content that
@@ -14,13 +15,7 @@ export const metadata: Metadata = {
   description:
     "Create an instant bug report in two clicks: session replay, console errors, network requests, screenshots, and repro steps in one offline .html file. Free, no account, nothing uploaded.",
   alternates: { canonical: "/instant-bug-report" },
-  openGraph: {
-    title: "Instant Bug Report — one click, one file, zero forms",
-    description:
-      "Session replay, console errors, network requests, screenshots, and repro steps — captured instantly into one offline .html file. Free, no account.",
-    url: "https://tracebug.dev/instant-bug-report",
-    images: [{ url: "/api/og", width: 1200, height: 630 }],
-  },
+  ...social("Instant Bug Report — one click, one file, zero forms", "Session replay, console errors, network requests, screenshots, and repro steps — captured instantly into one offline .html file. Free, no account.", { url: "https://tracebug.dev/instant-bug-report" }),
 };
 
 const CONTAINS = [
