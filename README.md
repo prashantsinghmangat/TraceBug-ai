@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
+  <a href="https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/"><img src="https://img.shields.io/badge/Firefox_Add--ons-Install-FF7139?style=for-the-badge&logo=firefoxbrowser&logoColor=white" alt="Install Firefox Add-on"></a>
   <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/badge/npm_install-tracebug--sdk-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install tracebug-sdk"></a>
   <a href="https://tracebug.dev"><img src="https://img.shields.io/badge/Live_Demo-tracebug.dev-6366F1?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
 </p>

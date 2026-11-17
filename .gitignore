@@ -45,3 +45,12 @@ docs-internal/
 
 # axe-core copied in by tracebug-extension/build/build-ext.mjs (Site Audit)
 tracebug-extension/vendor/
+
+# Internal: plans, marketing, stats, audits, release sheets. Kept locally, never published
+# (the repo is public). CODEMAP.md stays public: it is a code map for contributors.
+docs/launch/*
+!docs/launch/CODEMAP.md
+docs/audit/
+docs/audit-quality/
+docs/release-sheets/
+METRICS.md

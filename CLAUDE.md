@@ -17,6 +17,9 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
   Releasing: `docs/RELEASING.md` (steps), `docs/RELEASE_CHECKLIST.md` (manual rows), `docs/STORE-LISTINGS.md` (all store text).
 - `assets/` (gitignored) - store screenshots, banners, icons, demo video and their generators; index in `assets/README.md`.
   `docs-internal/` (gitignored) - marketing posts (`marketing/`) and private business notes.
+- **Local only (gitignored, the repo is public):** `docs/launch/*` except `CODEMAP.md`, `docs/audit/`,
+  `docs/audit-quality/`, `docs/release-sheets/`, `METRICS.md`, `docs-internal/`, `assets/`. Plans, marketing,
+  stats, audits and business notes go there, never in a tracked file.
 - `docs/launch/` - current launch work: `STATE.md` (where things stand - **start here**), `PLAN.md` (what's left), `PROGRESS.md`. The `*-archive.md` files are closed history; don't read them unless you need why.
 
 ## Commands
