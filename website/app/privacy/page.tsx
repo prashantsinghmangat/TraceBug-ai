@@ -18,7 +18,7 @@ export default function PrivacyPage() {
 
         <h1 className="mb-2 text-h2 font-medium text-text-primary">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: November 16, 2026
+          Last updated: November 17, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -167,7 +167,7 @@ export default function PrivacyPage() {
             </p>
             <ul className="list-disc pl-6 space-y-1 mt-2">
               <li>Run a server that receives your reports — there isn&apos;t one</li>
-              <li>Use analytics, telemetry, or tracking of any kind</li>
+              <li>Use analytics, telemetry, or tracking of any kind in the extension or the SDK</li>
               <li>Share, sell, or transfer your data to anyone of its own accord</li>
               <li>Use data for advertising, profiling, or creditworthiness</li>
               <li>Send anything you have not chosen to send</li>
@@ -240,10 +240,26 @@ export default function PrivacyPage() {
               This Website
             </h2>
             <p>
-              tracebug.dev has no analytics and sets no tracking cookies. It
-              stores something only when you send it:
+              tracebug.dev sets no cookies and has no ads or cross-site
+              tracking. It counts page views and stores something only when you
+              send it:
             </p>
             <ul className="list-disc pl-6 space-y-1 mt-2">
+              <li>
+                <strong className="text-text-primary">Page views</strong> — counted
+                with{" "}
+                <a href="https://www.goatcounter.com/help/privacy" className="text-primary hover:underline">GoatCounter</a>,
+                an open-source counter that uses no cookies and keeps no personal
+                data. For each view it receives the page path, the address&apos;s
+                query string (so it can read campaign tags such as{" "}
+                <code className="text-accent">?ref=</code> or{" "}
+                <code className="text-accent">utm_source</code>), the referring
+                site, the page title, your browser, screen size, and your IP
+                address, which GoatCounter uses for a rough location and does not
+                store. It isn&apos;t loaded on the sign-in, email, shared-report,
+                dashboard, feedback or uninstall pages. The extension, the SDK and
+                exported reports never load it.
+              </li>
               <li>
                 <strong className="text-text-primary">Email list</strong> — your
                 email address, which form you used, your browser&apos;s user

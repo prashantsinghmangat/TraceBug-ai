@@ -209,7 +209,7 @@ export default function FeedbackForm() {
           )}
         </div>
         <p className="text-[12px] leading-relaxed text-text-subtle">
-          Read by a human — usually the same day. No analytics, no account, nothing else collected.
+          Read by a human — usually the same day. No account, and this page isn&apos;t counted or tracked.
         </p>
       </form>
     </>

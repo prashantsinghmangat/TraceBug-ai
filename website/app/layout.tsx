@@ -3,6 +3,7 @@ import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { SDK_VERSION } from "@/lib/version";
 import ConsoleEgg from "@/components/ConsoleEgg";
 import MascotWalker from "@/components/MascotWalker";
+import PageCounter from "@/components/PageCounter";
 import "./globals.css";
 
 // Theme fonts (Midnight coral). Self-hosted by next/font at build time, so the
@@ -140,6 +141,7 @@ export default function RootLayout({
         {children}
         <ConsoleEgg />
         <MascotWalker />
+        <PageCounter />
       </body>
     </html>
   );
