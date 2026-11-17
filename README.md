@@ -37,7 +37,7 @@ Every report opens with:
 > TL;DR: TypeError thrown on /checkout when clicking 'Place Order' button
 ```
 
-No accounts. No SaaS lock-in. Data stays in your browser by default.
+No account to capture. No SaaS lock-in. Data stays in your browser by default. (Site Audit asks for a free account after 3 audits.)
 
 **Optional cloud sharing** (built, UI-gated off by default): if you'd rather share a URL than a file, sign in once and get a share link with the same content. The code ships behind a feature flag (`PHASE2-CLOUD`); the Share button stays disabled until the portal is switched on. Local `.html` export is the supported sharing path today.
 

@@ -263,7 +263,7 @@ export function mountCompactToolbar(
 
   // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_createToolbarBtn(
-    "Saved tickets",
+    "Saved tickets (and your last unsaved one)",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
     () => { _showOfflineTicketList(root); },
     "tracebug-toolbar-tickets-btn"
@@ -877,6 +877,42 @@ function _showOfflineTicketList(root: HTMLElement): void {
   hdr.appendChild(hdrTitle);
   hdr.appendChild(closeX);
   pop.appendChild(hdr);
+
+  // The last capture, if it was never saved: closing its ticket (✕, Esc, or a
+  // reload) used to leave no way back to it. It is the session the ticket
+  // modal opens by default, so "Reopen" lands on the same ticket, video and
+  // typed draft included. Only one is ever offered: the next capture starts a
+  // new session and takes its place. Never during a recording.
+  const latest = getAllSessions().slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  if (latest && !latest.saved && !isVideoRecording() && !_isTracking &&
+      ((latest.events || []).length > 0 || (latest.screenshots || []).length > 0)) {
+    const un = document.createElement("div");
+    un.dataset.tracebug = "unsaved-ticket";
+    setInlineStyle(un, "display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;border:1px dashed var(--tb-accent,#FF5C6C);margin-bottom:10px;background:var(--tb-bg-primary,#12121f)");
+    const unInfo = document.createElement("div");
+    setInlineStyle(unInfo, "flex:1;min-width:0");
+    const unTitle = document.createElement("div");
+    setInlineStyle(unTitle, "font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
+    let t = latest.title || latest.errorSummary || "";
+    if (!t) { try { t = generateBugTitle(latest); } catch {} }
+    unTitle.textContent = t || "Untitled ticket";
+    unTitle.title = t;
+    const unSub = document.createElement("div");
+    setInlineStyle(unSub, "font-size:10px;color:var(--tb-text-secondary,#aaa);margin-top:2px");
+    unSub.textContent = `Unsaved · ${_fmtTime(latest.updatedAt || latest.createdAt || 0)} · kept until your next capture`;
+    unInfo.appendChild(unTitle);
+    unInfo.appendChild(unSub);
+    const reopen = document.createElement("button");
+    reopen.textContent = "Reopen";
+    setInlineStyle(reopen, "background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap;flex-shrink:0");
+    reopen.addEventListener("click", () => {
+      closePop();
+      if (!isQuickBugOpen()) showQuickBugCapture(root).catch(() => {});
+    });
+    un.appendChild(unInfo);
+    un.appendChild(reopen);
+    pop.appendChild(un);
+  }
 
   if (sessions.length === 0) {
     const empty = document.createElement("div");

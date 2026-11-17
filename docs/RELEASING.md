@@ -2,7 +2,7 @@
 
 How to ship a version to every surface: Chrome Web Store, Firefox Add-ons (AMO), npm (`tracebug-sdk`
 and the `tracebug` MCP CLI), the official MCP Registry, the website, and the git tag. Last used for
-**1.11.6** (npm and MCP Registry 2026-11-12; stores pending).
+**1.12.0** (all surfaces, 2026-11-13). Next: **1.13.0**, sheet in `docs/release-sheets/1.13.0.md`.
 
 This file is the mechanics. The other release documents, one job each:
 
@@ -217,7 +217,8 @@ code, then `publish` again. Nothing was published by the failed attempt.
    ```bash
    git push origin v<x.y.z>
    ```
-4. Optional: create a GitHub release from the tag and paste the CHANGELOG section.
+4. Optional: create a GitHub release from the tag and paste the CHANGELOG section. Glama has Auto-Release on:
+   a GitHub release triggers a Glama build that installs `tracebug@latest` from npm, so publish npm first.
 
 ## 8. Announce (after the Chrome Web Store approves)
 

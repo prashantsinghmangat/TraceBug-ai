@@ -11,7 +11,7 @@ import { signalSuccess } from "../success-signal";
 import { recordExport, showReviewAsk } from "./review-ask";
 import { issueSignatureEnabled, setIssueSignature } from "../integrations/issue-signature";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen, replaceLastVideoRecording } from "../video-recorder";
-import { mountTrimBar, cutVideo, trimComments, trimBarCss, type TrimBarHandle } from "./video-trim";
+import { mountTrimBar, cutVideo, trimComments, trimBarCss, type TrimBarHandle, type TrimMedia } from "./video-trim";
 import { renderMarkdownView, mdViewCss } from "./md-view";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -994,9 +994,62 @@ function _openModal(
     try { if (_prevFocus && _prevFocus.isConnected) _prevFocus.focus(); } catch {}
   };
 
-  modal.querySelector('[data-action="close"]')!.addEventListener("click", close);
+  // ── Closing never loses work by accident ──────────────────────────────
+  // A click on the dimmed background used to close the ticket, and a stray
+  // click there threw away a review in progress. Now only ✕ / Esc close it,
+  // and an unsaved ticket asks first. Closing without saving still keeps it:
+  // the latest capture reopens from the toolbar's Tickets list until the next
+  // capture replaces it. Programmatic clicks on ✕ (isTrusted false: a new
+  // session starting, opening a saved ticket) close at once.
+  const isKept = (): boolean =>
+    !!modal.querySelector('[data-action="save-ticket"].tb-qb-btn-saved') || _draftCleared;
+  const closeConfirmEl = (): HTMLElement | null => modal.querySelector<HTMLElement>("#tb-qb-close-confirm");
+  const hideCloseConfirm = () => {
+    closeConfirmEl()?.remove();
+    try { modal.querySelector<HTMLElement>('[data-action="close"]')?.focus(); } catch {}
+  };
+  const showCloseConfirm = () => {
+    if (closeConfirmEl()) return;
+    const box = document.createElement("div");
+    box.id = "tb-qb-close-confirm";
+    box.className = "tb-qb-confirm";
+    setInnerHTML(box, `
+      <div class="tb-qb-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="tb-qb-cc-title" aria-describedby="tb-qb-cc-body">
+        <h3 id="tb-qb-cc-title">Close this ticket?</h3>
+        <p id="tb-qb-cc-body">It isn't saved yet. Until your next capture you can reopen it from <b>Saved tickets</b> on the TraceBug toolbar.</p>
+        <div class="tb-qb-confirm-actions">
+          <button type="button" class="tb-qb-btn" data-cc="keep">Keep editing</button>
+          <button type="button" class="tb-qb-btn" data-cc="close">Close</button>
+          <button type="button" class="tb-qb-btn tb-qb-btn-primary" data-cc="save">Save and close</button>
+        </div>
+      </div>`);
+    modal.appendChild(box);
+    box.addEventListener("click", (e) => {
+      const act = (e.target as HTMLElement).closest<HTMLElement>("[data-cc]")?.dataset.cc;
+      if (e.target === box || act === "keep") { hideCloseConfirm(); return; }
+      if (act === "close") { close(); return; }
+      if (act === "save") {
+        const btn = modal.querySelector<HTMLButtonElement>('[data-action="save-ticket"]');
+        btn?.click();
+        // Close only when the save really landed (storage full keeps it open).
+        if (isKept()) close(); else hideCloseConfirm();
+      }
+    });
+    try { box.querySelector<HTMLButtonElement>('[data-cc="keep"]')?.focus(); } catch {}
+  };
+  const requestClose = (trusted = true) => {
+    if (!trusted || isKept()) { close(); return; }
+    showCloseConfirm();
+  };
+
+  modal.querySelector('[data-action="close"]')!.addEventListener("click", (e) => requestClose(e.isTrusted));
+  let _bgHintAt = 0;
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
+    if (e.target !== overlay) return;
+    const now = Date.now();
+    if (now - _bgHintAt < 4000) return;
+    _bgHintAt = now;
+    showToast("Your ticket stays open. Use ✕ (or Esc) to close it.", root);
   });
 
   // Theme toggle: cycle light → dark → auto and refresh the icon.
@@ -1091,6 +1144,8 @@ function _openModal(
     // layer.
     if (e.defaultPrevented) return;
     if (helpEl && helpEl.style.display !== "none") return; // modalKeyHandler closes it
+    // Esc on the "Close this ticket?" question means "keep editing".
+    if (closeConfirmEl()) { hideCloseConfirm(); return; }
     const child = document.getElementById("tb-ai-popover")
       || document.getElementById("tb-mcp-handoff")
       || document.getElementById("tb-ai-config")
@@ -1103,7 +1158,7 @@ function _openModal(
       modal.querySelector('[data-action="more-toggle"]')?.setAttribute("aria-expanded", "false");
       return;
     }
-    close();
+    requestClose(e.isTrusted);
   };
   document.addEventListener("keydown", escHandler);
   // Stash so a refresh (which removes the DOM without calling close()) can also
@@ -2004,11 +2059,17 @@ ${report.steps}` : userDesc)
     // ── Trim ────────────────────────────────────────────────────────────
     // Cut the recording down to the part that shows the bug. The cut copy
     // replaces the in-memory recording, then the modal re-renders with it.
-    const trimHost = modal.querySelector<HTMLElement>("#tb-qb-trim");
+    let trimHost = modal.querySelector<HTMLElement>("#tb-qb-trim");
     let trimBar: TrimBarHandle | null = null;
     let trimAbort: AbortController | null = null;
-    if (trimHost && video.blob && video.blob.size > 0) {
-      trimBar = mountTrimBar(trimHost, videoEl, expectedS, {
+    // Where the trim bar sits, so the CSP fallback can put it back under the
+    // extension's player frame (see mountIframePlayer).
+    const trimSlot = trimHost ? { parent: trimHost.parentElement, next: trimHost.nextSibling } : null;
+    type Cutter = (startS: number, endS: number, signal: AbortSignal, onProgress: (f: number) => void) => Promise<Blob>;
+    const mountTrim = (player: HTMLVideoElement | TrimMedia, cutter: Cutter) => {
+      if (!trimHost) return;
+      const host = trimHost;
+      trimBar = mountTrimBar(host, player, expectedS, {
         onCancel: () => trimAbort?.abort(),
         onCut: async (startS, endS) => {
           if (trimAbort || !trimBar) return;
@@ -2016,10 +2077,8 @@ ${report.steps}` : userDesc)
           trimBar.setError(null);
           trimBar.setBusy(0);
           try {
-            const blob = await cutVideo(video.blob, video.mimeType, startS, endS, {
-              signal: trimAbort.signal,
-              onProgress: (f) => trimBar?.setBusy(f),
-            });
+            const blob = await cutter(startS, endS, trimAbort.signal, (f) => trimBar?.setBusy(f));
+            const trimHost = host;
             // Modal closed mid-cut: leave the recording as it was.
             if (!trimHost.isConnected) return;
             await replaceLastVideoRecording({
@@ -2047,8 +2106,13 @@ ${report.steps}` : userDesc)
           }
         },
       });
+    };
+    const canTrim = !!(trimHost && video.blob && video.blob.size > 0);
+    if (canTrim) {
+      mountTrim(videoEl, (s, e, signal, onProgress) => cutVideo(video.blob, video.mimeType, s, e, { signal, onProgress }));
     } else {
       trimHost?.remove();
+      trimHost = null;
     }
 
     // ── CSP fallback ────────────────────────────────────────────────────
@@ -2096,6 +2160,43 @@ ${report.steps}` : userDesc)
       iframe.title = "TraceBug recording";
       iframe.className = "tb-qb-player-iframe";
       host.appendChild(iframe);
+
+      // Trim on this site: the frame reports its playback (tb:player:time)
+      // and does the cut itself (tb:player:cut → cut-progress / cut-done /
+      // cut-error), because the page's CSP blocks the in-page <video> the
+      // ordinary cut plays through.
+      const post = (msg: Record<string, unknown>) => { try { iframe.contentWindow?.postMessage(msg, playerOrigin); } catch {} };
+      const frameEvents = new EventTarget();
+      const frameState = { currentTime: 0, duration: NaN, paused: true };
+      const frameMedia: TrimMedia = {
+        get currentTime() { return frameState.currentTime; },
+        get duration() { return frameState.duration; },
+        get paused() { return frameState.paused; },
+        pause: () => { frameState.paused = true; post({ type: "tb:player:pause" }); },
+        seek: (t) => { frameState.currentTime = t; post({ type: "tb:player:seek-to", seconds: t }); },
+        addEventListener: (t, f) => frameEvents.addEventListener(t, f),
+        removeEventListener: (t, f) => frameEvents.removeEventListener(t, f),
+      };
+      const cuts = new Map<string, { resolve: (b: Blob) => void; reject: (e: Error) => void; onProgress: (f: number) => void }>();
+      const frameCutter: Cutter = (startS, endS, signal, onProgress) => new Promise<Blob>((resolve, reject) => {
+        const id = Math.random().toString(36).slice(2);
+        const abort = () => { post({ type: "tb:player:cut-cancel", id }); };
+        signal.addEventListener("abort", abort, { once: true });
+        cuts.set(id, {
+          resolve: (b) => { signal.removeEventListener("abort", abort); resolve(b); },
+          reject: (e) => { signal.removeEventListener("abort", abort); reject(e); },
+          onProgress,
+        });
+        post({ type: "tb:player:cut", id, start: startS, end: endS, mimeType: video.mimeType || "video/webm" });
+      });
+      if (canTrim && trimSlot?.parent && video.blob) {
+        const h = document.createElement("div");
+        h.id = "tb-qb-trim";
+        trimSlot.parent.insertBefore(h, trimSlot.next && trimSlot.next.parentNode === trimSlot.parent ? trimSlot.next : null);
+        trimHost = h;
+        mountTrim(frameMedia, frameCutter);
+      }
+
       const onMsg = (e: MessageEvent) => {
         if (!iframe.isConnected) { window.removeEventListener("message", onMsg); return; }
         if (e.origin !== playerOrigin || e.source !== iframe.contentWindow) return;
@@ -2112,6 +2213,31 @@ ${report.steps}` : userDesc)
           });
           _ifr.win = iframe.contentWindow;
           _ifr.origin = playerOrigin;
+        } else if (t === "tb:player:time") {
+          const d = e.data as { currentTime?: number; duration?: number; paused?: boolean };
+          const prevDur = frameState.duration;
+          const wasPaused = frameState.paused;
+          frameState.currentTime = Number(d.currentTime) || 0;
+          frameState.duration = Number(d.duration);
+          frameState.paused = !!d.paused;
+          if (frameState.duration !== prevDur) frameEvents.dispatchEvent(new Event("durationchange"));
+          frameEvents.dispatchEvent(new Event("timeupdate"));
+          if (wasPaused && !frameState.paused) frameEvents.dispatchEvent(new Event("play"));
+        } else if (t === "tb:player:cut-progress") {
+          cuts.get(String(e.data.id))?.onProgress(Number(e.data.fraction) || 0);
+        } else if (t === "tb:player:cut-done") {
+          const job = cuts.get(String(e.data.id));
+          cuts.delete(String(e.data.id));
+          if (job && e.data.buffer instanceof ArrayBuffer) job.resolve(new Blob([e.data.buffer], { type: String(e.data.mimeType || video.mimeType || "video/webm") }));
+          else job?.reject(new Error("the cut returned no video"));
+        } else if (t === "tb:player:cut-error") {
+          const job = cuts.get(String(e.data.id));
+          cuts.delete(String(e.data.id));
+          if (job) {
+            const err = new Error(String(e.data.message || "cut failed"));
+            if (e.data.aborted) err.name = "AbortError";
+            job.reject(err);
+          }
         } else if (t === "tb:player:frame" && _ifrFramePending) {
           _ifrFramePending(e.data);
           _ifrFramePending = null;
@@ -2127,6 +2253,7 @@ ${report.steps}` : userDesc)
     const showBlockedNotice = () => {
       if (_blockedShown || !preview) return;
       // The trim bar drives the in-page <video>, which this site's CSP blocks.
+      // mountIframePlayer puts it back, driving the extension's player frame.
       trimBar?.destroy();
       trimBar = null;
       // networkState 3 = NETWORK_NO_SOURCE; a valid-but-slow local blob reaches
@@ -3687,6 +3814,11 @@ function _injectStyles(): void {
     #${MODAL_ID} button:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
 
     /* ── Help overlay (keyboard cheat sheet) ──────── */
+    #${MODAL_ID} .tb-qb-confirm { position:absolute; inset:0; background:rgba(0,0,0,0.55); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:11; padding:24px; }
+    #${MODAL_ID} .tb-qb-confirm-card { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:20px 22px; max-width:420px; box-shadow:0 20px 50px rgba(0,0,0,0.4); }
+    #${MODAL_ID} .tb-qb-confirm-card h3 { margin:0 0 8px; font-size:16px; font-weight:600; }
+    #${MODAL_ID} .tb-qb-confirm-card p { margin:0 0 16px; font-size:13px; line-height:1.5; color:var(--tb-text-secondary); }
+    #${MODAL_ID} .tb-qb-confirm-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
     #${MODAL_ID} .tb-qb-help { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10; padding:24px; }
     #${MODAL_ID} .tb-qb-help-card { background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:24px 28px; max-width:420px; width:100%; box-shadow:var(--tb-shadow-md); }
     #${MODAL_ID} .tb-qb-help-title { font-size:14px; font-weight:600; margin-bottom:16px; color:var(--tb-text-primary); letter-spacing:-0.01em; }

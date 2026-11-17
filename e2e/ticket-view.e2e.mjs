@@ -3,6 +3,8 @@
 // the light theme:
 //  - the description shows as formatted text (no raw ** or >), the raw
 //    Markdown opens on click or "Edit Markdown", and edits survive the switch;
+//  - closing: a background click keeps the ticket, ✕/Esc on an unsaved one ask
+//    first, and a closed unsaved ticket reopens from Saved tickets;
 //  - the Network tab's Status column header and badge-less statuses are
 //    readable (they were white-on-white in light mode).
 import { chromium } from "playwright";
@@ -127,6 +129,42 @@ try {
     check(`badge-less status "${c.plain[2]}" is readable`, pc >= 3, `${pc.toFixed(2)}:1`);
   }
   if (SHOTS) await page.locator(".tb-qb-net-table").screenshot({ path: join(SHOTS, "network-light.png") });
+
+  // ── Closing never loses an unsaved ticket by accident ──────────────────
+  const modalOpen = () => page.evaluate(() => !!document.getElementById("tracebug-quick-bug-modal"));
+  const confirmOpen = () => page.evaluate(() => !!document.getElementById("tb-qb-close-confirm"));
+  await page.mouse.click(8, 400); // the dimmed background, outside the ticket
+  await page.waitForTimeout(200);
+  check("a click on the background does not close the ticket", await modalOpen());
+  await page.click('#tracebug-quick-bug-modal [data-action="close"]');
+  check("✕ on an unsaved ticket asks first", (await modalOpen()) && (await confirmOpen()));
+  if (SHOTS) await page.locator("#tracebug-quick-bug-modal").screenshot({ path: join(SHOTS, "close-confirm.png") });
+  await page.keyboard.press("Escape");
+  check("Esc on the question means keep editing", (await modalOpen()) && !(await confirmOpen()));
+  await page.keyboard.press("Escape");
+  check("Esc on an unsaved ticket asks too", await confirmOpen());
+  await page.click('#tb-qb-close-confirm [data-cc="keep"]');
+  check("Keep editing keeps the ticket open", (await modalOpen()) && !(await confirmOpen()));
+  await page.click('#tracebug-quick-bug-modal [data-action="close"]');
+  await page.click('#tb-qb-close-confirm [data-cc="close"]');
+  check("Close closes it", !(await modalOpen()));
+
+  // The closed, unsaved ticket can be reopened from Saved tickets.
+  await page.click("#tracebug-toolbar-tickets-btn");
+  const un = await page.waitForSelector('[data-tracebug="unsaved-ticket"]', { timeout: 3000 }).catch(() => null);
+  check("Saved tickets offers the last unsaved ticket", !!un, un ? (await un.innerText()).replace(/\s+/g, " ") : "missing");
+  if (un) {
+    await page.click('[data-tracebug="unsaved-ticket"] button');
+    await page.waitForSelector("#tracebug-quick-bug-modal #tb-qb-desc", { state: "attached", timeout: 10000 });
+    const kept = await page.evaluate(() => document.getElementById("tb-qb-desc").value);
+    check("Reopen brings back the same ticket with the typed text", /typed by the tester/.test(kept), kept.slice(-60));
+    // Saved: ✕ closes without asking.
+    await page.click('#tracebug-quick-bug-modal [data-action="save-ticket"]');
+    await page.waitForTimeout(200);
+    await page.click('#tracebug-quick-bug-modal [data-action="close"]');
+    check("a saved ticket closes without asking", !(await modalOpen()) && !(await confirmOpen()));
+  }
+
   check("no page errors", errors.length === 0, errors.join(" | "));
 } catch (e) {
   check("run completes", false, String(e && e.stack || e).split("\n").slice(0, 3).join(" "));

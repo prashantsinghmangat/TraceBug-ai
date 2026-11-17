@@ -4,13 +4,42 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-16
+
+> Drawing while you record, a rebuilt screenshot editor, video trim, Site Audit that remembers its last result and hands off to your agent, and the growth-audit fixes (capture first in the popup, MCP setup on the welcome page).
+
 ### Added
 
+- **Draw on the page while you record.** The ✎ on the recording bar opens a drawing toolbar under it: pen, box, ellipse, arrow, line, text, highlighter and eraser, six colours, undo/redo/clear and fade. Shapes stay anchored to the page as it scrolls and are never part of the DOM replay. Keys 1–8 pick a tool (shown in the tooltips); Esc puts the pen down.
+- **Trim the recording in the ticket.** Handles under the video pick the part to keep; **Cut** re-records that range. The trim lives in the page only (a reload brings back the full recording) and works on strict sites too (GitHub and others whose security policy blocks in-page video): there the cut runs inside TraceBug's own player.
+- **Screenshot editor, rebuilt.** Select and move, pen, box, ellipse, arrow, line, text, marker, numbered steps, pixelate and eraser, with sizes, undo/redo and copy. Saves at full resolution.
 - **Fix with AI in the audit panel.** One click downloads the whole audit and copies one line, "Fix the latest TraceBug site audit.", for a coding agent that has the TraceBug MCP server. The message names the file and offers setup ("Agent not set up?") without claiming the agent is connected, which the page can't know; if the copy or the download fails, it says so. Copy for AI stays for agents without MCP.
-- **Site Audit: a free account after 3 audits** (extension only; ADR 009). The first 3 audits need nothing; then the panel asks for a free account — your email and a 6-digit code on an extension page (`signin.html`), no password, never a form on the audited site. Results you already have stay on screen and exportable; only a new scan asks. Bug capture, exports, tickets, MCP, the npm SDK and the CLI never need an account. The account stores your email only (never audits, pages or URLs); news and Pro offers only if you tick a separate, unticked box. If sign-in can't be reached, audits stay open for an hour. The popup's new person icon shows whether you're signed in and how many free audits are left, with Sign in, Sign out and Delete account; the welcome page offers an optional sign-in you can skip.
+- **Site Audit: a free account after 3 audits** (extension only; ADR 009). The first 3 audits need nothing; then the panel asks for a free account — your email and a 6-digit code on an extension page (`signin.html`), no password, never a form on the audited site. Results you already have stay on screen and exportable; only a new scan asks. Bug capture, exports, tickets, MCP, the npm SDK and the CLI never need an account. The account stores your email only (never audits, pages or URLs); news and Pro offers only if you tick a separate, unticked box. If sign-in can't be reached, audits stay open for an hour. The popup's person icon (shown once you're signed in or out of free audits) shows whether you're signed in and how many free audits are left, with Sign in, Sign out and Delete account; the welcome page offers an optional sign-in you can skip.
+- **Optional product updates by email.** After your 2nd saved ticket or export, the popup asks once whether you want a say in what TraceBug does next. Typing an email signs you up (a confirm email first, then at most one email a month, one-click unsubscribe); usage counts are sent only if you tick that box. "No thanks" ends it for good; closing it lets it ask once more, at most.
 - **The audit remembers its last result.** Opening Site Audit again (popup or toolbar) shows this page's last result instead of scanning, with when it ran and a **Re-scan** button. The result is kept per page and scan in the tab's session storage, so it survives a reload: fix the code, reload, Re-scan, and the panel shows the old and new score side by side (for example `56 → 100 +44`, coloured by band) above what was fixed, still there, new or regressed.
 - **Open in Claude** in the audit panel: copies the selected findings as a fix prompt and opens a new Claude chat with it (prefilled when it fits in a link; otherwise the prompt is on your clipboard, also for Claude Code, Cursor or the Claude desktop app).
 - **`fix_site_audit` MCP prompt** (`/tracebug:fix_site_audit` in Claude Code), beside `debug_bug_report`: read every finding with its evidence, group findings only where the evidence shows a shared cause, fix a shared cause once, ask before editing, run the tests, then verify from a fresh browser audit (Re-scan + `compare_audits`), never from the edit itself.
+- **Connect your AI agent from the welcome page.** A new step 4 shows the one-line MCP setup command, with a macOS/Linux ↔ Windows switch.
+- **`tracebug mcp --help`** prints setup for each agent (including the Windows `cmd /c` form) and where reports are looked for, instead of starting the server. `tracebug --version` works; an unknown command exits with an error.
+
+### Changed
+
+- **A ticket under review no longer closes by accident.** A click on the background leaves it open; ✕ or Esc on an unsaved ticket asks first (Keep editing, Close, or Save and close). A ticket you close without saving stays at the top of **Saved tickets** on the toolbar, with **Reopen**, until your next capture.
+- **The popup leads with Capture Bug**, then Screenshot, then Audit this page.
+- **MCP bug tools say which fields are page text.** Every bug tool result names its untrusted fields (`untrustedFields`, `untrustedNote`), so an agent treats captured page text as data, never as instructions.
+- **Large reports page instead of flooding the agent.** Console errors, network activity and the repro timeline return 100 rows by default (`offset`/`limit`, up to 500) with a `paging` block saying what's left; very long messages, stacks and URLs are clipped.
+- **Ticket readability.** The description reads as text (Markdown on click); the Info tab folds environment, storage and capture gaps into sections; network status is readable in the light theme. The floating toolbar keeps its orientation when dragged and after a reload.
+- **Store summary** now leads with capture: "Record a browser bug: replay, console and network in one offline file your AI agent (Claude Code, Cursor) can fix. Free, no upload."
+
+### Fixed
+
+- **Firefox: video is off by default.** Firefox has no Tab mode, so video on meant a screen-share prompt on every capture. Existing Firefox users who never changed the setting get it turned off once; a choice you made is never touched.
+- **Personal data inside stored values is masked.** Storage keys with innocent names (an analytics SDK's `{"visitor":{"email":…,"first_name":…}}`) put names and emails into tickets, exports and MCP output. Personal-data fields inside JSON values are now masked, and email addresses are masked anywhere in a stored value.
+
+### Security
+
+- **Firefox data-collection consent.** The Firefox build declares no required data collection; the optional email (Site Audit sign-in, update list) and usage counts are asked for at the moment you send them (Firefox 140+).
+- Sign-in: a locked address gets no new code and a "try again in N minutes" message; one-time-code sends are limited per address and per day.
 
 ## [1.12.0] - 2026-11-12
 

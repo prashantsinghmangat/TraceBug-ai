@@ -10,7 +10,8 @@ import { chromium, firefox } from "playwright";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { build } from "tsup";
 
 const VERBOSE = process.argv.includes("--verbose");
@@ -35,6 +36,18 @@ const server = createServer((req, res) => {
   res.end(`<!doctype html><meta charset="utf-8"><body><script src="/trim.js"></script></body>`);
 });
 await new Promise((r) => server.listen(PORT, r));
+
+// The extension's player frame (tracebug-extension/player.html + player.js) on
+// its own origin, as a chrome-extension:// page would be. On sites whose CSP
+// blocks in-page video (GitHub), the ticket's Trim cuts inside this frame.
+const EXT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "tracebug-extension");
+const FRAME_PORT = PORT + 1;
+const frameServer = createServer((req, res) => {
+  const f = req.url.startsWith("/player.js") ? "player.js" : "player.html";
+  res.writeHead(200, { "content-type": f.endsWith(".js") ? "text/javascript" : "text/html" });
+  res.end(readFileSync(join(EXT_DIR, f)));
+});
+await new Promise((r) => frameServer.listen(FRAME_PORT, r));
 
 const RUNS = [
   ["firefox", firefox, { headless: true, firefoxUserPrefs: { "media.autoplay.default": 0 } }],
@@ -107,6 +120,64 @@ for (const [name, engine, opts] of RUNS) {
     if (r.srcRms > 0.01) check(`[${name}] the cut keeps the sound`, r.cutRms > r.srcRms * 0.3, `rms ${r.cutRms.toFixed(3)} vs source ${r.srcRms.toFixed(3)}`);
     else console.log(`note  [${name}] source has no decodable audio here (rms ${r.srcRms}) — sound not checked`);
     check(`[${name}] progress runs 0 → 1`, r.progressMonotonic && r.lastProgress === 1);
+
+    // ── The same cut inside the extension's player frame ──────────────
+    const f = await Promise.race([
+      page.evaluate(async (frameUrl) => {
+        const c = document.createElement("canvas"); c.width = 320; c.height = 240; document.body.appendChild(c);
+        const cx = c.getContext("2d"); let n = 0;
+        const iv = setInterval(() => { cx.fillStyle = `hsl(${(n++ * 7) % 360},80%,50%)`; cx.fillRect(0, 0, 320, 240); }, 33);
+        const rec = new MediaRecorder(c.captureStream(30), { mimeType: "video/webm" }); const ch = [];
+        rec.ondataavailable = (e) => { if (e.data.size) ch.push(e.data); }; rec.start(1000);
+        await new Promise((res) => setTimeout(res, 6500)); rec.stop(); await new Promise((res) => (rec.onstop = res));
+        clearInterval(iv);
+        const src = new Blob(ch, { type: "video/webm" });
+        const origin = new URL(frameUrl).origin;
+        const msgs = [];
+        addEventListener("message", (e) => { if (e.origin === origin) msgs.push(e.data); });
+        const waitFor = (pred, ms) => new Promise((res, rej) => {
+          const hit = msgs.find(pred); if (hit) { res(hit); return; }
+          const t = setTimeout(() => rej(new Error("timeout waiting for frame")), ms);
+          const h = (e) => { if (e.origin === origin && pred(e.data)) { clearTimeout(t); removeEventListener("message", h); res(e.data); } };
+          addEventListener("message", h);
+        });
+        const ifr = document.createElement("iframe"); ifr.src = frameUrl; document.body.appendChild(ifr);
+        await waitFor((d) => d.type === "tb:player:ready", 10000);
+        const buf = await src.arrayBuffer();
+        ifr.contentWindow.postMessage({ type: "tb:player:load", buffer: buf, mimeType: "video/webm", durationMs: 6500 }, origin, [buf]);
+        const timed = await waitFor((d) => d.type === "tb:player:time" && d.duration > 0, 10000).then(() => true, () => false);
+
+        // Cancel works and leaves the frame ready for the next cut.
+        ifr.contentWindow.postMessage({ type: "tb:player:cut", id: "c1", start: 1, end: 5 }, origin);
+        await waitFor((d) => d.type === "tb:player:cut-progress" && d.id === "c1", 10000);
+        ifr.contentWindow.postMessage({ type: "tb:player:cut-cancel", id: "c1" }, origin);
+        const cancelled = await waitFor((d) => d.type === "tb:player:cut-error" && d.id === "c1", 10000);
+
+        ifr.contentWindow.postMessage({ type: "tb:player:cut", id: "c2", start: 2, end: 5, mimeType: "video/webm" }, origin);
+        const done = await waitFor((d) => (d.type === "tb:player:cut-done" || d.type === "tb:player:cut-error") && d.id === "c2", 45000);
+        if (done.type !== "tb:player:cut-done") return { error: done.message };
+        const prog = msgs.filter((d) => d.type === "tb:player:cut-progress" && d.id === "c2").map((d) => d.fraction);
+        const out = new Blob([done.buffer], { type: done.mimeType });
+        const v = document.createElement("video"); v.muted = true; v.src = URL.createObjectURL(out);
+        await new Promise((res) => v.addEventListener("loadedmetadata", res, { once: true }));
+        if (!isFinite(v.duration)) await new Promise((res) => { v.addEventListener("seeked", res, { once: true }); v.currentTime = 1e7; });
+        const dur = v.duration;
+        v.currentTime = 1; await new Promise((res) => v.addEventListener("seeked", res, { once: true }));
+        const k = document.createElement("canvas"); k.width = 32; k.height = 24; const kx = k.getContext("2d");
+        kx.drawImage(v, 0, 0, 32, 24);
+        const px = kx.getImageData(0, 0, 32, 24).data; let lum = 0;
+        for (let i = 0; i < px.length; i += 4) lum += px[i] + px[i + 1] + px[i + 2];
+        return { timed, cancelled: !!cancelled.aborted, size: out.size, dur, lum, progress: prog.length, monotonic: prog.every((p, i) => i === 0 || p >= prog[i - 1]) };
+      }, `http://127.0.0.1:${FRAME_PORT}/player.html`),
+      new Promise((res) => setTimeout(() => res("TIMEOUT"), 90000)),
+    ]);
+    if (crashed || typeof f !== "object" || f.error) { check(`[${name}] player frame: cut completes`, false, crashed ? "page crashed" : String(f?.error || f)); continue; }
+    check(`[${name}] player frame: reports its playback time`, f.timed);
+    check(`[${name}] player frame: Cancel stops a cut`, f.cancelled);
+    check(`[${name}] player frame: cut completes`, f.size > 1000, `${f.size} bytes`);
+    check(`[${name}] player frame: kept length matches the selection (3 s)`, Math.abs(f.dur - 3) <= 0.6, `${f.dur.toFixed(2)} s`);
+    check(`[${name}] player frame: the cut has a picture`, f.lum > 1000, String(f.lum));
+    check(`[${name}] player frame: progress reported`, f.progress > 0 && f.monotonic, String(f.progress));
   } catch (e) {
     check(`[${name}] run completes`, false, String(e && e.message || e).split("\n")[0]);
   } finally {
@@ -114,6 +185,7 @@ for (const [name, engine, opts] of RUNS) {
   }
 }
 server.close();
+frameServer.close();
 if (!ran) check("at least one browser ran", false);
 console.log(failures === 0 ? `\nALL CHECKS PASSED — ${passes}/${passes} checks passed` : `\n${failures} CHECK(S) FAILED — ${passes}/${passes + failures} checks passed`);
 process.exit(failures ? 1 : 0);

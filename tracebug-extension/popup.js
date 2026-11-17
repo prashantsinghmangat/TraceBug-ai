@@ -1185,6 +1185,14 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.13.0": {
+    label: "New in 1.13.0",
+    lines: [
+      "Draw on the page while you record, and trim the video in the ticket",
+      "A rebuilt screenshot editor: arrows, steps, pixelate, eraser and more",
+      "Site Audit keeps its last result and hands the fix to your coding agent",
+    ],
+  },
   "1.12.0": {
     label: "New in 1.12.0",
     lines: [

@@ -13,6 +13,10 @@
 // The trimmed copy replaces the page's in-memory recording for this ticket
 // (download, export, Grab frame). It is not written back to the extension's
 // stored copy: a page reload before export brings the full recording back.
+//
+// On sites whose CSP blocks in-page video (GitHub), the ticket plays the
+// recording in the extension's player frame; the trim bar then drives that
+// frame (TrimMedia) and the cut runs inside it (player.js, same method).
 
 import { setInnerHTML } from "./helpers";
 import type { VideoComment } from "../video-recorder";
@@ -158,6 +162,33 @@ function _once(target: EventTarget, type: string, signal?: AbortSignal): Promise
 
 // ── Trim bar ─────────────────────────────────────────────────────────────
 
+/**
+ * What the trim bar needs from a player. A page <video> (mediaOfVideo), or
+ * the extension's player frame on sites whose CSP blocks in-page video
+ * (quick-bug.ts builds that one over postMessage).
+ */
+export interface TrimMedia {
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly paused: boolean;
+  pause(): void;
+  seek(seconds: number): void;
+  addEventListener(type: string, fn: () => void): void;
+  removeEventListener(type: string, fn: () => void): void;
+}
+
+export function mediaOfVideo(v: HTMLVideoElement): TrimMedia {
+  return {
+    get currentTime() { return v.currentTime; },
+    get duration() { return v.duration; },
+    get paused() { return v.paused; },
+    pause: () => v.pause(),
+    seek: (t) => { v.currentTime = t; },
+    addEventListener: (t, f) => v.addEventListener(t, f),
+    removeEventListener: (t, f) => v.removeEventListener(t, f),
+  };
+}
+
 export interface TrimBarHandle {
   destroy(): void;
   /** Show cut progress (0..1) or clear it with null. */
@@ -172,10 +203,11 @@ export interface TrimBarHandle {
  */
 export function mountTrimBar(
   host: HTMLElement,
-  video: HTMLVideoElement,
+  player: HTMLVideoElement | TrimMedia,
   durationS: number,
   handlers: { onCut: (startS: number, endS: number) => void; onCancel: () => void },
 ): TrimBarHandle {
+  const video: TrimMedia = typeof HTMLVideoElement !== "undefined" && player instanceof HTMLVideoElement ? mediaOfVideo(player) : (player as TrimMedia);
   const canCut = canCutVideo();
   let duration = durationS > 0 ? durationS : 0;
   let start = 0, end = duration;
@@ -243,7 +275,7 @@ export function mountTrimBar(
     start = r.start; end = r.end;
     render();
   };
-  const seekPreview = (t: number) => { try { video.pause(); video.currentTime = Math.min(Math.max(0, t), Math.max(0, duration - 0.04)); } catch {} };
+  const seekPreview = (t: number) => { try { video.pause(); video.seek(Math.min(Math.max(0, t), Math.max(0, duration - 0.04))); } catch {} };
   const timeAt = (clientX: number) => {
     const r = track.getBoundingClientRect();
     return r.width > 0 ? ((clientX - r.left) / r.width) * duration : 0;
@@ -296,11 +328,11 @@ export function mountTrimBar(
   const onTime = () => {
     renderPlayhead();
     if (busy || isWholeClip(start, end, duration)) return;
-    if (!video.paused && video.currentTime >= end) { video.pause(); try { video.currentTime = end; } catch {} }
+    if (!video.paused && video.currentTime >= end) { video.pause(); try { video.seek(end); } catch {} }
   };
   const onPlay = () => {
     if (busy || isWholeClip(start, end, duration)) return;
-    if (video.currentTime < start - 0.05 || video.currentTime >= end - 0.05) { try { video.currentTime = start; } catch {} }
+    if (video.currentTime < start - 0.05 || video.currentTime >= end - 0.05) { try { video.seek(start); } catch {} }
   };
   // The real duration can arrive late (MediaRecorder WebM has no header).
   const onMeta = () => {
