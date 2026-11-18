@@ -65,8 +65,11 @@ the same step.
   declares optional `identity`; Firefox build strips it). Bridge: `provider-bridge.js` `validateExtensionPageSender`,
   `validateChoice`, `TRACKER_UI_VERBS`. UI: `confirm-send.js` "Create panel" (`startPanel`, `selectTracker`,
   `loadContainers`, `loadFields`, `collectChoice`), `options.js` "Tracker accounts" (`renderTrackerAccounts`).
+  `connectableTrackers()` rides on the `TB_HOST_ACCESS` answer so the page offers "Send to GitHub" before any
+  sign-in. GitHub App repos: `trackers.ts` `github.listContainers` walks `/user/installations` for OAuth tokens.
   Tests `tests/tracker-{oauth,auth-store,adapters}.test.ts`; e2e `e2e/ext-tracker-create.e2e.mjs` (`e2e:tracker`,
-  stubs GitHub with `context.route`, which reaches the worker's fetches).
+  token path) and `e2e/ext-github-connect.e2e.mjs` (`e2e:github-connect`, device flow) stub GitHub with
+  `context.route`, which reaches the worker's fetches but NOT tabs the extension opens.
 
 - **Scanner** `src/scanner/` (~660 total): `index.ts` `scan()` runs detectors in parallel → `Issue[]` in
   memory; detectors in `detectors/` (`a11y.ts` axe, `broken-images`, `mixed-content`, `session-data`,
@@ -117,8 +120,9 @@ the same step.
 | `TB_OPEN_OPTIONS` | popup, in-page pointers | `background.js` ~L1075 |
 | `tb:rec:*` | page SDK ↔ offscreen | `background.js` ~L1222 relay; `started` ~L1131, `persist` ~L1149, `handleRecordingMessage` (start/stop side effects) ~L1380 |
 | `tb:provider:send`, `tb:llm:analyze` | page SDK | `background.js` ~L1228 → `provider-bridge.js` → `tracebug-provider-api.js` |
-| `tb:confirm:get`, `tb:confirm:decide` (+ Create-panel `choice`) | `confirm-send.html` | `background.js` ~L1236, ~L1249 |
-| `tb:tracker:*` (status, containers, fields, connect, connect-poll, disconnect) | `confirm-send.html`, `options.html` only | `background.js` `handleTrackerUi` |
+| `tb:confirm:get`, `tb:confirm:decide` | `confirm-send.html` | `background.js` ~L1236, ~L1249 |
+| `tb:confirm:create` (Create panel: result/error back to the window; marker + duplicate check) | `confirm-send.html` | `background.js` `createFromPanel` |
+| `tb:tracker:*` (status, containers, fields, connect, connect-poll, disconnect, set-default) | `confirm-send.html`, `options.html`, `welcome.html` only | `background.js` `handleTrackerUi`; page helper `tracker-connect.js` |
 
 ## Storage keys — which store, and who owns them
 

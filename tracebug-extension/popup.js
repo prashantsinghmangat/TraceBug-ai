@@ -288,6 +288,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     themeBtn.innerHTML = themeIcon(next);
   });
 
+  // Settings (trackers, AI key, redaction…) — the popup was the one surface
+  // with no route there except right-click → Options.
+  document.getElementById("settingsBtn")?.addEventListener("click", () => {
+    try { chrome.runtime.openOptionsPage(); } catch {
+      try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html") }); } catch {}
+    }
+    window.close();
+  });
 
   void initWhatsNew().then(initEmailAsk).catch(() => {});
 

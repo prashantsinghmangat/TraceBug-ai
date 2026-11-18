@@ -188,8 +188,12 @@
           <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
         <div class="device" hidden>
-          <p class="hint">Enter <b class="device-code"></b> on <a class="device-link" href="#">github.com/login/device</a>.</p>
+          <p class="hint">Enter <b class="device-code"></b> on github.com/login/device.</p>
         </div>
+        <!-- Right after connecting: where the Create panel starts. -->
+        <label class="acct-default-wrap" hidden>Default repository
+          <select class="acct-default"></select>
+        </label>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="ghAdvanced">
@@ -217,6 +221,9 @@
           <button class="acct-connect" type="button" hidden>Connect Linear</button>
           <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
+        <label class="acct-default-wrap" hidden>Default team
+          <select class="acct-default"></select>
+        </label>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="lnAdvanced">
@@ -361,6 +368,7 @@
     </p>
   </div>
   <script src="diagnostics.js"></script>
+  <script src="tracker-connect.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

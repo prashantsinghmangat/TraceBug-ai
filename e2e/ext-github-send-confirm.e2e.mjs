@@ -113,8 +113,10 @@ try {
   check("no github.com tab ever opened", !anyGithubTab, JSON.stringify(openedUrls));
 
   if (confirmWin) {
-    const confirmText = await confirmWin.evaluate(() => document.body.innerText).catch(() => "");
-    check("confirm window names the configured destination", confirmText.includes("acme/widgets"), confirmText.slice(0, 120));
+    // ADR 010: the Create panel's repository box carries the configured repo.
+    await confirmWin.waitForFunction(() => document.getElementById("container").value === "acme/widgets", null, { timeout: 8000 }).catch(() => {});
+    const repoBox = await confirmWin.inputValue("#container").catch(() => "");
+    check("confirm window names the configured destination", repoBox === "acme/widgets", repoBox);
     await confirmWin.click("#cancel").catch(() => {});
   }
   await sleep(500);

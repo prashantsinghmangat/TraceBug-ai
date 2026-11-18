@@ -457,9 +457,15 @@ describe('tracker UI messages are for extension pages only', () => {
     for (const v of B10.TRACKER_UI_VERBS) expect(B10.VERBS).not.toContain(v);
   });
 
-  it('accepts the confirm window and the options page', () => {
+  it('accepts the confirm window, the options page and the welcome page', () => {
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'confirm-send.html?id=x' }, EXT_ID, BASE)).toBe(true);
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html', tab: { id: 3 }, frameId: 0 }, EXT_ID, BASE)).toBe(true);
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'welcome.html', tab: { id: 4 }, frameId: 0 }, EXT_ID, BASE)).toBe(true);
+  });
+
+  it('lets settings/onboarding save a default repo, still never from the page', () => {
+    expect(B10.TRACKER_UI_VERBS).toContain('tb:tracker:set-default');
+    expect(B10.VERBS).not.toContain('tb:tracker:set-default');
   });
 
   it('rejects our own content script — it carries the host page URL', () => {

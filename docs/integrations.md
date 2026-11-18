@@ -4,28 +4,55 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 
 ## In the extension
 
-1. **Save a credential once** in TraceBug settings (right-click the toolbar icon → Options):
+### GitHub: Connect, no token (Chrome)
 
-   | Tracker | Under "Advanced: use a token" | Where to get it |
-   |---|---|---|
-   | **GitHub** | Personal access token (`repo` scope). Default repository is optional. | github.com → Settings → Developer settings → Personal access tokens |
-   | **Linear** | Personal API key. Default team is optional. | Linear → Settings → API → Personal API keys |
-   | **Slack** | Incoming webhook URL | Slack → your app → Incoming Webhooks |
+Connect once — from the welcome page (step 5), TraceBug settings (GitHub card), or the first time you send:
 
-   Saving asks the browser for access to that one tracker's API host. Credentials live in the extension's own storage, which the sites you test cannot read.
+1. Capture a bug and click **Send to GitHub** in the ticket. TraceBug opens its own **Create GitHub issue** window.
+2. The first time, click **Connect GitHub**. TraceBug copies a short code and opens `github.com/login/device`.
+   Paste the code, click **Authorize**, and come back: the window says "as <your login>" by itself.
+   - GitHub asks you to install **TraceBug Dev** on the repositories it may file into. Add more any time from the
+     **Add repositories** link in the window.
+3. Pick the **Repository** (settings and the welcome page ask for a default right after you connect), tick
+   **Labels** (**bug** starts ticked), choose an **Assignee** and **Milestone** if you want, and click
+   **Create issue**. The window shows **Created #123** with a link; nothing opens unless you click it.
 
-2. **File from a ticket.** Click **Send to GitHub** (or Linear). TraceBug opens its own **Create an issue** window:
-   - the report title and body, exactly as they will be sent, with warnings (remote images, @mentions, a shortened body);
-   - **Create in** — GitHub or Linear;
-   - a searchable **Repository** / **Team** picker, listed from your account;
-   - **Labels** for the repository you picked (GitHub);
-   - **Create issue**. The issue opens in a new tab and the ticket shows its number.
+You connect once. Next time it is pick → Create, with your last repository and fields preselected. **Disconnect**
+lives in TraceBug settings (GitHub card); to revoke the app entirely, use GitHub → Settings → Applications.
 
-   Your last repository/team and labels are remembered for the next report. Nothing is sent until you click Create; closing the window cancels.
+Why a code instead of a redirect: GitHub only allows the redirect sign-in for apps that keep a secret on a server,
+and TraceBug has no server (ADR 010). The code flow needs no secret.
 
-**Why a separate window:** the ticket runs inside the page you are testing, so anything shown there — your private repository names, teams, people — could be read by that site. The Create window belongs to the extension; the page only ever hands it the report text.
+### With a token (all trackers; Firefox; Linear until its Connect arrives)
 
-**Coming next (Chrome first):** a **Connect** button that signs in to GitHub, Linear, Azure DevOps and GitLab without a token, and Jira Cloud with an API token. It appears in settings and in the Create window once each tracker's app is registered; until then, and in Firefox, the token path above is the way in.
+In TraceBug settings (right-click the toolbar icon → Options), open **Advanced: use a token** on the tracker's card:
+
+| Tracker | What to paste | Where to get it |
+|---|---|---|
+| **GitHub** | Personal access token: fine-grained with **Issues: Read and write** on the repos you want, or classic with `repo`. Default repository is optional. | github.com → Settings → Developer settings → Personal access tokens |
+| **Linear** | Personal API key. Default team is optional. | Linear → Settings → API → Personal API keys |
+| **Slack** | Incoming webhook URL | Slack → your app → Incoming Webhooks |
+
+Saving asks the browser for access to that one tracker's API host. Then **Send to GitHub** (or Linear) opens the
+same **Create an issue** window: tracker, a searchable **Repository** / **Team** picker listed from your account,
+GitHub labels, assignee and milestone, and **Create issue**.
+
+### The Create window
+
+- It shows the title and body exactly as they will be sent, with warnings (remote images, @mentions, a shortened body).
+- Nothing is sent until you click **Create issue**; closing the window cancels.
+- If creating fails, the window keeps your choices, shows the error and offers **Retry**; your ticket in TraceBug
+  is untouched. If the connection dropped (so GitHub may have created it), Retry first looks for that issue —
+  each issue carries an invisible marker — so it is never filed twice.
+- If your sign-in expired or was revoked, the window shows **Reconnect GitHub** and keeps your choices.
+- **Why a separate window:** the ticket runs inside the page you are testing, so anything shown there — your
+  private repository names, teams, people — could be read by that site. The Create window belongs to the
+  extension; the page only ever hands it the report text. Credentials live in the extension's own storage.
+- GitHub's API can't attach files, so the recording and screenshots download when the issue is created; drag them
+  into the issue (the body says which files).
+
+**Coming next (Chrome first):** Connect for Linear, Azure DevOps and GitLab (a sign-in popup, no code), and Jira
+Cloud with an API token. Firefox keeps the token path until the Firefox step.
 
 **Slack** stays a webhook: the message is posted as it is, with no picker.
 
@@ -33,7 +60,7 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 
 The SDK has no extension window, so it files straight from the page with the config you give it — your own app, your own token:
 
-- **GitHub** → `POST /repos/{owner}/{repo}/issues`, then opens the created issue in a new tab. The full report body is sent (no URL truncation).
+- **GitHub** → `POST /repos/{owner}/{repo}/issues`; the window shows the created issue's link. The full report body is sent (no URL truncation).
 - **Linear** → GraphQL `issueCreate`. Opens the created issue; the toast shows its identifier (e.g. `ENG-42`).
 - **Slack** → incoming-webhook POST. Fire-and-forget (Slack webhooks are CORS-opaque, so success is reported optimistically).
 

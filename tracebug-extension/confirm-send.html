@@ -48,6 +48,7 @@
       font-size: 13px;
       margin-bottom: 14px;
     }
+    .meta[hidden] { display: none; }
     .meta dt { color: var(--muted); }
     .meta dd { margin: 0; word-break: break-word; }
     .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; }
@@ -159,6 +160,20 @@
     .msg.err { color: var(--danger); }
     a { color: var(--accent); }
     button.small { padding: 6px 12px; font-size: 12px; }
+    /* Labels as chips: tick by clicking, filter by typing. */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; overflow-y: auto; padding: 2px; }
+    .chips .filter { flex: 1 0 100%; margin-bottom: 2px; }
+    button.chip {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+      font-size: 12px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    button.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0B0D14; }
+    .done { font-size: 15px; font-weight: 600; margin: 4px 0; }
 
     /* Light theme. The window follows the OS: it has no page to inherit from. */
     @media (prefers-color-scheme: light) {
@@ -175,6 +190,8 @@
       .warn { color: #6B4A00; background: rgba(245, 158, 11, 0.12); }
       button { color: #FFFFFF; }
       button.ghost { color: var(--text); border-color: var(--line); }
+      button.chip { color: var(--text); }
+      button.chip[aria-pressed="true"] { color: #FFFFFF; }
     }
   </style>
 </head>
@@ -204,7 +221,7 @@
           <a href="#" id="settingsLink">Use a token in TraceBug settings</a>
         </div>
         <div class="pblock" id="deviceBox" hidden>
-          <span class="plabel">Enter this code on the page that opens:</span>
+          <span class="plabel">Paste this code on the GitHub page that opened, then click Authorize:</span>
           <div class="prow">
             <span class="code" id="userCode"></span>
             <button type="button" class="ghost small" id="copyCode">Copy</button>
@@ -222,7 +239,14 @@
         <label class="plabel" for="container" id="containerLabel">Repository</label>
         <input type="text" id="container" list="containerList" autocomplete="off" spellcheck="false" />
         <datalist id="containerList"></datalist>
+        <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
         <div id="fields"></div>
+      </div>
+
+      <!-- After Create: the result, in place. Nothing opens unless the link is clicked. -->
+      <div class="pblock" id="doneBox" hidden>
+        <p class="done">✓ Created <a href="#" id="issueLink"></a></p>
+        <p class="muted" id="doneNote"></p>
       </div>
 
       <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
@@ -233,7 +257,7 @@
       <ul id="warnList"></ul>
     </div>
 
-    <dl class="meta">
+    <dl class="meta" id="meta">
       <dt>Destination</dt><dd id="destination">—</dd>
       <dt>Via</dt><dd id="provider">—</dd>
     </dl>

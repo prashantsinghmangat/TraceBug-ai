@@ -11,8 +11,8 @@
 export const TODO_OWNER_CLIENT_ID = "TODO_OWNER_CLIENT_ID";
 
 export const OAUTH_CLIENTS = {
-  /** GitHub App with Device Flow enabled (Issues: R/W, Metadata: R). */
-  github: TODO_OWNER_CLIENT_ID,
+  /** GitHub App "TraceBug Dev" (org tracebugdev), Device Flow on (Issues: R/W, Metadata: R). */
+  github: "Iv23lidsU0w7Ezzc9qyb",
   /** Linear OAuth app; PKCE, scopes `read,write`. */
   linear: TODO_OWNER_CLIENT_ID,
   /** Microsoft Entra app registration, multi-tenant, Azure DevOps delegated permission. */
@@ -22,6 +22,9 @@ export const OAUTH_CLIENTS = {
 } as const;
 
 export type OAuthTracker = keyof typeof OAUTH_CLIENTS;
+
+/** The GitHub App's public page, where a user adds repositories to it. */
+export const GITHUB_APP_INSTALL_URL = "https://github.com/apps/tracebug-dev/installations/new";
 
 /** True once the owner has pasted a real client id for this tracker. */
 export function hasOAuthClient(tracker: OAuthTracker): boolean {

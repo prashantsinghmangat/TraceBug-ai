@@ -363,3 +363,15 @@ Check both with the OS in light and dark mode, and with the keyboard only (Tab, 
 
 Firefox (`npm run ext:firefox`): the settings cards show no Connect button, the token form is open, and
 the same send files the issue through the same window.
+
+### 22. Connect GitHub with no token (Phase 13 step 2) — real account, Chrome
+
+Chrome build, settings with **no** GitHub token (Remove it if one is saved). The GitHub App **TraceBug Dev** is
+installed on your account for at least one repository. Capture a bug → **Send to GitHub** → **Connect GitHub**.
+**Pass:** a github.com/login/device tab opens with the code already on your clipboard; after Authorize the window
+comes back by itself saying "as <your login>", lists exactly the repos the app is installed on, loads labels,
+assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N" — no tab opens until you click
+the link, which opens the issue with them set. Settings → GitHub then reads "Connected as <login>" with a Default
+repository picker; **Disconnect** returns it to "Connect GitHub". Also: welcome page step 5 → Connect GitHub →
+pick a default repository. Repeat once 8+ hours later without
+reconnecting: the issue still files (the token renewed itself).

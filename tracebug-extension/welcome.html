@@ -327,6 +327,19 @@
     .ai-copy:hover { background: var(--ai-btn-bg-2); color: var(--ai-title); }
     /* Set by welcome.js for ~1.6s after a real copy. */
     .ai-copy.copied, .ai-copy.copied:hover { color: var(--ok-icon); }
+    /* Step 5: connect a tracker (ADR 010). Same dark box as step 4. */
+    #trackerStep[hidden], #trackerStep [hidden] { display: none !important; }
+    .tr-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .tr-row .btn { margin-top: 0; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; }
+    .tr-status { font-size: 12.5px; color: var(--ai-text); }
+    .tr-status.err { color: #FF8590; }
+    .tr-code { font-size: 13px; color: var(--ai-text); margin: 12px 0 0; }
+    .tr-code b { font-family: var(--mono); font-size: 18px; letter-spacing: .12em; color: var(--ai-title); }
+    .tr-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 13px; color: var(--ai-title); max-width: 420px; }
+    .tr-pick select {
+      font: inherit; font-size: 13px; color: var(--ai-code-text);
+      background: var(--ai-code-bg); border: 1px solid var(--ai-code-border); border-radius: 8px; padding: 8px 10px;
+    }
 
     /* ── Secondary cards ───────────────────────────────── */
     /* Empty until welcome.js adds the team card; see TEAM_GUIDE_URL. */
@@ -519,6 +532,22 @@
       </div>
     </section>
 
+    <!-- ── Connect a tracker (ADR 010) ──────────────────────────
+         Optional; shown only where this build offers sign-in (welcome.js asks
+         the worker). The worker does the sign-in — this page never sees a token. -->
+    <section class="ai ai-step" id="trackerStep" aria-labelledby="trTitle" hidden>
+      <div class="ai-t" id="trTitle">5 · File bugs straight into GitHub</div>
+      <p class="ai-l">Optional. Connect once and pick a repository; every bug ticket then gets a Create GitHub issue button. Issues go from your browser to GitHub directly.</p>
+      <div class="tr-row">
+        <button class="btn" id="trConnect" type="button">Connect GitHub</button>
+        <span class="tr-status" id="trStatus" role="status" aria-live="polite"></span>
+      </div>
+      <p class="tr-code" id="trCodeLine" hidden>Your code: <b id="trCode"></b></p>
+      <label class="tr-pick" id="trPickWrap" hidden>Default repository
+        <select id="trPick"></select>
+      </label>
+    </section>
+
     <!-- ── Privacy ─────────────────────────────────────────── -->
     <section class="privacy">
       <div class="privacy-cols">
@@ -571,6 +600,7 @@
     </footer>
 
   </div>
+  <script src="tracker-connect.js"></script>
   <script src="welcome.js"></script>
 </body>
 </html>

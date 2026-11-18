@@ -2353,9 +2353,10 @@ async function _fileViaTracker(
     // The Create panel can file somewhere other than the button's tracker.
     const where = result.label || TRACKER_LABELS[provider];
     if (result.url) {
-      // In the extension the worker has already opened it (ADR 010); a second
-      // window.open here would be a duplicate tab, or a blocked popup.
-      if (!result.opened) window.open(result.url, "_blank", "noopener,noreferrer");
+      // In the extension the Create panel already showed the link, or the
+      // worker opened it (ADR 010); opening it here too would be an unasked-for
+      // tab, a duplicate, or a blocked popup.
+      if (!result.opened && !result.shown) window.open(result.url, "_blank", "noopener,noreferrer");
       showToast(`✓ ${where} issue created${ref}`, root);
     } else {
       showToast(`✓ Sent to ${where}`, root);

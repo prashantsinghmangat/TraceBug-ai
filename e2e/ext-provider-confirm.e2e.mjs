@@ -163,8 +163,11 @@ try {
 
   if (win) {
     const text = await win.evaluate(() => document.body.innerText);
-    check("the window names the destination from EXTENSION storage", text.includes(REPO_NAME),
-      text.slice(0, 120).replace(/\s+/g, " "));
+    // ADR 010: the destination is the Create panel's repository box, prefilled
+    // from the saved config (the Destination row is gone — it repeated it).
+    await win.waitForFunction((r) => document.getElementById("container").value === r, REPO_NAME, { timeout: 8000 }).catch(() => {});
+    const repoBox = await win.inputValue("#container").catch(() => "");
+    check("the window names the destination from EXTENSION storage", repoBox === REPO_NAME, repoBox);
     check("the window names the requesting origin", text.includes(`localhost:${PORT}`));
     check("the window shows the title", text.includes("Login fails"));
     check("the window never shows the token", !(await win.content()).includes(GH_TOKEN));
@@ -210,14 +213,23 @@ try {
   }));
   const win2 = await waitForConfirmWindow();
   check("a second confirmation window opens after the first resolved", !!win2);
-  if (win2) await win2.click("#send");
+  if (win2) {
+    await win2.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).catch(() => {});
+    await win2.click("#send");
+  }
   await sleep(2500);
-  const r2 = await outcome(id2);
   // api.github.com is unreachable from this test, so the call fails at the
   // network — which still proves the send was ATTEMPTED only after Send, and
-  // that the failure is reported as a plain sentence.
+  // that the failure is reported as a plain sentence. ADR 010: the window
+  // keeps the error and offers Retry; the page hears nothing until it closes.
+  const err2 = win2 ? (await win2.textContent("#panelMsg").catch(() => "")).trim() : "";
   check("Send proceeds to a real call and reports a plain error, not a stack",
-    !!r2.result && !r2.result.cancelled && /could not reach|github/i.test(r2.result.error || ""),
+    /could not reach|github/i.test(err2) && !/\bat \w+ \(/.test(err2), err2);
+  check("…in the window, with Retry", !!win2 && (await win2.textContent("#send")).trim() === "Retry");
+  if (win2) await win2.close();
+  await sleep(900);
+  const r2 = await outcome(id2);
+  check("closing it after the failure tells the page it was cancelled", !!r2.result && r2.result.cancelled === true,
     JSON.stringify(r2.result));
 
   // ══ 4. HTML in the body renders as TEXT ═══════════════════════════════════
@@ -279,6 +291,9 @@ try {
   const win3b = await waitForConfirmWindow();
   check("window opens for the over-long payload", !!win3b);
   if (win3b) {
+    // The window fetches the request from the worker after it opens, and a
+    // payload this size arrives via storage — wait for it rather than racing it.
+    await win3b.waitForFunction(() => (document.getElementById("body").textContent || "").length > 0, null, { timeout: 8000 }).catch(() => {});
     const view = await win3b.evaluate(() => ({
       body: document.getElementById("body").textContent,
       label: document.getElementById("bodyLabel").textContent,

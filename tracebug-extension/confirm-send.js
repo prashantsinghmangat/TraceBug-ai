@@ -99,6 +99,8 @@ const panel = {
   fieldsFor: "",         // container the specs belong to
   pollTimer: null,
   loadSeq: 0,
+  keep: null,            // choices held across a reconnect: {tracker, container, fields}
+  busy: false,           // a create is in flight
 };
 
 function show(id, on) {
@@ -125,9 +127,16 @@ function selectedContainer() {
 function syncCreateButton() {
   if (!panel.active || decided) return;
   const t = panel.current;
-  $("send").disabled = !(t && t.connected && selectedContainer());
+  $("send").disabled = panel.busy || !(t && t.connected && selectedContainer());
   put("destination", selectedContainer() || "(choose below)");
   put("provider", t ? t.label : "");
+}
+
+/** "Create GitHub issue" — in the heading and the window's title bar. */
+function setTitle(t) {
+  const text = "Create " + (t ? t.label + " " : "an ") + "issue";
+  put("heading", text);
+  document.title = text;
 }
 
 function renderTrackerSelect(selectedId) {
@@ -167,6 +176,7 @@ async function selectTracker(id) {
   show("deviceBox", false);
   show("accessBox", false);
   if (!t) return;
+  setTitle(t);
 
   put("account", t.connected
     ? (t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token")
@@ -188,7 +198,11 @@ async function selectTracker(id) {
   show("connectBox", false);
   show("pickBox", true);
   put("containerLabel", t.containerNoun);
-  $("container").value = (t.last && t.last.container) || "";
+  show("manageLink", !!t.manageUrl);
+  $("manageLink").dataset.url = t.manageUrl || "";
+  // After a reconnect, the user's own choices win over the remembered ones.
+  const keep = panel.keep && panel.keep.tracker === t.id ? panel.keep : null;
+  $("container").value = (keep && keep.container) || (t.last && t.last.container) || "";
   syncCreateButton();
   await loadContainers();
   await loadFields(true);
@@ -249,8 +263,11 @@ async function loadFields(useRemembered) {
     return;
   }
   panel.fieldSpecs = Array.isArray(res.fields) ? res.fields : [];
-  const remembered = useRemembered && t.last && t.last.container === container ? (t.last.fields || {}) : {};
-  panel.fieldSpecs.forEach((f) => $("fields").appendChild(renderField(f, remembered[f.key])));
+  const keep = panel.keep && panel.keep.tracker === t.id && panel.keep.container === container ? panel.keep : null;
+  const remembered = keep ? keep.fields
+    : useRemembered && t.last && t.last.container === container ? (t.last.fields || {}) : null;
+  panel.keep = null;
+  panel.fieldSpecs.forEach((f) => $("fields").appendChild(renderField(f, remembered ? remembered[f.key] : undefined)));
 }
 
 function renderField(spec, preset) {
@@ -281,35 +298,42 @@ function renderField(spec, preset) {
     return wrap;
   }
 
+  // Multi-select as chips. Nothing remembered for this repo yet (preset is
+  // undefined, not an empty list) → "bug" starts ticked, if the repo has it.
+  if (preset === undefined) {
+    const bug = (spec.options || []).find((op) => String(op.label).toLowerCase() === "bug");
+    if (bug) want.add(bug.id);
+  }
   const fs = document.createElement("fieldset");
   fs.dataset.field = spec.key;
   const lg = document.createElement("legend");
   lg.textContent = spec.label;
   fs.appendChild(lg);
   const box = document.createElement("div");
-  box.className = "opts";
-  if ((spec.options || []).length > 10) {
+  box.className = "chips";
+  if ((spec.options || []).length > 8) {
     const filter = document.createElement("input");
     filter.type = "search";
     filter.className = "filter";
-    filter.placeholder = "Filter " + spec.label.toLowerCase();
-    filter.setAttribute("aria-label", "Filter " + spec.label.toLowerCase());
+    filter.placeholder = "Search " + spec.label.toLowerCase();
+    filter.setAttribute("aria-label", "Search " + spec.label.toLowerCase());
     filter.addEventListener("input", () => {
       const q = filter.value.trim().toLowerCase();
-      box.querySelectorAll("label").forEach((l) => { l.hidden = !!q && !l.textContent.toLowerCase().includes(q); });
+      box.querySelectorAll("button.chip").forEach((c) => { c.hidden = !!q && !c.textContent.toLowerCase().includes(q); });
     });
     box.appendChild(filter);
   }
   (spec.options || []).forEach((op) => {
-    const l = document.createElement("label");
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.value = String(op.id);
-    cb.checked = want.has(op.id);
-    const span = document.createElement("span");
-    span.textContent = String(op.label);
-    l.append(cb, span);
-    box.appendChild(l);
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.value = String(op.id);
+    chip.textContent = String(op.label);
+    chip.setAttribute("aria-pressed", want.has(op.id) ? "true" : "false");
+    chip.addEventListener("click", () => {
+      chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    });
+    box.appendChild(chip);
   });
   if (!(spec.options || []).length) {
     const none = document.createElement("span");
@@ -338,7 +362,7 @@ function collectChoice() {
       if (sel && sel.value) fields[f.key] = sel.value;
     } else {
       const fs = document.querySelector('fieldset[data-field="' + CSS.escape(f.key) + '"]');
-      fields[f.key] = fs ? [...fs.querySelectorAll('input[type="checkbox"]:checked')].map((c) => c.value) : [];
+      fields[f.key] = fs ? [...fs.querySelectorAll('button.chip[aria-pressed="true"]')].map((c) => c.value) : [];
     }
   });
   return { tracker: t.id, container: selectedContainer(), fields };
@@ -364,6 +388,21 @@ function requestPermissions(perm) {
   });
 }
 
+async function copyText(text) {
+  if (!text) return false;
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+}
+
+/** After signing in on GitHub's tab, put this window back in front of it. */
+function bringToFront() {
+  try {
+    chrome.windows.getCurrent((w) => {
+      void chrome.runtime.lastError;
+      if (w && w.id != null) chrome.windows.update(w.id, { focused: true }, () => void chrome.runtime.lastError);
+    });
+  } catch {}
+}
+
 function openExternal(url) {
   let u;
   try { u = new URL(url); } catch { return; }
@@ -387,7 +426,14 @@ async function onConnect() {
     $("openDevice").dataset.url = res.verificationUri || "";
     put("openDevice", "Open " + String(res.verificationUri || "").replace(/^https:\/\//, ""));
     show("deviceBox", true);
-    panelMsg("Waiting for you to enter the code…");
+    // One click: copy the code and open the page that asks for it. The copy can
+    // fail (the click's user activation may have lapsed); the code stays on
+    // screen with its own Copy button either way.
+    const copied = await copyText(res.userCode || "");
+    openExternal(res.verificationUri || "");
+    panelMsg(copied
+      ? "Code copied. Paste it on GitHub and click Authorize — this window carries on by itself."
+      : "Enter the code on GitHub and click Authorize — this window carries on by itself.");
     schedulePoll(t.id, res.interval || 5);
     return;
   }
@@ -407,6 +453,7 @@ function schedulePoll(id, seconds) {
     }
     if (res.status === "pending") { schedulePoll(id, res.interval || seconds); return; }
     show("deviceBox", false);
+    bringToFront();
     panelMsg("Connected" + (res.account ? " as " + res.account : "") + ".");
     await refreshAfterAuthChange(id);
   }, Math.max(1, seconds) * 1000);
@@ -429,8 +476,12 @@ function wirePanel() {
     e.preventDefault();
     try { chrome.runtime.openOptionsPage(); } catch {}
   });
-  $("copyCode").addEventListener("click", () => {
-    try { navigator.clipboard.writeText($("userCode").textContent || ""); panelMsg("Code copied."); } catch {}
+  $("copyCode").addEventListener("click", async () => {
+    if (await copyText($("userCode").textContent || "")) panelMsg("Code copied.");
+  });
+  $("manageLink").addEventListener("click", (e) => {
+    e.preventDefault();
+    openExternal($("manageLink").dataset.url || "");
   });
   $("openDevice").addEventListener("click", () => openExternal($("openDevice").dataset.url || ""));
   $("allowAccess").addEventListener("click", async () => {
@@ -452,12 +503,81 @@ function wirePanel() {
   c.addEventListener("change", () => { syncCreateButton(); loadFields(false); });
 }
 
+// ── Create ────────────────────────────────────────────────────────────────
+// The window stays open for the outcome. The request stays pending in the
+// worker until it succeeds, so a failure changes nothing: same ticket, same
+// choices, and Retry. Cancel is locked while a create is in flight — closing
+// under it could hide an issue that did get filed.
+
+const ISSUE_HOSTS = { github: ["github.com"], linear: ["linear.app"] };
+
+async function createIssue() {
+  if (decided || panel.busy || $("send").disabled) return;
+  const choice = collectChoice();
+  panel.busy = true;
+  $("send").disabled = true;
+  $("cancel").disabled = true;
+  panelMsg("");
+  put("countdown", "Creating…");
+  const res = await send("tb:confirm:create", { id: ID, choice });
+  panel.busy = false;
+  $("cancel").disabled = false;
+  put("countdown", "");
+  if (res && res.ok && res.result) { showDone(choice.tracker, res.result); return; }
+  const error = (res && res.error) || "Could not create the issue.";
+  if (res && res.reconnect) {
+    // Keep what the user picked; the Reconnect button is in the panel now.
+    panel.keep = choice;
+    await refreshAfterAuthChange(choice.tracker);
+    panelMsg(error, true);
+    return;
+  }
+  panelMsg(res && res.unclear
+    ? error + " Retry checks whether it was created first, so it won't be filed twice."
+    : error, true);
+  $("send").textContent = "Retry";
+  syncCreateButton();
+}
+
+function showDone(tracker, r) {
+  decided = true;
+  ["connectBox", "accessBox", "pickBox", "disconnect"].forEach((id) => show(id, false));
+  $("tracker").disabled = true;
+  panelMsg("");
+  const link = $("issueLink");
+  link.textContent = r.ref || "the issue";
+  link.dataset.url = r.url || "";
+  link.dataset.tracker = tracker;
+  put("doneNote", r.found
+    ? "It had already been created — TraceBug found it rather than filing it twice."
+    : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.");
+  show("doneBox", true);
+  $("send").hidden = true;
+  $("cancel").textContent = "Close";
+  $("cancel").disabled = false;
+  $("cancel").focus();
+}
+
+/** Open the created issue — only an https URL on that tracker's own site. */
+function openIssue() {
+  const link = $("issueLink");
+  let u;
+  try { u = new URL(link.dataset.url || ""); } catch { return; }
+  const hosts = ISSUE_HOSTS[link.dataset.tracker] || [];
+  if (u.protocol !== "https:" || !hosts.includes(u.hostname)) return;
+  openExternal(u.toString());
+}
+
 /** Called from load() for a title + body tracker send. */
 async function startPanel(target) {
   if (!(await loadStatus())) return false;
   panel.active = true;
   wirePanel();
   show("panel", true);
+  // The panel already says where it goes; no Destination/Via rows, no timer.
+  $("meta").hidden = true;
+  if (tick) clearInterval(tick);
+  put("countdown", "");
   $("send").textContent = "Create issue";
   const first = rowFor(target) ? target : ISSUE_TRACKERS[0];
   renderTrackerSelect(first);
@@ -511,7 +631,7 @@ async function load() {
   // The Create panel loads AFTER the body and warnings are on screen: listing
   // repos is a network call, and what is about to be sent must never wait on it.
   if (r.kind !== "llm" && ISSUE_TRACKERS.includes(r.target)) {
-    put("heading", "Create an issue");
+    setTitle(null);
     $("send").disabled = true;
     await startPanel(r.target);
   }
@@ -541,11 +661,19 @@ async function decide(approved) {
   window.close();
 }
 
-$("send").addEventListener("click", () => decide(true));
-$("cancel").addEventListener("click", () => decide(false));
+$("send").addEventListener("click", () => (panel.active ? createIssue() : decide(true)));
+$("cancel").addEventListener("click", () => {
+  if (panel.busy) return;
+  // After a create, the request is already settled: Close just closes.
+  if (decided && panel.active) { window.close(); return; }
+  decide(false);
+});
+$("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") decide(false);
+  if (e.key !== "Escape" || panel.busy) return;
+  if (decided && panel.active) { window.close(); return; }
+  decide(false);
 });
 
 // Closing the window with the titlebar ✕ is a cancel. The worker also watches

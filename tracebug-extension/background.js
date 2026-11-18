@@ -1012,9 +1012,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // page nor a content script can read chrome.commands, and no UI may hardcode
   // the key — the user can rebind or clear it. "" means nothing is bound.
   if (message.type === "TB_HOST_ACCESS") {
+    // `connectable` (ADR 010): trackers this build can sign in to, so the
+    // ticket offers "Send to GitHub" before anyone has connected — the Create
+    // window is where Connect lives. Booleans only, like the rest of caps.
     Promise.all([hasHostAccess("<all_urls>"), boundQuickCaptureShortcut()])
-      .then(([granted, shortcut]) => sendResponse({ granted, shortcut }))
-      .catch(() => sendResponse({ granted: false, shortcut: "" }));
+      .then(([granted, shortcut]) => sendResponse({ granted, shortcut, connectable: connectableTrackers() }))
+      .catch(() => sendResponse({ granted: false, shortcut: "", connectable: {} }));
     return true; // async
   }
 
@@ -1261,6 +1264,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     resolvePending(message.id, !!message.approved, choice)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  // ADR 010: Create from the panel. Unlike decide, the window stays open and
+  // gets the outcome itself — "Created #N" with a link, or the error and a
+  // Retry that keeps the user's choices. Accepted ONLY from confirm-send.html.
+  if (message.type === "tb:confirm:create") {
+    if (!isConfirmSender(sender)) { sendResponse({ ok: false, error: "Rejected." }); return false; }
+    const b = bridgeLib();
+    const c = b ? b.validateChoice(message.choice) : { ok: false, error: "Reload the extension." };
+    if (!c.ok) { sendResponse({ ok: false, error: c.error }); return false; }
+    createFromPanel(String(message.id || ""), c.choice)
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ ok: false, error: (err && err.message) || "Could not create the issue." }));
     return true;
   }
 
@@ -1829,7 +1846,7 @@ async function handleProviderRequest(message, sender) {
   // hostile page spam for the rest of it, and "session" is vague anyway
   // because the worker restarts.
   const integrations = cfgAll[INT_KEY] || {};
-  if (!hasProviderConfig(v.target, integrations, cfgAll[TRACKER_AUTH_KEY])) {
+  if (!hasProviderConfig(v.target, integrations, cfgAll[TRACKER_AUTH_KEY]) && !connectableTrackers()[v.target]) {
     return ackError((TB_PROVIDER_LABELS[v.target] || v.target) + " is not configured — open TraceBug settings.");
   }
 
@@ -2003,6 +2020,70 @@ async function resolvePending(id, approved, choice) {
   await runAndReport(id, req.tabId, req);
 }
 
+// A create still running after this long is taken to have died with the
+// worker — and, since it may have landed, the next try checks first.
+const IN_FLIGHT_STALE_MS = 90 * 1000;
+// Per request to the tracker. A hung create is an unclear failure, not a hang.
+const CREATE_TIMEOUT_MS = 30 * 1000;
+
+function isInFlight(req) {
+  return !!(req && req.inFlightAt && Date.now() - req.inFlightAt < IN_FLIGHT_STALE_MS);
+}
+
+/**
+ * Create from the panel. The request stays pending until it succeeds, so a
+ * failure leaves everything as it was: the page's ticket untouched, the window
+ * open with the user's choices, Retry available. After an unclear failure
+ * (network, timeout) the retry looks for the hidden marker first — GitHub has
+ * no idempotency key, and a create that landed must not be filed twice.
+ */
+async function createFromPanel(id, choice) {
+  const api = providerApi();
+  if (!api) return { ok: false, error: "TraceBug could not load its provider code. Reload the extension." };
+  const all = await sessionGet(PENDING_KEY, {});
+  const req = all[id];
+  if (!req || req.kind !== "tracker") {
+    return { ok: false, error: "This request is no longer waiting. Send it again from the ticket." };
+  }
+  // One create at a time: a double click or a second message must not file twice.
+  if (isInFlight(req)) return { ok: false, error: "Already creating this issue…" };
+  if (req.inFlightAt) req.unclear = true;
+  req.inFlightAt = Date.now();
+  await sessionSet({ [PENDING_KEY]: all });
+
+  const run = Object.assign({}, req, {
+    choice,
+    target: choice.tracker,
+    providerLabel: TB_PROVIDER_LABELS[choice.tracker] || choice.tracker,
+    fromPanel: true,
+  });
+  try {
+    const result = await callTrackerFromWorker(api, run);
+    result.shown = true;
+    const was = await dropPending(id);
+    try { chrome.alarms.clear(CONFIRM_ALARM + id); } catch {}
+    if (was) tellTab(was.tabId, { type: "tb:provider:result", id, ok: true, result });
+    return {
+      ok: true,
+      result: { url: result.url || "", ref: result.ref || "", label: result.label || run.providerLabel, found: !!result.found },
+    };
+  } catch (err) {
+    const unclear = api.isUnclearFailure(err);
+    const again = await sessionGet(PENDING_KEY, {});
+    if (again[id]) {
+      again[id].inFlightAt = 0;
+      if (unclear) again[id].unclear = true;
+      await sessionSet({ [PENDING_KEY]: again });
+    }
+    return {
+      ok: false,
+      error: api.mapProviderError(err, run.providerLabel),
+      reconnect: !!(err && err.name === "ReconnectNeededError"),
+      unclear,
+    };
+  }
+}
+
 // ── The actual call ────────────────────────────────────────────────────────
 
 async function runAndReport(id, tabId, req) {
@@ -2140,6 +2221,18 @@ function oauthUiSupported() {
   catch { return false; }
 }
 
+/** { github: true, … } for each tracker whose Connect this build can offer. */
+function connectableTrackers() {
+  const api = providerApi();
+  const out = {};
+  if (!api || typeof api.trackerAdapter !== "function" || !oauthUiSupported()) return out;
+  for (const id of api.ISSUE_TRACKERS) {
+    const a = api.trackerAdapter(id);
+    if (a && a.connect()) out[id] = true;
+  }
+  return out;
+}
+
 function authContext(adapter, integrations) {
   const c = adapter.connect();
   return { store: trackerAuthStore, tracker: adapter.id, label: adapter.label, integrations, spec: c ? c.spec : null };
@@ -2178,14 +2271,23 @@ async function createViaAdapter(api, adapter, req, integrations) {
   const container = (choice && choice.container) || api.legacyContainer(adapter.id, integrations);
   if (!container) throw new Error("Pick a " + adapter.containerNoun.toLowerCase() + " to file the issue in.");
   const fields = choice ? choice.fields : legacyFields(adapter.id, integrations);
-  const result = await api.withTrackerAuth(authContext(adapter, integrations), (auth) =>
-    adapter.createIssue(auth, container, fields, { title: req.payload.title, body: req.payload.body }));
+  // Invisible in the rendered issue; lets a retry find this one (createFromPanel).
+  const marker = "tracebug:" + String(req.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  const result = await api.withTrackerAuth(authContext(adapter, integrations), async (auth) => {
+    if (req.unclear && typeof adapter.findIssueByMarker === "function") {
+      const found = await adapter.findIssueByMarker(auth, container, marker, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+      if (found) { found.found = true; return found; }
+    }
+    return adapter.createIssue(auth, container, fields,
+      { title: req.payload.title, body: req.payload.body, marker }, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+  });
   if (choice) await rememberChoice(adapter.id, container, fields);
   result.label = adapter.label;
-  // The worker opens the issue, not the page: a page's window.open after an
-  // async round trip is a popup the browser blocks. Only an https URL on the
-  // tracker's own host is opened — the URL came over the network.
-  if (api.isTrustedIssueUrl(adapter.id, result.url)) {
+  // The panel shows the result with its link; nothing opens unless the user
+  // clicks it. Only the older decide path (no panel) still opens the issue
+  // here: a page's window.open after an async round trip is a blocked popup.
+  // Only an https URL on the tracker's own host — the URL came over the network.
+  if (!req.fromPanel && api.isTrustedIssueUrl(adapter.id, result.url)) {
     try { await chrome.tabs.create({ url: result.url, active: true }); result.opened = true; } catch {}
   }
   return result;
@@ -2212,6 +2314,8 @@ async function trackerStatusList(api) {
       // user gesture the browser requires.
       connectPermissions: c ? { permissions: c.flow === "pkce" ? ["identity"] : [], origins: c.hosts } : null,
       apiHosts: a.apiHosts,
+      // "Add repositories" link — only meaningful once signed in through the app.
+      manageUrl: map[id] && !map[id].needsReconnect ? (a.manageUrl || null) : null,
       last: p
         ? { container: p.container || "", fields: p.fields || {} }
         : { container: api.legacyContainer(id, integrations), fields: legacyFields(id, integrations) },
@@ -2332,6 +2436,15 @@ async function handleTrackerUi(message, sender) {
       case "tb:tracker:connect": return await connectTracker(api, adapter);
       case "tb:tracker:connect-poll": return await pollTrackerConnect(api, adapter);
       case "tb:tracker:disconnect": return await disconnectTracker(api, adapter);
+      case "tb:tracker:set-default": {
+        const c = b.validateChoice({ tracker: adapter.id, container: message.container, fields: {} });
+        if (!c.ok) return { error: c.error };
+        const prev = ((await localGet([TRACKER_PREFS_KEY], {}))[TRACKER_PREFS_KEY] || {})[adapter.id];
+        // Same repo as last time keeps its labels; a new one starts clean.
+        await rememberChoice(adapter.id, c.choice.container,
+          prev && prev.container === c.choice.container ? prev.fields : {});
+        return { ok: true };
+      }
       default: return { error: "Unsupported request type." };
     }
   } catch (err) {
@@ -2386,6 +2499,12 @@ if (chrome.alarms && chrome.alarms.onAlarm) {
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (!alarm || typeof alarm.name !== "string" || alarm.name.indexOf(CONFIRM_ALARM) !== 0) return;
     const id = alarm.name.slice(CONFIRM_ALARM.length);
+    // Never cancel under a create that is running: it may land, and the page
+    // must hear that, not "cancelled". Look again in a minute.
+    if (isInFlight(await getPending(id))) {
+      try { chrome.alarms.create(CONFIRM_ALARM + id, { when: Date.now() + 60 * 1000 }); } catch {}
+      return;
+    }
     const req = await dropPending(id);
     if (!req) return;
     if (req.windowId != null) {
@@ -2406,6 +2525,8 @@ if (chrome.windows && chrome.windows.onRemoved) {
     const all = await sessionGet(PENDING_KEY, {});
     const hit = Object.keys(all).find((k) => all[k] && all[k].windowId === windowId);
     if (!hit) return;
+    // Closed while creating: let the create finish and report to the page.
+    if (isInFlight(all[hit])) { all[hit].windowId = null; await sessionSet({ [PENDING_KEY]: all }); return; }
     const req = await dropPending(hit);
     try { chrome.alarms.clear(CONFIRM_ALARM + hit); } catch {}
     if (!req) return;

@@ -216,6 +216,7 @@ function wireOsToggle() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   void initAccountCard();
+  void initTrackerStep();
 
   // Version — from the manifest, so it cannot disagree with the build.
   try {
@@ -313,4 +314,55 @@ async function initAccountCard() {
       if (v && v.account && v.account.email) card.hidden = true;
     });
   } catch {}
+}
+
+// Step 5: Connect GitHub, then pick the default repository (ADR 010). Shown
+// only where the worker says this build can sign in — Firefox keeps its
+// token path in settings, so the card stays hidden there.
+async function initTrackerStep() {
+  const card = document.getElementById("trackerStep");
+  const C = typeof TraceBugTrackerConnect !== "undefined" ? TraceBugTrackerConnect : null;
+  if (!card || !C) return;
+  const status = document.getElementById("trStatus");
+  const btn = document.getElementById("trConnect");
+  const codeLine = document.getElementById("trCodeLine");
+  const pickWrap = document.getElementById("trPickWrap");
+  const pick = document.getElementById("trPick");
+  const say = (text, isErr) => {
+    status.textContent = text || "";
+    status.className = "tr-status" + (isErr ? " err" : "");
+  };
+
+  async function render() {
+    const res = await C.msg("tb:tracker:status");
+    const t = res && Array.isArray(res.trackers) ? res.trackers.find((r) => r.id === "github") : null;
+    if (!t || !t.canConnect) { card.hidden = true; return null; }
+    card.hidden = false;
+    const signedIn = t.via === "oauth";
+    btn.hidden = signedIn;
+    btn.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
+    pickWrap.hidden = !signedIn;
+    if (signedIn) {
+      say("Connected" + (t.account ? " as " + t.account : "") + ".");
+      await C.fillDefaultPicker(t, pick, say);
+    }
+    return t;
+  }
+
+  let row = await render();
+  btn.addEventListener("click", () => {
+    if (!row) return;
+    C.connect(row, {
+      say,
+      code: (code) => {
+        document.getElementById("trCode").textContent = code || "";
+        codeLine.hidden = !code;
+      },
+      done: async () => {
+        row = await render();
+        say(status.textContent + " Now pick where new issues go.");
+        if (!pickWrap.hidden) pick.focus();
+      },
+    });
+  });
 }

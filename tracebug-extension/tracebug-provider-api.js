@@ -22,6 +22,7 @@ var TraceBugProviderAPI = (() => {
   var worker_exports = {};
   __export(worker_exports, {
     DEFAULT_BASE_URLS: () => DEFAULT_BASE_URLS,
+    GITHUB_APP_INSTALL_URL: () => GITHUB_APP_INSTALL_URL,
     ISSUE_TRACKERS: () => ISSUE_TRACKERS,
     ISSUE_URL_HOSTS: () => ISSUE_URL_HOSTS,
     MAX_CONTAINERS: () => MAX_CONTAINERS,
@@ -37,6 +38,7 @@ var TraceBugProviderAPI = (() => {
     TODO_OWNER_CLIENT_ID: () => TODO_OWNER_CLIENT_ID,
     TRACKER_ADAPTERS: () => TRACKER_ADAPTERS,
     base64url: () => base64url,
+    bodyWithMarker: () => bodyWithMarker,
     buildAuthorizeUrl: () => buildAuthorizeUrl,
     callLLM: () => callLLM,
     capProviderBody: () => capProviderBody,
@@ -49,6 +51,8 @@ var TraceBugProviderAPI = (() => {
     github: () => github,
     hasOAuthClient: () => hasOAuthClient,
     isTrustedIssueUrl: () => isTrustedIssueUrl,
+    isUnclearFailure: () => isUnclearFailure,
+    issueMarkerComment: () => issueMarkerComment,
     legacyContainer: () => legacyContainer,
     legacyToken: () => legacyToken,
     linear: () => linear,
@@ -72,6 +76,27 @@ var TraceBugProviderAPI = (() => {
   });
 
   // src/providers/api.ts
+  var MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
+  function issueMarkerComment(marker) {
+    return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+  }
+  function bodyWithMarker(provider, body, marker) {
+    var _a;
+    const text = capProviderBody(provider, body).text;
+    const mark = issueMarkerComment(marker);
+    if (!mark) return text;
+    const limit = (_a = PROVIDER_BODY_LIMITS[provider]) != null ? _a : PROVIDER_BODY_LIMITS.github;
+    const room = limit - mark.length - 2;
+    return (text.length > room ? text.slice(0, room) : text) + "\n\n" + mark;
+  }
+  function isUnclearFailure(err) {
+    if (!err || typeof err !== "object") return false;
+    const e = err;
+    if (typeof e.status === "number") return false;
+    if (e.name === "ReconnectNeededError" || e.name === "NotConnectedError" || e.name === "ProviderHttpError") return false;
+    if (e.name === "AbortError" || e.name === "TimeoutError" || e.name === "TypeError") return true;
+    return /failed to fetch|networkerror|load failed|timed? ?out/i.test(e.message || "");
+  }
   var DEFAULT_BASE_URLS = {
     anthropic: "https://api.anthropic.com",
     openai: "https://api.openai.com",
@@ -147,6 +172,7 @@ var TraceBugProviderAPI = (() => {
     if (err && typeof err === "object") {
       const e = err;
       if (e.name === "AbortError") return `${label} request was cancelled.`;
+      if (e.name === "TimeoutError") return `${label} didn't answer in time.`;
       if (e.name === "TypeError" || /failed to fetch|networkerror|load failed/i.test(e.message || "")) {
         return `Could not reach ${label}. Check your connection, and that TraceBug has access to it in settings.`;
       }
@@ -203,8 +229,10 @@ var TraceBugProviderAPI = (() => {
         title: content.title,
         // Backstop: the extension already capped this before the confirmation
         // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-        body: capProviderBody("github", content.body).text,
-        labels: config.labels && config.labels.length ? config.labels : void 0
+        body: bodyWithMarker("github", content.body, content.marker),
+        labels: config.labels && config.labels.length ? config.labels : void 0,
+        assignees: config.assignees && config.assignees.length ? config.assignees : void 0,
+        milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
@@ -680,8 +708,8 @@ var TraceBugProviderAPI = (() => {
   // src/providers/oauth-clients.ts
   var TODO_OWNER_CLIENT_ID = "TODO_OWNER_CLIENT_ID";
   var OAUTH_CLIENTS = {
-    /** GitHub App with Device Flow enabled (Issues: R/W, Metadata: R). */
-    github: TODO_OWNER_CLIENT_ID,
+    /** GitHub App "TraceBug Dev" (org tracebugdev), Device Flow on (Issues: R/W, Metadata: R). */
+    github: "Iv23lidsU0w7Ezzc9qyb",
     /** Linear OAuth app; PKCE, scopes `read,write`. */
     linear: TODO_OWNER_CLIENT_ID,
     /** Microsoft Entra app registration, multi-tenant, Azure DevOps delegated permission. */
@@ -689,6 +717,7 @@ var TraceBugProviderAPI = (() => {
     /** gitlab.com application, "Confidential" unticked, scope `api`. */
     gitlab: TODO_OWNER_CLIENT_ID
   };
+  var GITHUB_APP_INSTALL_URL = "https://github.com/apps/tracebug-dev/installations/new";
   function hasOAuthClient(tracker) {
     const id = OAUTH_CLIENTS[tracker];
     return !!id && id !== TODO_OWNER_CLIENT_ID;
@@ -697,6 +726,8 @@ var TraceBugProviderAPI = (() => {
   // src/providers/trackers.ts
   var MAX_CONTAINERS = 500;
   var MAX_LABELS = 300;
+  var MAX_PEOPLE = 300;
+  var MAX_INSTALLATIONS = 20;
   function asList(v) {
     if (Array.isArray(v)) return v.filter((s) => typeof s === "string" && s);
     return typeof v === "string" && v ? [v] : [];
@@ -717,24 +748,45 @@ var TraceBugProviderAPI = (() => {
     }
     return null;
   }
-  async function ghPages(auth, first, max, signal) {
+  async function ghPages(auth, first, max, signal, key) {
     const out = [];
     let url = first;
     while (url && out.length < max) {
       if (!url.startsWith(GH_API + "/")) break;
       const res = await fetch(url, { headers: ghHeaders(auth), signal });
       const data = await parseJsonOrThrow(res, "GitHub", "tracker");
-      if (!Array.isArray(data)) break;
-      out.push(...data);
+      const list = key && data && typeof data === "object" ? data[key] : data;
+      if (!Array.isArray(list)) break;
+      out.push(...list);
       url = nextLink(res.headers.get("link"));
     }
     return out.slice(0, max);
+  }
+  function toContainers(repos) {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const r of repos) {
+      if (typeof r.full_name !== "string" || r.archived || seen.has(r.full_name)) continue;
+      seen.add(r.full_name);
+      out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : void 0 });
+    }
+    return out;
+  }
+  async function optionalList(p) {
+    try {
+      return await p;
+    } catch (err) {
+      const s = err.status;
+      if (s === 403 || s === 404) return [];
+      throw err;
+    }
   }
   var github = {
     id: "github",
     label: "GitHub",
     containerNoun: "Repository",
     apiHosts: ["https://api.github.com/*"],
+    manageUrl: GITHUB_APP_INSTALL_URL,
     connect() {
       if (!hasOAuthClient("github")) return null;
       return {
@@ -755,28 +807,98 @@ var TraceBugProviderAPI = (() => {
       return d.login || "";
     },
     async listContainers(auth, signal) {
-      const repos = await ghPages(
+      if (auth.via === "oauth") {
+        const installs = await ghPages(
+          auth,
+          `${GH_API}/user/installations?per_page=100`,
+          MAX_INSTALLATIONS,
+          signal,
+          "installations"
+        );
+        const repos = [];
+        for (const inst of installs) {
+          if (typeof inst.id !== "number" || repos.length >= MAX_CONTAINERS) continue;
+          repos.push(...await ghPages(
+            auth,
+            `${GH_API}/user/installations/${inst.id}/repositories?per_page=100`,
+            MAX_CONTAINERS - repos.length,
+            signal,
+            "repositories"
+          ));
+        }
+        return toContainers(repos);
+      }
+      return toContainers(await ghPages(
         auth,
         `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
         MAX_CONTAINERS,
         signal
-      );
-      return repos.filter((r) => typeof r.full_name === "string" && !r.archived).map((r) => ({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : void 0 }));
+      ));
     },
     async listFields(auth, container, signal) {
       if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
-      const labels = await ghPages(auth, `${GH_API}/repos/${container}/labels?per_page=100`, MAX_LABELS, signal);
-      const options = labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name, label: l.name }));
-      return [{
+      const base = `${GH_API}/repos/${container}`;
+      const [labels, people, milestones, repo] = await Promise.all([
+        ghPages(auth, `${base}/labels?per_page=100`, MAX_LABELS, signal),
+        optionalList(ghPages(auth, `${base}/assignees?per_page=100`, MAX_PEOPLE, signal)),
+        optionalList(ghPages(
+          auth,
+          `${base}/milestones?state=open&per_page=100`,
+          MAX_LABELS,
+          signal
+        )),
+        // Only for its `permissions`: whether the warning below applies.
+        fetch(base, { headers: ghHeaders(auth), signal }).then((r) => r.ok ? r.json() : null).catch(() => null)
+      ]);
+      const fields = [{
         key: "labels",
         label: "Labels",
         kind: "multi",
-        options,
-        note: "GitHub drops labels silently unless you can push to the repository."
+        options: labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name, label: l.name }))
       }];
+      if (people.length) {
+        fields.push({
+          key: "assignee",
+          label: "Assignee",
+          kind: "single",
+          options: people.filter((p) => typeof p.login === "string").map((p) => ({ id: p.login, label: p.login }))
+        });
+      }
+      if (milestones.length) {
+        fields.push({
+          key: "milestone",
+          label: "Milestone",
+          kind: "single",
+          options: milestones.filter((m) => typeof m.number === "number").map((m) => ({ id: String(m.number), label: m.title || `#${m.number}` }))
+        });
+      }
+      if (repo && repo.permissions && repo.permissions.push === false) {
+        fields[fields.length - 1].note = "You can't push to this repository, so GitHub will drop labels, assignees and milestones.";
+      }
+      return fields;
     },
     async createIssue(auth, container, values, content, signal) {
-      return postGitHubIssue({ token: auth.token, repo: container, labels: asList(values.labels) }, content, signal);
+      const milestone = Number(asList(values.milestone)[0]);
+      return postGitHubIssue({
+        token: auth.token,
+        repo: container,
+        labels: asList(values.labels),
+        assignees: asList(values.assignee).slice(0, 1),
+        milestone: Number.isInteger(milestone) && milestone > 0 ? milestone : void 0
+      }, content, signal);
+    },
+    async findIssueByMarker(auth, container, marker, signal) {
+      const mark = issueMarkerComment(marker);
+      if (!mark || !/^[\w.-]+\/[\w.-]+$/.test(container)) return null;
+      const res = await fetch(
+        `${GH_API}/repos/${container}/issues?state=all&sort=created&direction=desc&per_page=30`,
+        { headers: ghHeaders(auth), signal }
+      );
+      const list = await parseJsonOrThrow(res, "GitHub", "tracker");
+      if (!Array.isArray(list)) return null;
+      const hit = list.find((i) => typeof i.body === "string" && i.body.includes(mark));
+      if (!hit || typeof hit.html_url !== "string") return null;
+      return { provider: "github", ok: true, url: hit.html_url, ref: hit.number ? `#${hit.number}` : void 0 };
     }
   };
   function linearAuthHeader(auth) {

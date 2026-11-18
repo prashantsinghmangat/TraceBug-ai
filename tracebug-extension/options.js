@@ -473,7 +473,6 @@ function trackerMsg(type, extra) {
 
 const PILL_IDS = { github: "ghPill", linear: "lnPill" };
 const ADVANCED_IDS = { github: "ghAdvanced", linear: "lnAdvanced" };
-const acctPolls = {};
 
 async function renderTrackerAccounts() {
   const res = await trackerMsg("tb:tracker:status");
@@ -498,6 +497,15 @@ async function renderTrackerAccounts() {
     // No button to show → no empty row under the account line.
     connect.parentElement.hidden = connect.hidden && disconnect.hidden;
     disconnect.onclick = () => disconnectFromOptions(t, box);
+    // Signed in: pick the default repo/team here (filled once per render).
+    const pickWrap = box.querySelector(".acct-default-wrap");
+    if (pickWrap) {
+      pickWrap.hidden = t.via !== "oauth";
+      if (t.via === "oauth") {
+        TraceBugTrackerConnect.fillDefaultPicker(t, pickWrap.querySelector("select"),
+          (text, isErr) => say(box.querySelector(".acct-status"), text, isErr ? "err" : "ok", isErr ? " " : ""));
+      }
+    }
     const pillEl = $(PILL_IDS[t.id]);
     if (pillEl) {
       pillEl.textContent = t.via === "oauth" ? "Connected" : t.connected ? "Configured" : t.needsReconnect ? "Reconnect" : "Not configured";
@@ -511,57 +519,22 @@ async function renderTrackerAccounts() {
 
 function connectFromOptions(t, box) {
   const status = box.querySelector(".acct-status");
-  const perm = t.connectPermissions || { permissions: [], origins: [] };
-  // permissions.request first, synchronously in the click (user gesture).
-  const ask = (perm.permissions.length || perm.origins.length)
-    ? new Promise((resolve) => {
-      try { chrome.permissions.request(perm, (g) => { void chrome.runtime.lastError; resolve(!!g); }); }
-      catch { resolve(false); }
-    })
-    : Promise.resolve(true);
-  ask.then(async (granted) => {
-    if (!granted) { say(status, "TraceBug needs that permission to sign in to " + t.label + ".", "err"); return; }
-    say(status, "Connecting to " + t.label + "…", "ok");
-    const res = await trackerMsg("tb:tracker:connect", { tracker: t.id });
-    if (!res || res.error) { say(status, (res && res.error) || "Could not connect.", "err"); return; }
-    if (res.flow === "device") {
-      const dev = box.querySelector(".device");
-      box.querySelector(".device-code").textContent = res.userCode || "";
-      const link = box.querySelector(".device-link");
-      link.textContent = String(res.verificationUri || "").replace(/^https:\/\//, "");
-      link.onclick = (e) => {
-        e.preventDefault();
-        try {
-          const u = new URL(res.verificationUri);
-          if (u.protocol === "https:") chrome.tabs.create({ url: u.toString() });
-        } catch {}
-      };
-      if (dev) dev.hidden = false;
-      say(status, "Waiting for you to enter the code…", "ok");
-      pollFromOptions(t, box, res.interval || 5);
-      return;
-    }
-    say(status, "Connected" + (res.account ? " as " + res.account : "") + ".", "ok");
-    await renderTrackerAccounts();
+  const dev = box.querySelector(".device");
+  // TraceBugTrackerConnect (tracker-connect.js) asks for permissions inside
+  // this click, copies the device code, opens GitHub's page and polls.
+  TraceBugTrackerConnect.connect(t, {
+    say: (text, isErr) => say(status, text, isErr ? "err" : "ok", isErr ? "" : " "),
+    code: (code) => {
+      box.querySelector(".device-code").textContent = code || "";
+      if (dev) dev.hidden = !code;
+    },
+    done: async (account) => {
+      say(status, "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
+      await renderTrackerAccounts();
+      const pick = box.querySelector(".acct-default");
+      if (pick && !pick.closest("[hidden]")) pick.focus();
+    },
   });
-}
-
-function pollFromOptions(t, box, seconds) {
-  clearTimeout(acctPolls[t.id]);
-  acctPolls[t.id] = setTimeout(async () => {
-    const status = box.querySelector(".acct-status");
-    const dev = box.querySelector(".device");
-    const res = await trackerMsg("tb:tracker:connect-poll", { tracker: t.id });
-    if (!res || res.error) {
-      if (dev) dev.hidden = true;
-      say(status, (res && res.error) || "Sign-in failed. Click Connect to try again.", "err");
-      return;
-    }
-    if (res.status === "pending") { pollFromOptions(t, box, res.interval || seconds); return; }
-    if (dev) dev.hidden = true;
-    say(status, "Connected" + (res.account ? " as " + res.account : "") + ".", "ok");
-    await renderTrackerAccounts();
-  }, Math.max(1, seconds) * 1000);
 }
 
 async function disconnectFromOptions(t, box) {

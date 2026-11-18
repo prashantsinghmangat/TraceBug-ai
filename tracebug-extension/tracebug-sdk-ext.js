@@ -32207,6 +32207,18 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   });
 
   // src/providers/api.ts
+  function issueMarkerComment(marker) {
+    return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+  }
+  function bodyWithMarker(provider, body, marker) {
+    var _a2;
+    const text = capProviderBody(provider, body).text;
+    const mark2 = issueMarkerComment(marker);
+    if (!mark2) return text;
+    const limit = (_a2 = PROVIDER_BODY_LIMITS[provider]) != null ? _a2 : PROVIDER_BODY_LIMITS.github;
+    const room = limit - mark2.length - 2;
+    return (text.length > room ? text.slice(0, room) : text) + "\n\n" + mark2;
+  }
   function withCommas(n2) {
     return String(n2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
@@ -32298,8 +32310,10 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         title: content.title,
         // Backstop: the extension already capped this before the confirmation
         // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-        body: capProviderBody("github", content.body).text,
-        labels: config.labels && config.labels.length ? config.labels : void 0
+        body: bodyWithMarker("github", content.body, content.marker),
+        labels: config.labels && config.labels.length ? config.labels : void 0,
+        assignees: config.assignees && config.assignees.length ? config.assignees : void 0,
+        milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
@@ -32468,10 +32482,11 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  var DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
+  var MARKER_RE, DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
   var init_api = __esm({
     "src/providers/api.ts"() {
       "use strict";
+      MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
       DEFAULT_BASE_URLS = {
         anthropic: "https://api.anthropic.com",
         openai: "https://api.openai.com",
@@ -34913,7 +34928,7 @@ ${report.steps}`;
       const ref = result2.ref ? ` ${result2.ref}` : "";
       const where = result2.label || TRACKER_LABELS[provider];
       if (result2.url) {
-        if (!result2.opened) window.open(result2.url, "_blank", "noopener,noreferrer");
+        if (!result2.opened && !result2.shown) window.open(result2.url, "_blank", "noopener,noreferrer");
         showToast(`\u2713 ${where} issue created${ref}`, root2);
       } else {
         showToast(`\u2713 Sent to ${where}`, root2);

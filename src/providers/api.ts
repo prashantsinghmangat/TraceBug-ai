@@ -28,6 +28,10 @@ export interface GitHubConfig {
   repo: string;
   /** Optional default labels applied to created issues. */
   labels?: string[];
+  /** Logins to assign. GitHub drops them silently without push access. */
+  assignees?: string[];
+  /** Milestone NUMBER (not title). */
+  milestone?: number;
 }
 
 export interface LinearConfig {
@@ -61,6 +65,11 @@ export interface CreateIssueResult {
   opaque?: boolean;
   /** The extension already opened `url` in a new tab (ADR 010). */
   opened?: boolean;
+  /** The extension's Create panel already showed the result with its link:
+   *  the page must not open the issue itself. */
+  shown?: boolean;
+  /** A retry found the issue an earlier, unclear attempt had already filed. */
+  found?: boolean;
   /** Display name of the tracker it actually went to — the Create panel can switch. */
   label?: string;
 }
@@ -69,6 +78,42 @@ export interface CreateIssueResult {
 export interface IssueContent {
   title: string;
   body: string;
+  /** "tracebug:<id>", written as an invisible HTML comment at the end of the
+   *  body so a retry after an unclear failure can find the issue it may have
+   *  already created (GitHub has no idempotency key). */
+  marker?: string;
+}
+
+const MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
+
+/** The comment a marker is written as, or "" for a malformed marker. */
+export function issueMarkerComment(marker: string | undefined): string {
+  return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+}
+
+/** Body + marker, still within the provider's limit. */
+export function bodyWithMarker(provider: TrackerProvider, body: string, marker?: string): string {
+  const text = capProviderBody(provider, body).text;
+  const mark = issueMarkerComment(marker);
+  if (!mark) return text;
+  const limit = PROVIDER_BODY_LIMITS[provider] ?? PROVIDER_BODY_LIMITS.github;
+  const room = limit - mark.length - 2;
+  return (text.length > room ? text.slice(0, room) : text) + "\n\n" + mark;
+}
+
+/**
+ * Did this failure leave it unknown whether the tracker acted? A network
+ * error, an abort or a timeout: the request may have landed. Anything the
+ * tracker answered (an HTTP status) or that stopped before sending (no
+ * credential) is clear.
+ */
+export function isUnclearFailure(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { name?: string; message?: string; status?: unknown };
+  if (typeof e.status === "number") return false;
+  if (e.name === "ReconnectNeededError" || e.name === "NotConnectedError" || e.name === "ProviderHttpError") return false;
+  if (e.name === "AbortError" || e.name === "TimeoutError" || e.name === "TypeError") return true;
+  return /failed to fetch|networkerror|load failed|timed? ?out/i.test(e.message || "");
 }
 
 /** What the page supplies for a Slack send. */
@@ -278,6 +323,7 @@ export function mapProviderError(err: unknown, label: string): string {
   if (err && typeof err === "object") {
     const e = err as { name?: string; message?: string };
     if (e.name === "AbortError") return `${label} request was cancelled.`;
+    if (e.name === "TimeoutError") return `${label} didn't answer in time.`;
     // A bare "Failed to fetch"/"NetworkError" means DNS, offline, or a host
     // permission we were never granted — never a provider rejection, because
     // those arrive with a status.
@@ -389,8 +435,10 @@ export async function postGitHubIssue(
       title: content.title,
       // Backstop: the extension already capped this before the confirmation
       // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-      body: capProviderBody("github", content.body).text,
+      body: bodyWithMarker("github", content.body, content.marker),
       labels: config.labels && config.labels.length ? config.labels : undefined,
+      assignees: config.assignees && config.assignees.length ? config.assignees : undefined,
+      milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : undefined,
     }),
   });
   const data = await parseJsonOrThrow(res, "GitHub", "tracker");

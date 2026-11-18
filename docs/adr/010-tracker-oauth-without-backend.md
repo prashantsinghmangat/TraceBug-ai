@@ -75,6 +75,11 @@ the extension is public.
   "Required unless the user access token was generated using the device flow" ([refreshing tokens][gh-refresh]).
 - **The web flow is not an option.** PKCE was added in 2025, but the web flow's token exchange still requires the
   secret ([changelog][gh-pkce]).
+- **Registered 2026-11-18:** GitHub App **TraceBug Dev**, owned by the free org `tracebugdev` (so the consent
+  screen names the product, not a person), client ID `Iv23lidsU0w7Ezzc9qyb`, Device Flow on, webhook off, Issues
+  read & write + Metadata read, installable on any account. No client secret or private key was generated.
+  The app must stay **public** (Advanced → Make public): a private app installs only on `tracebugdev`.
+  Public page: `https://github.com/apps/tracebug-dev`.
 - **Why a GitHub App rather than an OAuth App:** the user picks which repos it can see, and its permissions are narrow.
   - We need Issues: read & write and Metadata: read ([permissions][gh-perms]).
   - Repos come from `GET /user/installations` → `/user/installations/{id}/repositories`.
@@ -135,6 +140,13 @@ the extension is public.
 Every flow above ends with a token issued straight to the extension, by a request the extension makes itself. No
 TraceBug server sees the token, the report or the tracker's answer. Where that is impossible (Jira, Slack, ClickUp,
 Notion, Asana), we keep the token path rather than add a server.
+
+**Rejected 2026-11-18: a token-swap endpoint for one-popup GitHub sign-in (Jam's model).** GitHub's redirect flow
+needs the client secret at the code exchange even with PKCE (docs checked 2026-11-18), so a single Authorize popup
+requires a server holding the secret. It would break ADR 001, put every user's token in transit through our server,
+and add an uptime dependency to filing a bug. GitHub stays on the device flow; the friction is reduced in the client
+instead (popup window, code on the clipboard, auto-close, in-page panel). Jam's MCP OAuth is the same story: it exists because Jam's data is in its cloud; TraceBug's MCP is stdio over
+local files and needs no sign-in.
 
 ## Later candidates (not built)
 

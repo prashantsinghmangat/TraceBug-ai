@@ -11,10 +11,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CreateIssueResult, IssueContent } from "./api";
-import { capProviderBody, parseJsonOrThrow, postGitHubIssue, postLinearIssue } from "./api";
+import { capProviderBody, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue } from "./api";
 import type { IssueTracker, ResolvedAuth } from "./auth-store";
 import type { OAuthSpec } from "./oauth";
-import { OAUTH_CLIENTS, hasOAuthClient } from "./oauth-clients";
+import { GITHUB_APP_INSTALL_URL, OAUTH_CLIENTS, hasOAuthClient } from "./oauth-clients";
 
 export interface Container {
   /** What the API takes: "owner/repo", a team id, … */
@@ -55,6 +55,8 @@ export interface TrackerAdapter {
   containerNoun: string;
   /** Host permissions the API calls need. */
   apiHosts: string[];
+  /** Where a signed-in user adds more containers (e.g. the GitHub App's install page). */
+  manageUrl?: string;
   /** Built from oauth-clients.ts; null until the owner registers the app. */
   connect(): ConnectSpec | null;
   whoAmI(auth: ResolvedAuth, signal?: AbortSignal): Promise<string>;
@@ -67,11 +69,23 @@ export interface TrackerAdapter {
     content: IssueContent,
     signal?: AbortSignal,
   ): Promise<CreateIssueResult>;
+  /** The issue carrying this marker, among the container's newest — how a
+   *  retry after an unclear failure avoids filing a duplicate. Absent for a
+   *  tracker that can't search for it. */
+  findIssueByMarker?(
+    auth: ResolvedAuth,
+    container: string,
+    marker: string,
+    signal?: AbortSignal,
+  ): Promise<CreateIssueResult | null>;
 }
 
 /** Upper bound on what one picker lists — a search box, not an export. */
 export const MAX_CONTAINERS = 500;
 const MAX_LABELS = 300;
+const MAX_PEOPLE = 300;
+/** Installations walked for repos. A user in more orgs than this can type the repo. */
+const MAX_INSTALLATIONS = 20;
 
 function asList(v: string | string[] | undefined): string[] {
   if (Array.isArray(v)) return v.filter((s) => typeof s === "string" && s);
@@ -100,7 +114,18 @@ export function nextLink(link: string | null): string | null {
   return null;
 }
 
-async function ghPages<T>(auth: ResolvedAuth, first: string, max: number, signal?: AbortSignal): Promise<T[]> {
+/**
+ * Follow GitHub's pagination. `key` names the array inside an object response
+ * (`/user/installations` answers `{ installations: [...] }`); without it the
+ * response itself is the array.
+ */
+async function ghPages<T>(
+  auth: ResolvedAuth,
+  first: string,
+  max: number,
+  signal?: AbortSignal,
+  key?: string,
+): Promise<T[]> {
   const out: T[] = [];
   let url: string | null = first;
   while (url && out.length < max) {
@@ -108,11 +133,36 @@ async function ghPages<T>(auth: ResolvedAuth, first: string, max: number, signal
     if (!url.startsWith(GH_API + "/")) break;
     const res = await fetch(url, { headers: ghHeaders(auth), signal });
     const data = (await parseJsonOrThrow(res, "GitHub", "tracker")) as unknown;
-    if (!Array.isArray(data)) break;
-    out.push(...(data as T[]));
+    const list = key && data && typeof data === "object" ? (data as Record<string, unknown>)[key] : data;
+    if (!Array.isArray(list)) break;
+    out.push(...(list as T[]));
     url = nextLink(res.headers.get("link"));
   }
   return out.slice(0, max);
+}
+
+type GhRepo = { full_name?: string; private?: boolean; archived?: boolean };
+
+function toContainers(repos: GhRepo[]): Container[] {
+  const seen = new Set<string>();
+  const out: Container[] = [];
+  for (const r of repos) {
+    if (typeof r.full_name !== "string" || r.archived || seen.has(r.full_name)) continue;
+    seen.add(r.full_name);
+    out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : undefined });
+  }
+  return out;
+}
+
+/** A list that may legitimately be refused (no push access → 403/404): empty, not an error. */
+async function optionalList<T>(p: Promise<T[]>): Promise<T[]> {
+  try {
+    return await p;
+  } catch (err) {
+    const s = (err as { status?: number }).status;
+    if (s === 403 || s === 404) return [];
+    throw err;
+  }
 }
 
 export const github: TrackerAdapter = {
@@ -120,6 +170,7 @@ export const github: TrackerAdapter = {
   label: "GitHub",
   containerNoun: "Repository",
   apiHosts: ["https://api.github.com/*"],
+  manageUrl: GITHUB_APP_INSTALL_URL,
   connect() {
     if (!hasOAuthClient("github")) return null;
     return {
@@ -140,32 +191,93 @@ export const github: TrackerAdapter = {
     return d.login || "";
   },
   async listContainers(auth, signal) {
-    type Repo = { full_name?: string; private?: boolean; archived?: boolean };
-    const repos = await ghPages<Repo>(
+    if (auth.via === "oauth") {
+      // A GitHub App sees only the repos the user installed it on, so list
+      // those — /user/repos would offer repos the app cannot file into.
+      const installs = await ghPages<{ id?: number }>(
+        auth, `${GH_API}/user/installations?per_page=100`, MAX_INSTALLATIONS, signal, "installations");
+      const repos: GhRepo[] = [];
+      for (const inst of installs) {
+        if (typeof inst.id !== "number" || repos.length >= MAX_CONTAINERS) continue;
+        repos.push(...await ghPages<GhRepo>(
+          auth, `${GH_API}/user/installations/${inst.id}/repositories?per_page=100`,
+          MAX_CONTAINERS - repos.length, signal, "repositories"));
+      }
+      return toContainers(repos);
+    }
+    return toContainers(await ghPages<GhRepo>(
       auth,
       `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
       MAX_CONTAINERS,
       signal,
-    );
-    return repos
-      .filter((r) => typeof r.full_name === "string" && !r.archived)
-      .map((r) => ({ id: r.full_name!, label: r.full_name!, detail: r.private ? "private" : undefined }));
+    ));
   },
   async listFields(auth, container, signal) {
     if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
-    type Label = { name?: string };
-    const labels = await ghPages<Label>(auth, `${GH_API}/repos/${container}/labels?per_page=100`, MAX_LABELS, signal);
-    const options = labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name!, label: l.name! }));
-    return [{
+    const base = `${GH_API}/repos/${container}`;
+    const [labels, people, milestones, repo] = await Promise.all([
+      ghPages<{ name?: string }>(auth, `${base}/labels?per_page=100`, MAX_LABELS, signal),
+      optionalList(ghPages<{ login?: string }>(auth, `${base}/assignees?per_page=100`, MAX_PEOPLE, signal)),
+      optionalList(ghPages<{ number?: number; title?: string }>(
+        auth, `${base}/milestones?state=open&per_page=100`, MAX_LABELS, signal)),
+      // Only for its `permissions`: whether the warning below applies.
+      fetch(base, { headers: ghHeaders(auth), signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null) as Promise<{ permissions?: { push?: boolean } } | null>,
+    ]);
+    const fields: FieldSpec[] = [{
       key: "labels",
       label: "Labels",
       kind: "multi",
-      options,
-      note: "GitHub drops labels silently unless you can push to the repository.",
+      options: labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name!, label: l.name! })),
     }];
+    if (people.length) {
+      fields.push({
+        key: "assignee",
+        label: "Assignee",
+        kind: "single",
+        options: people.filter((p) => typeof p.login === "string").map((p) => ({ id: p.login!, label: p.login! })),
+      });
+    }
+    if (milestones.length) {
+      fields.push({
+        key: "milestone",
+        label: "Milestone",
+        kind: "single",
+        options: milestones
+          .filter((m) => typeof m.number === "number")
+          .map((m) => ({ id: String(m.number), label: m.title || `#${m.number}` })),
+      });
+    }
+    // Shown only when it applies: a known "no push access". Unknown → no note.
+    if (repo && repo.permissions && repo.permissions.push === false) {
+      fields[fields.length - 1].note =
+        "You can't push to this repository, so GitHub will drop labels, assignees and milestones.";
+    }
+    return fields;
   },
   async createIssue(auth, container, values, content, signal) {
-    return postGitHubIssue({ token: auth.token, repo: container, labels: asList(values.labels) }, content, signal);
+    const milestone = Number(asList(values.milestone)[0]);
+    return postGitHubIssue({
+      token: auth.token,
+      repo: container,
+      labels: asList(values.labels),
+      assignees: asList(values.assignee).slice(0, 1),
+      milestone: Number.isInteger(milestone) && milestone > 0 ? milestone : undefined,
+    }, content, signal);
+  },
+  async findIssueByMarker(auth, container, marker, signal) {
+    const mark = issueMarkerComment(marker);
+    if (!mark || !/^[\w.-]+\/[\w.-]+$/.test(container)) return null;
+    const res = await fetch(
+      `${GH_API}/repos/${container}/issues?state=all&sort=created&direction=desc&per_page=30`,
+      { headers: ghHeaders(auth), signal });
+    const list = (await parseJsonOrThrow(res, "GitHub", "tracker")) as unknown;
+    if (!Array.isArray(list)) return null;
+    const hit = list.find((i: { body?: unknown }) => typeof i.body === "string" && i.body.includes(mark)) as
+      { html_url?: string; number?: number } | undefined;
+    if (!hit || typeof hit.html_url !== "string") return null;
+    return { provider: "github", ok: true, url: hit.html_url, ref: hit.number ? `#${hit.number}` : undefined };
   },
 };
 

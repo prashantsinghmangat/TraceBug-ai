@@ -36,10 +36,12 @@
     "tb:tracker:connect",
     "tb:tracker:connect-poll",
     "tb:tracker:disconnect",
+    // Settings / onboarding: the repo/team to start from next time.
+    "tb:tracker:set-default",
   ];
 
   // The pages allowed to send them.
-  var TRACKER_UI_PAGES = ["confirm-send.html", "options.html"];
+  var TRACKER_UI_PAGES = ["confirm-send.html", "options.html", "welcome.html"];
 
   // What a Create-panel choice may carry, at most.
   var MAX_CONTAINER_CHARS = 300;

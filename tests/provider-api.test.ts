@@ -12,7 +12,7 @@
 //      backwards would either break page mode or keep lying about delivery.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  friendlyStatus, mapProviderError, PROVIDER_ORIGINS,
+  friendlyStatus, mapProviderError, PROVIDER_ORIGINS, isUnclearFailure, issueMarkerComment, ProviderHttpError,
   postGitHubIssue, postLinearIssue, postSlackMessage, callLLM,
   capProviderBody, PROVIDER_BODY_LIMITS,
 } from '../src/providers/api';
@@ -412,5 +412,28 @@ describe('the send paths cap the body themselves', () => {
     );
     const sent = JSON.parse(String((readable.mock.calls[0][1] as RequestInit).body));
     expect(sent.text.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.slack);
+  });
+});
+
+describe('isUnclearFailure (duplicate guard)', () => {
+  it('treats network errors, aborts and timeouts as unclear', () => {
+    expect(isUnclearFailure(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isUnclearFailure(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(true);
+    expect(isUnclearFailure(Object.assign(new Error('x'), { name: 'TimeoutError' }))).toBe(true);
+  });
+  it('treats an answer from the tracker, or no credential, as clear', () => {
+    expect(isUnclearFailure(new ProviderHttpError('GitHub: 422', 422))).toBe(false);
+    expect(isUnclearFailure(Object.assign(new Error('x'), { name: 'ReconnectNeededError' }))).toBe(false);
+    expect(isUnclearFailure(Object.assign(new Error('x'), { name: 'NotConnectedError' }))).toBe(false);
+    expect(isUnclearFailure(new Error('Pick a repository'))).toBe(false);
+    expect(isUnclearFailure(null)).toBe(false);
+  });
+  it('writes only a well-formed marker', () => {
+    expect(issueMarkerComment('tracebug:abc_1-2')).toBe('<!-- tracebug:abc_1-2 -->');
+    expect(issueMarkerComment('tracebug:a -->x')).toBe('');
+    expect(issueMarkerComment(undefined)).toBe('');
+  });
+  it('maps a timeout to a sentence', () => {
+    expect(mapProviderError(Object.assign(new Error('x'), { name: 'TimeoutError' }), 'GitHub')).toMatch(/didn't answer/);
   });
 });

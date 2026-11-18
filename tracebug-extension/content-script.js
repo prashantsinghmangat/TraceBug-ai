@@ -183,8 +183,10 @@ safeRun(function () {
       shortcut: typeof shortcut === "string" ? shortcut : "",
       // A credential is enough since ADR 010: the repo/team is picked in the
       // extension's Create window, not typed in settings.
-      github: !!((i.github && i.github.token) || o.github),
-      linear: !!((i.linear && i.linear.apiKey) || o.linear),
+      // …or nothing yet, where this build can sign in: the Create window
+      // offers Connect (the worker's `connectable`, booleans only).
+      github: !!((i.github && i.github.token) || o.github || (workerAnswer && workerAnswer.connectable && workerAnswer.connectable.github)),
+      linear: !!((i.linear && i.linear.apiKey) || o.linear || (workerAnswer && workerAnswer.connectable && workerAnswer.connectable.linear)),
       slack: !!(i.slack && i.slack.webhookUrl),
       // Ollama is local and needs no key, so "configured" means a provider is
       // chosen and either it's ollama or a key is present.

@@ -54,6 +54,10 @@ const ctx = await chromium.launchPersistentContext(
 // ── GitHub stub ────────────────────────────────────────────────────────────
 const apiHits = [];
 let issuePost = null;
+let issuePosts = 0;
+// The first POST "lands" at GitHub but the answer never arrives (connection
+// dropped) — the unclear failure the duplicate guard exists for.
+let dropFirstAnswer = true;
 await ctx.route("https://api.github.com/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
@@ -66,13 +70,26 @@ await ctx.route("https://api.github.com/**", async (route) => {
   }
   if (req.method() === "GET" && url.pathname === "/repos/acme/api/labels") return ok([{ name: "bug" }, { name: "ui" }]);
   if (req.method() === "GET" && url.pathname === "/repos/acme/widgets/labels") return ok([{ name: "triage" }]);
+  if (req.method() === "GET" && url.pathname === "/repos/acme/api") return ok({ permissions: { push: true } });
+  if (req.method() === "GET" && url.pathname === "/repos/acme/widgets") return ok({ permissions: { push: false } });
+  if (req.method() === "GET" && url.pathname === "/repos/acme/api/issues") {
+    // The retry's look-up: the issue the dropped POST created is there.
+    return ok(issuePost ? [{ number: 42, html_url: ISSUE_URL, body: issuePost.body }] : []);
+  }
   if (req.method() === "POST" && url.pathname === "/repos/acme/api/issues") {
+    issuePosts++;
     issuePost = JSON.parse(req.postData() || "{}");
+    if (dropFirstAnswer) {
+      dropFirstAnswer = false;
+      await new Promise((r) => setTimeout(r, 700));
+      return route.abort("connectionreset");
+    }
     return ok({ html_url: ISSUE_URL, number: 42 });
   }
   return route.fulfill({ status: 404, contentType: "application/json", body: '{"message":"Not Found"}' });
 });
-// The created issue opens in a tab: answer it locally, never the real site.
+// The created issue opens in a tab. Best effort: Playwright routes may not reach a tab the
+// extension opens, so the checks below read only the tab's URL, never its content.
 await ctx.route("https://github.com/**", (route) =>
   route.fulfill({ status: 200, contentType: "text/html", body: "<title>acme/api#42</title><h1>Issue 42</h1>" }));
 
@@ -154,11 +171,16 @@ try {
 
   await win.waitForSelector("#panel:not([hidden])", { timeout: 8000 });
   check("the Create panel is shown for a GitHub send", true);
+  check('the window is titled "Create GitHub issue"',
+    (await win.title()) === "Create GitHub issue" && (await win.textContent("#heading")).trim() === "Create GitHub issue",
+    await win.title());
   check("the tracker menu offers GitHub and Linear",
     JSON.stringify(await win.$$eval("#tracker option", (os) => os.map((o) => o.value))) === '["github","linear"]');
   check('the button reads "Create issue"', (await win.textContent("#send")).trim() === "Create issue");
   check("Create waits for a repository", await win.isDisabled("#send"));
-  check("Connect is not offered before the app is registered", !(await win.isVisible("#connect")));
+  check("no Connect box while a saved token works", !(await win.isVisible("#connect")));
+  check("no countdown", (await win.textContent("#countdown")).trim() === "");
+  check("no duplicate Destination/Via rows", !(await win.isVisible("#meta")));
 
   await win.waitForFunction(() => document.querySelectorAll("#containerList option").length > 0, null, { timeout: 8000 });
   const listed = await win.$$eval("#containerList option", (os) => os.map((o) => o.value));
@@ -166,22 +188,49 @@ try {
     JSON.stringify(listed) === '["acme/widgets","acme/api"]', JSON.stringify(listed));
   check("the worker's fetches went through the stub", apiHits.includes("GET /user/repos"), apiHits.join(", "));
 
+  // A repo the user can't push to: the warning shows.
+  await win.fill("#container", "acme/widgets");
+  await win.dispatchEvent("#container", "change");
+  await win.waitForSelector('fieldset[data-field="labels"] button.chip[value="triage"]', { timeout: 8000 });
+  check("push warning shows for a repo the user can't push to",
+    /can't push/.test(await win.textContent("#fields")), await win.textContent("#fields"));
+
   await win.fill("#container", "acme/api");
   await win.dispatchEvent("#container", "change");
-  await win.waitForSelector('fieldset[data-field="labels"] input[value="bug"]', { timeout: 8000 });
-  check("labels load for the picked repo", true);
-  check("the destination shows the pick", (await win.textContent("#destination")).trim() === "acme/api");
-  await win.check('fieldset[data-field="labels"] input[value="bug"]');
+  await win.waitForSelector('fieldset[data-field="labels"] button.chip[value="bug"]', { timeout: 8000 });
+  check("labels load for the picked repo, as chips", true);
+  check("…and no push warning where the user can push", !/can't push/.test(await win.textContent("#fields")));
+  check('"bug" is ticked by default', (await win.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true");
+  check("other labels are not", (await win.getAttribute('button.chip[value="ui"]', "aria-pressed")) === "false");
   check("Create is enabled once a repo is picked", !(await win.isDisabled("#send")));
 
-  const issueTabP = ctx.waitForEvent("page", { predicate: (p) => p.url().startsWith(ISSUE_URL), timeout: 10000 });
+  // ── Unclear failure: GitHub took the POST, the answer was lost ──
   await win.click("#send");
-  const issueTab = await issueTabP.catch(() => null);
-  check("the created issue opened in a new tab", !!issueTab, issueTab ? issueTab.url() : "no tab");
+  await sleep(150);
+  check("Create is disabled while sending", await win.isDisabled("#send"));
+  check("…and Cancel too, so nothing is closed under it", await win.isDisabled("#cancel"));
+  await win.waitForFunction(() => /won't be filed twice/.test(document.getElementById("panelMsg").textContent), null, { timeout: 10000 })
+    .catch(() => {});
+  const failMsg = (await win.textContent("#panelMsg")).trim();
+  check("an unclear failure says so and offers Retry",
+    /won't be filed twice/.test(failMsg) && (await win.textContent("#send")).trim() === "Retry", failMsg);
+  check("the choices are kept", (await win.inputValue("#container")) === "acme/api" &&
+    (await win.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true");
+  check("the ticket in the page is still open and untouched",
+    await page.locator("#tracebug-quick-bug-modal").isVisible() && (await page.evaluate(() => window.__tbResults.length)) === 0);
+  check("the hidden marker went with the first try", /<!-- tracebug:[\w-]+ -->$/.test((issuePost && issuePost.body) || ""));
 
-  check("GitHub got the picked repo", !!issuePost);
+  const tabsBefore = ctx.pages().length;
+  await win.click("#send");
+  await win.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+  check('the retry found the first issue: "Created #42"',
+    (await win.textContent("#doneBox")).includes("Created #42"), (await win.textContent("#doneBox")).trim());
+  check("…and says it was already there", /already been created/.test(await win.textContent("#doneNote")));
+  check("GitHub got exactly one issue (no duplicate)", issuePosts === 1, String(issuePosts));
   check("…with the picked label", JSON.stringify(issuePost && issuePost.labels) === '["bug"]', JSON.stringify(issuePost && issuePost.labels));
   check("…and a title from the ticket", !!(issuePost && issuePost.title));
+  await sleep(800);
+  check("no tab opened by itself", ctx.pages().length === tabsBefore, `${tabsBefore} → ${ctx.pages().length}`);
 
   await page.waitForFunction(() => window.__tbResults.length > 0, null, { timeout: 8000 }).catch(() => {});
   const results = await page.evaluate(() => window.__tbResults);
@@ -189,8 +238,13 @@ try {
   check("no token in anything the page received", !results.some((r) => r.includes(TOKEN) || /ghp_|ghu_|ghr_/.test(r)));
   const toast = await page.locator("text=/GitHub issue created #42/").first().isVisible().catch(() => false);
   check('the page says "GitHub issue created #42"', toast);
-  const ghTabs = ctx.pages().filter((p) => p.url().startsWith(ISSUE_URL)).length;
-  check("exactly one issue tab (the page did not open a second)", ghTabs === 1, String(ghTabs));
+  check("the page did not open the issue either", !ctx.pages().some((p) => p.url().startsWith(ISSUE_URL)));
+
+  // The link opens it — only when clicked.
+  const issueTabP = ctx.waitForEvent("page", { predicate: (p) => p.url().startsWith(ISSUE_URL), timeout: 8000 });
+  await win.click("#issueLink");
+  const issueTab = await issueTabP.catch(() => null);
+  check("clicking the link opens the issue", !!issueTab, issueTab ? issueTab.url() : "no tab");
 
   const prefs = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1);
   check("the repo and labels are remembered for next time",
@@ -205,8 +259,9 @@ try {
   check("options: GitHub shows as connected via a token", gh && gh.connected && gh.via === "token", JSON.stringify(gh));
   check("options: status carries no token", !JSON.stringify(status).includes(TOKEN));
   check("options: the Chrome build supports sign-in UI", status && status.oauthUi === true);
-  check("options: the token form is open when sign-in isn't offered",
-    await opt.evaluate(() => new Promise((r) => setTimeout(() => r(document.getElementById("ghAdvanced").open), 300))));
+  // GitHub sign-in is offered in this build, so the token form is the folded-away fallback.
+  check("options: the token form is folded away when sign-in is offered",
+    await opt.evaluate(() => new Promise((r) => setTimeout(() => r(!document.getElementById("ghAdvanced").open), 300))));
 } finally {
   await ctx.close();
   server.close();
