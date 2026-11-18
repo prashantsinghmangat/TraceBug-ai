@@ -35,6 +35,8 @@ export interface LinearConfig {
   apiKey: string;
   /** Team id the issue is filed under. */
   teamId: string;
+  /** True for an OAuth access token, which Linear takes as `Bearer …`. */
+  bearer?: boolean;
 }
 
 export interface SlackConfig {
@@ -57,6 +59,10 @@ export interface CreateIssueResult {
   ref?: string;
   /** True when the provider gives no readable response (Slack no-cors). */
   opaque?: boolean;
+  /** The extension already opened `url` in a new tab (ADR 010). */
+  opened?: boolean;
+  /** Display name of the tracker it actually went to — the Create panel can switch. */
+  label?: string;
 }
 
 /** What the page supplies for a GitHub/Linear send. Nothing else is accepted. */
@@ -325,7 +331,20 @@ function extractProviderError(body: unknown): string | null {
   return null;
 }
 
-async function parseJsonOrThrow(
+/**
+ * A provider answered with an HTTP error. `status` is what lets the worker
+ * tell a 401 (refresh and retry once, ADR 010) from everything else.
+ */
+export class ProviderHttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ProviderHttpError";
+    this.status = status;
+  }
+}
+
+export async function parseJsonOrThrow(
   res: Response,
   label: string,
   kind: "tracker" | "llm",
@@ -334,7 +353,7 @@ async function parseJsonOrThrow(
   try {
     body = await res.json();
   } catch {
-    if (!res.ok) throw new Error(friendlyStatus(res.status, label, kind));
+    if (!res.ok) throw new ProviderHttpError(friendlyStatus(res.status, label, kind), res.status);
     throw new Error(`${label} returned an unreadable response.`);
   }
   if (!res.ok) {
@@ -343,7 +362,7 @@ async function parseJsonOrThrow(
     // half of a 422.
     const own = extractProviderError(body);
     const friendly = friendlyStatus(res.status, label, kind);
-    throw new Error(own && own !== friendly ? `${friendly} (${own})` : friendly);
+    throw new ProviderHttpError(own && own !== friendly ? `${friendly} (${own})` : friendly, res.status);
   }
   return body as ProviderResponse;
 }
@@ -393,8 +412,9 @@ export async function postLinearIssue(
     signal,
     headers: {
       "content-type": "application/json",
-      // Linear personal API keys go in Authorization verbatim (no "Bearer").
-      "authorization": config.apiKey,
+      // Linear personal API keys go in Authorization verbatim (no "Bearer");
+      // OAuth access tokens do take it.
+      "authorization": config.bearer ? `Bearer ${config.apiKey}` : config.apiKey,
     },
     body: JSON.stringify({
       query,

@@ -177,7 +177,7 @@ The modal footer exposes the primary exports, with the rest under **More ▾**:
 | **Export HAR** | Network capture as a standard HAR 1.2 file. |
 | **Fix with AI** | Builds the structured prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
 | **Open in GitHub** _(npm SDK, when `githubRepo` is set but no token is configured)_ | Opens a prefilled GitHub issue page in a new tab. |
-| **Send to GitHub** _(when a BYO-token GitHub integration is configured)_ | Files the issue directly — through a confirm window in the extension (nothing leaves the browser until you approve it), or a direct API call in the SDK. Same button as above; the label switches to "Send to …" whenever this is the case. |
+| **Send to GitHub** _(when a BYO-token GitHub integration is configured)_ | Files the issue directly — in the extension through its **Create an issue** window, where you pick the tracker, repository/team and labels (nothing leaves the browser until you click Create; the issue then opens in a new tab), or a direct API call in the SDK. Same button as above; the label switches to "Send to …" whenever this is the case. |
 | **Download .zip (attach to GitHub)** _(More)_ | The same replay `.html` wrapped in a `.zip` — GitHub issues accept `.zip` attachments by drag-and-drop but reject bare `.html`. The prefilled issue body includes a "drag the zip here" placeholder. |
 | **Download failing test (.spec.ts)** _(More)_ | A runnable Playwright spec that replays the session and asserts the captured failure is gone — red until the bug is fixed, green after. Also embedded in the `.html` export for the MCP `get_playwright_test` tool. |
 | **Export for AI (.html)** _(More)_ | Tiny (~5 KB) text-only HTML — paste/upload into a chat, no MCP needed. |

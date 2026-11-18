@@ -160,8 +160,15 @@ function chromeManifest() {
  * `tabCapture`; the popup reads the manifest and shows Desktop only here.
  */
 function firefoxManifest() {
+  // ADR 010: `identity` cannot be an OPTIONAL permission in Firefox, and it
+  // must never become a required one without the owner's sign-off. So the
+  // Firefox build drops it; background.js sees no `identity` in the manifest
+  // and hides Connect there, leaving the pasted-token paths (Chrome first).
+  const optional = (base.optional_permissions || []).filter((p) => p !== "identity");
+  const { optional_permissions: _drop, ...rest } = base;
   return {
-    ...base,
+    ...rest,
+    ...(optional.length ? { optional_permissions: optional } : {}),
     version,
     // Firefox event pages have no importScripts, so the worker-side scripts
     // are listed ahead of background.js and run in the same global.

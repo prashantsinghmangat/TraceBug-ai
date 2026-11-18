@@ -110,6 +110,72 @@
     button:disabled { opacity: .5; cursor: default; }
     .countdown { font-size: 11px; color: var(--muted); }
     .fatal { padding: 24px 18px; color: var(--muted); font-size: 13px; }
+
+    /* ── Create panel (ADR 010): tracker, repo/team, fields ───────────── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .panel[hidden], .panel [hidden] { display: none !important; }
+    .prow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .prow + .prow, .pblock { margin-top: 10px; }
+    .plabel { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    select, input[type="text"], input[type="search"] {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 9px;
+      font: inherit;
+      font-size: 13px;
+      min-width: 0;
+    }
+    #container { width: 100%; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .code {
+      font: 600 18px/1.2 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+      letter-spacing: .12em;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    fieldset { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
+    legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
+    .opts {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 8px;
+      background: var(--bg);
+    }
+    .opts label { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; }
+    .opts .filter { width: 100%; margin: 4px 0 6px; }
+    .msg { font-size: 12px; margin: 8px 0 0; min-height: 1em; }
+    .msg.err { color: var(--danger); }
+    a { color: var(--accent); }
+    button.small { padding: 6px 12px; font-size: 12px; }
+
+    /* Light theme. The window follows the OS: it has no page to inherit from. */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #FFFFFF;
+        --panel: #F5F6F9;
+        --text: #141823;
+        --muted: #5B6275;
+        --line: #DCE0E8;
+        --accent: #D93A4C;
+        --warn: #9A6200;
+        --danger: #C62834;
+      }
+      .warn { color: #6B4A00; background: rgba(245, 158, 11, 0.12); }
+      button { color: #FFFFFF; }
+      button.ghost { color: var(--text); border-color: var(--line); }
+    }
   </style>
 </head>
 <body>
@@ -119,6 +185,49 @@
   </header>
 
   <main id="main">
+    <!-- ADR 010: the Create panel. Shown only for a tracker send. Everything in
+         it comes from the worker (tracker, repo and label names) or the user;
+         it is still written with textContent only. -->
+    <section class="panel" id="panel" hidden aria-label="Where to file the issue">
+      <div class="prow">
+        <label for="tracker" class="muted">Create in</label>
+        <select id="tracker"></select>
+        <span class="muted" id="account"></span>
+        <span class="grow"></span>
+        <button type="button" class="ghost small" id="disconnect" hidden>Disconnect</button>
+      </div>
+
+      <div class="pblock" id="connectBox" hidden>
+        <p class="muted" id="connectText"></p>
+        <div class="prow">
+          <button type="button" class="small" id="connect">Connect</button>
+          <a href="#" id="settingsLink">Use a token in TraceBug settings</a>
+        </div>
+        <div class="pblock" id="deviceBox" hidden>
+          <span class="plabel">Enter this code on the page that opens:</span>
+          <div class="prow">
+            <span class="code" id="userCode"></span>
+            <button type="button" class="ghost small" id="copyCode">Copy</button>
+            <button type="button" class="small" id="openDevice">Open sign-in page</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pblock" id="accessBox" hidden>
+        <p class="muted" id="accessText"></p>
+        <button type="button" class="small" id="allowAccess">Allow access</button>
+      </div>
+
+      <div class="pblock" id="pickBox" hidden>
+        <label class="plabel" for="container" id="containerLabel">Repository</label>
+        <input type="text" id="container" list="containerList" autocomplete="off" spellcheck="false" />
+        <datalist id="containerList"></datalist>
+        <div id="fields"></div>
+      </div>
+
+      <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
+    </section>
+
     <div class="warn" id="warnBox" style="display:none">
       <strong>Before you send</strong>
       <ul id="warnList"></ul>

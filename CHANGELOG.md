@@ -4,6 +4,16 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Pick where an issue goes, in TraceBug's own window.** Send to GitHub or Linear now opens a **Create an issue** window. It lists your repositories (or Linear teams) to search and pick from, loads the repository's labels to tick, and has a **Create issue** button. The issue then opens in a new tab. TraceBug remembers your last repository/team and labels. You can switch between GitHub and Linear in the same window. Only the extension can read the list; the site you're testing never sees your repository or team names.
+
+### Changed
+
+- **Settings no longer need a repository or team typed in.** A token or API key is enough; the repository or team is picked when you file, and any one already typed in becomes the default. The token form moved under **Advanced: use a token** (it stays open until sign-in arrives). Existing setups keep working with nothing to redo.
+- **The confirmation window waits up to 10 minutes for a tracker send** (it was 2), since it is now where you pick the destination. AI analysis keeps 2 minutes.
+- **Captured text now hides GitHub App and Linear sign-in tokens** too (`ghu_`, `ghr_`, `lin_oauth_`), alongside the token shapes it already masked.
+
 ## [1.13.0] - 2026-11-16
 
 > Drawing while you record, a rebuilt screenshot editor, video trim, Site Audit that remembers its last result and hands off to your agent, and the growth-audit fixes (capture first in the popup, MCP setup on the welcome page).

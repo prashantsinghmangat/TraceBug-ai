@@ -73,10 +73,12 @@ export function rpcCall<T = unknown>(type: string, data?: unknown, timeoutMs = 6
 
 // ── Provider bridge ────────────────────────────────────────────────────────
 
-// The worker auto-cancels an unanswered confirmation at 120s. We wait a little
-// longer so the worker's own timeout is what the user sees, with its wording,
-// rather than a bare client-side "timeout".
+// The worker auto-cancels an unanswered confirmation at 120s (AI) or 10 min
+// (a tracker send, whose window can include signing in and picking a repo —
+// ADR 010). We wait a little longer so the worker's own timeout is what the
+// user sees, with its wording, rather than a bare client-side "timeout".
 const PROVIDER_TIMEOUT_MS = 150000;
+const TRACKER_TIMEOUT_MS = 10 * 60 * 1000 + 30000;
 
 interface ProviderAck {
   pending?: boolean;
@@ -101,7 +103,7 @@ interface ProviderResultDetail {
  * a service-worker restart — the MV3 worker is free to die while the user
  * reads the confirmation.
  */
-function callProvider<T>(verb: string, detail: Record<string, unknown>): Promise<T> {
+function callProvider<T>(verb: string, detail: Record<string, unknown>, timeoutMs = PROVIDER_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const id = nextId("tb_send");
     let settled = false;
@@ -136,7 +138,7 @@ function callProvider<T>(verb: string, detail: Record<string, unknown>): Promise
 
     const timer = setTimeout(() => {
       finish(() => reject(new TraceBugCancelled("Send timed out waiting for confirmation.")));
-    }, PROVIDER_TIMEOUT_MS);
+    }, timeoutMs);
 
     window.dispatchEvent(new CustomEvent("tracebug-provider-request", {
       detail: { id, type: verb, data: detail },
@@ -152,7 +154,11 @@ export function sendTrackerViaBridge(
   provider: TrackerProvider,
   content: IssueContent | SlackContent,
 ): Promise<CreateIssueResult> {
-  return callProvider<CreateIssueResult>("tb:provider:send", { provider, payload: content });
+  return callProvider<CreateIssueResult>(
+    "tb:provider:send",
+    { provider, payload: content },
+    provider === "slack" ? PROVIDER_TIMEOUT_MS : TRACKER_TIMEOUT_MS,
+  );
 }
 
 /** Run LLM analysis from the service worker. `prompt` is already sanitized. */

@@ -379,8 +379,9 @@ describe('destination label', () => {
   });
 
   it('says so when the destination is missing rather than rendering undefined', () => {
-    expect(B.destinationLabel('github', {})).toMatch(/no repository/i);
-    expect(B.destinationLabel('linear', {})).toMatch(/no team/i);
+    // ADR 010: with no default, the user picks in the Create panel.
+    expect(B.destinationLabel('github', {})).toMatch(/choose a repository/i);
+    expect(B.destinationLabel('linear', {})).toMatch(/choose a team/i);
   });
 });
 
@@ -435,5 +436,73 @@ describe('happy path', () => {
 
   it('gives the user two minutes to decide', () => {
     expect(B.CONFIRM_TIMEOUT_MS).toBe(120_000);
+  });
+});
+
+// ── ADR 010: the Create panel's messages and choice ────────────────────────
+
+const B10 = sandbox.TraceBugProviderBridge as {
+  TRACKER_UI_VERBS: string[];
+  VERBS: string[];
+  TRACKER_CONFIRM_TIMEOUT_MS: number;
+  validateExtensionPageSender: (s: unknown, id: string, base: string, pages?: string[]) => boolean;
+  validateChoice: (c: unknown) => { ok: boolean; error?: string; choice?: { tracker: string; container: string; fields: Record<string, unknown> } };
+  isIssueTracker: (t: unknown) => boolean;
+  destinationLabel: (target: string, cfg: unknown) => string;
+};
+const BASE = `chrome-extension://${EXT_ID}/`;
+
+describe('tracker UI messages are for extension pages only', () => {
+  it('are not page verbs: the page bridge rejects them', () => {
+    for (const v of B10.TRACKER_UI_VERBS) expect(B10.VERBS).not.toContain(v);
+  });
+
+  it('accepts the confirm window and the options page', () => {
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'confirm-send.html?id=x' }, EXT_ID, BASE)).toBe(true);
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html', tab: { id: 3 }, frameId: 0 }, EXT_ID, BASE)).toBe(true);
+  });
+
+  it('rejects our own content script — it carries the host page URL', () => {
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: 'https://evil.test/confirm-send.html', tab: { id: 1 }, frameId: 0 }, EXT_ID, BASE)).toBe(false);
+  });
+
+  it('rejects other extension pages, other extensions and subframes', () => {
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'popup.html' }, EXT_ID, BASE)).toBe(false);
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html.evil' }, EXT_ID, BASE)).toBe(false);
+    expect(B10.validateExtensionPageSender({ id: 'other', url: BASE + 'options.html' }, EXT_ID, BASE)).toBe(false);
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html', frameId: 2 }, EXT_ID, BASE)).toBe(false);
+    expect(B10.validateExtensionPageSender(null, EXT_ID, BASE)).toBe(false);
+  });
+});
+
+describe('validateChoice', () => {
+  it('rebuilds a good choice and drops empty values', () => {
+    const r = B10.validateChoice({ tracker: 'github', container: ' acme/web ', fields: { labels: ['bug', ''], milestone: '3' } });
+    expect(r.ok).toBe(true);
+    expect(JSON.parse(JSON.stringify(r.choice))).toEqual({ tracker: 'github', container: 'acme/web', fields: { labels: ['bug'], milestone: '3' } });
+  });
+
+  it('only lets the panel pick an issue tracker (never Slack)', () => {
+    expect(B10.validateChoice({ tracker: 'slack', container: 'x' }).ok).toBe(false);
+    expect(B10.isIssueTracker('linear')).toBe(true);
+  });
+
+  it('needs a destination', () => {
+    expect(B10.validateChoice({ tracker: 'github', container: '  ' }).error).toMatch(/Pick where/);
+  });
+
+  it('caps sizes and refuses non-text values', () => {
+    expect(B10.validateChoice({ tracker: 'github', container: 'x'.repeat(301) }).ok).toBe(false);
+    expect(B10.validateChoice({ tracker: 'github', container: 'a/b', fields: { labels: [{}] } }).ok).toBe(false);
+    expect(B10.validateChoice({ tracker: 'github', container: 'a/b', fields: { labels: Array(101).fill('x') } }).ok).toBe(false);
+    expect(B10.validateChoice({ tracker: 'github', container: 'a/b', fields: { '__proto__x': 'y' } }).ok).toBe(false);
+  });
+
+  it('gives a tracker send (sign-in included) ten minutes', () => {
+    expect(B10.TRACKER_CONFIRM_TIMEOUT_MS).toBe(600_000);
+  });
+
+  it('labels an unpicked destination as a choice to make, not an error', () => {
+    expect(B10.destinationLabel('github', { github: { token: 't' } })).toBe('(choose a repository)');
   });
 });

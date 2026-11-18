@@ -52,6 +52,22 @@ the same step.
 
 ## Smaller areas the next work touches (read these files whole; they're short)
 
+- **Tracker connect + Create panel (Phase 13, ADR 010).** Worker bundle entry `src/providers/worker.ts` (tsup →
+  `tracebug-provider-api.js`) re-exports: `api.ts` (HTTP adapters, `ProviderHttpError` carries `status`,
+  `parseJsonOrThrow`) · `oauth.ts` (PKCE `createPkcePair`/`buildAuthorizeUrl`/`parseRedirect`/`exchangeCode`,
+  device flow `requestDeviceCode`/`pollDeviceToken` — ONE poll, the window drives the loop; `refreshTokens`) ·
+  `auth-store.ts` (`resolveAuth`, `withTrackerAuth` = refresh <60 s left, 401 → one refresh → `ReconnectNeededError`;
+  falls back to pasted tokens; `describeAuth` is the only view a UI gets) · `trackers.ts` (`TrackerAdapter`:
+  `connect`/`whoAmI`/`listContainers`/`listFields`/`createIssue`; `github`, `linear`; `isTrustedIssueUrl`) ·
+  `oauth-clients.ts` (public client IDs, `TODO_OWNER_CLIENT_ID` = Connect hidden).
+  Worker: `background.js` section "Tracker connect + the Create panel" (`handleTrackerUi`, `createViaAdapter`,
+  `trackerStatusList`, `connectTracker`, `pollTrackerConnect`, `disconnectTracker`, `oauthUiSupported` = manifest
+  declares optional `identity`; Firefox build strips it). Bridge: `provider-bridge.js` `validateExtensionPageSender`,
+  `validateChoice`, `TRACKER_UI_VERBS`. UI: `confirm-send.js` "Create panel" (`startPanel`, `selectTracker`,
+  `loadContainers`, `loadFields`, `collectChoice`), `options.js` "Tracker accounts" (`renderTrackerAccounts`).
+  Tests `tests/tracker-{oauth,auth-store,adapters}.test.ts`; e2e `e2e/ext-tracker-create.e2e.mjs` (`e2e:tracker`,
+  stubs GitHub with `context.route`, which reaches the worker's fetches).
+
 - **Scanner** `src/scanner/` (~660 total): `index.ts` `scan()` runs detectors in parallel → `Issue[]` in
   memory; detectors in `detectors/` (`a11y.ts` axe, `broken-images`, `mixed-content`, `session-data`,
   `frustration`). `Issue` type: `src/types.ts` ~L577. UI: `src/ui/issues-panel.ts`. Public API
@@ -100,8 +116,9 @@ the same step.
 | `TB_DISABLE_TAB` | in-page toolbar ✕ | `background.js` ~L1016 |
 | `TB_OPEN_OPTIONS` | popup, in-page pointers | `background.js` ~L1075 |
 | `tb:rec:*` | page SDK ↔ offscreen | `background.js` ~L1222 relay; `started` ~L1131, `persist` ~L1149, `handleRecordingMessage` (start/stop side effects) ~L1380 |
-| `tb:provider:send`, `tb:llm:analyze` | page SDK | `background.js` ~L1192 → `provider-bridge.js` → `tracebug-provider-api.js` |
-| `tb:confirm:get`, `tb:confirm:decide` | `confirm-send.html` | `background.js` ~L1200, ~L1213 |
+| `tb:provider:send`, `tb:llm:analyze` | page SDK | `background.js` ~L1228 → `provider-bridge.js` → `tracebug-provider-api.js` |
+| `tb:confirm:get`, `tb:confirm:decide` (+ Create-panel `choice`) | `confirm-send.html` | `background.js` ~L1236, ~L1249 |
+| `tb:tracker:*` (status, containers, fields, connect, connect-poll, disconnect) | `confirm-send.html`, `options.html` only | `background.js` `handleTrackerUi` |
 
 ## Storage keys — which store, and who owns them
 
@@ -110,8 +127,9 @@ the same step.
   `_events_capture_started`, `_storage_stats`. Also `_last_bug_draft`, `_toolbar_pos`, `_theme_pref`,
   `_replay_theme`, `_plan`, `_user`, `_onboarding_complete`, `_milestone_ask_done`, `_dev`.
 - **`chrome.storage.local`** (`tb_*`, extension-owned): `tb_record_opts` (Record options + `videoSetBy`) ·
-  `tb_integrations_v1`, `tb_ai_config_v1` (**the secrets**) · `tb_llm_sites_v1`, `tb_llm_rates_v1` ·
-  `tb_pending_sends_v1`, `tb_send*` (confirm-send) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
+  `tb_integrations_v1`, `tb_ai_config_v1`, `tb_tracker_auth_v1` (OAuth tokens, ADR 010) (**the secrets**) ·
+  `tb_tracker_prefs_v1` (last repo/team + fields per tracker) · `tb_llm_sites_v1` ·
+  `tb_send_payload_*` (confirm-send, large payloads) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
   `tb_audit_gate_v1` (Site Audit gate, ADR 009: `audits`, `account`, `graceUntil`; `background.js` `auditPermit` ← `TB_AUDIT_PERMIT`
   ← content-script `tracebug-audit-permit-request` ← panel `auditPermit()`; sign-in `signin.html`/`signin.js` → `/api/ext/otp/*`; popup account menu `popup.js` `initAccount`; welcome card
   `welcome.js` `initAccountCard`, `tb_welcome_signin_skipped`) ·
@@ -120,7 +138,8 @@ the same step.
   Website side: `website/app/api/notify-me` → `lib/mailer.mjs` (Resend) → `/api/confirm`, `/api/unsubscribe`, `/email`;
   view `email_subscribers` (migration 0008); hand-run `website/scripts/email.mjs confirm|send`.
   (`tb_host_perm_declined` removed in 1.11.2, T-13 — the popup's cross-site opt-in row is gone.)
-- **`chrome.storage.session`**: `tb_sw_state_v1` only — worker state, awaited via `_hydrated`.
+- **`chrome.storage.session`**: `tb_sw_state_v1` — worker state, awaited via `_hydrated`; `tb_device_flow_v1` —
+  device-flow code between polls (ADR 010); `tb_pending_sends_v1`, `tb_llm_rates_v1` (confirm-send).
 - **`chrome.storage.sync`**: `tracebug_redact` only — redaction rules.
 - **Legacy, migrated and deleted on sight** (`secret-migration.js`): page `tracebug_integrations`,
   `tracebug_ai_config`, `tracebug_ai_key`.

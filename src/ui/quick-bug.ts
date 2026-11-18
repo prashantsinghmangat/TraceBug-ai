@@ -2350,11 +2350,15 @@ async function _fileViaTracker(
   try {
     const result = await createTrackerIssue(provider, report);
     const ref = result.ref ? ` ${result.ref}` : "";
+    // The Create panel can file somewhere other than the button's tracker.
+    const where = result.label || TRACKER_LABELS[provider];
     if (result.url) {
-      window.open(result.url, "_blank", "noopener,noreferrer");
-      showToast(`✓ ${TRACKER_LABELS[provider]} issue created${ref}`, root);
+      // In the extension the worker has already opened it (ADR 010); a second
+      // window.open here would be a duplicate tab, or a blocked popup.
+      if (!result.opened) window.open(result.url, "_blank", "noopener,noreferrer");
+      showToast(`✓ ${where} issue created${ref}`, root);
     } else {
-      showToast(`✓ Sent to ${TRACKER_LABELS[provider]}`, root);
+      showToast(`✓ Sent to ${where}`, root);
     }
     if (screenshots.length) _downloadAllScreenshots(screenshots);
     _downloadVideoIfPresent();

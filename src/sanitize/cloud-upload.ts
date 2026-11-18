@@ -30,6 +30,8 @@ const TOKEN_PATTERNS: { name: string; re: RegExp; replace: (m: string) => string
   { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
   { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
   { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+  // GitHub App user-to-server tokens and their refresh tokens (ADR 010)
+  { name: "github_user", re: /\bgh[ur]_[A-Za-z0-9]{30,}\b/g, replace: mask },
   // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
   { name: "aws_access",  re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
   { name: "aws_secret",  re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
@@ -47,6 +49,8 @@ const TOKEN_PATTERNS: { name: string; re: RegExp; replace: (m: string) => string
   { name: "postmark",    re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
   // Linear / Vercel / Cloudflare / Discord
   { name: "linear",      re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+  // Linear OAuth access tokens (ADR 010)
+  { name: "linear_oauth", re: /\blin_oauth_[A-Za-z0-9]{32,}\b/g, replace: mask },
   { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
   // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
   // session IDs, etc. that don't carry a recognizable prefix. Conservative:

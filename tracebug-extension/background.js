@@ -1248,9 +1248,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // never from a content script, however well-formed the message looks.
   if (message.type === "tb:confirm:decide") {
     if (!isConfirmSender(sender)) { sendResponse({ ok: false, error: "Rejected." }); return false; }
-    resolvePending(message.id, !!message.approved)
+    // ADR 010: an approved tracker send may carry the Create panel's choice
+    // (tracker, repo/team, fields). A bad choice is answered to the WINDOW,
+    // which stays open so the user can fix it — the request is not resolved.
+    let choice = null;
+    if (message.approved && message.choice != null) {
+      const b = bridgeLib();
+      const c = b ? b.validateChoice(message.choice) : { ok: false, error: "Reload the extension." };
+      if (!c.ok) { sendResponse({ ok: false, error: c.error }); return false; }
+      choice = c.choice;
+    }
+    resolvePending(message.id, !!message.approved, choice)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  // ADR 010 §4: the Create panel and the options page. Extension pages only.
+  if (typeof message.type === "string" && message.type.indexOf("tb:tracker:") === 0) {
+    handleTrackerUi(message, sender)
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ error: (err && err.message) || "Request failed." }));
     return true;
   }
 
@@ -1776,7 +1794,7 @@ async function handleProviderRequest(message, sender) {
     }
   }
 
-  const cfgAll = await localGet([INT_KEY, AI_CFG_KEY, LLM_SITES_KEY], {});
+  const cfgAll = await localGet([INT_KEY, AI_CFG_KEY, LLM_SITES_KEY, TRACKER_AUTH_KEY], {});
 
   if (v.kind === "llm") {
     const aiCfg = cfgAll[AI_CFG_KEY];
@@ -1811,7 +1829,7 @@ async function handleProviderRequest(message, sender) {
   // hostile page spam for the rest of it, and "session" is vague anyway
   // because the worker restarts.
   const integrations = cfgAll[INT_KEY] || {};
-  if (!hasProviderConfig(v.target, integrations)) {
+  if (!hasProviderConfig(v.target, integrations, cfgAll[TRACKER_AUTH_KEY])) {
     return ackError((TB_PROVIDER_LABELS[v.target] || v.target) + " is not configured — open TraceBug settings.");
   }
 
@@ -1849,10 +1867,16 @@ function capTrackerPayload(target, payload) {
   return { payload: next, warning: capped.warning };
 }
 
-function hasProviderConfig(target, integrations) {
+/**
+ * Can this tracker send at all? Since ADR 010 the repo/team is picked in the
+ * confirm window, so a credential is enough: a pasted token, or an OAuth
+ * sign-in (even one that needs reconnecting — the window says so).
+ */
+function hasProviderConfig(target, integrations, authMap) {
   const i = integrations || {};
-  if (target === "github") return !!(i.github && i.github.token && i.github.repo);
-  if (target === "linear") return !!(i.linear && i.linear.apiKey && i.linear.teamId);
+  const a = authMap || {};
+  if (target === "github") return !!((i.github && i.github.token) || a.github);
+  if (target === "linear") return !!((i.linear && i.linear.apiKey) || a.linear);
   if (target === "slack") return !!(i.slack && i.slack.webhookUrl);
   return false;
 }
@@ -1886,7 +1910,9 @@ async function queueConfirmation(req) {
     return ackError(room.error);
   }
 
-  const expiresAt = now + b.CONFIRM_TIMEOUT_MS;
+  const expiresAt = now + (req.kind === "tracker" && b.isIssueTracker(req.target)
+    ? b.TRACKER_CONFIRM_TIMEOUT_MS
+    : b.CONFIRM_TIMEOUT_MS);
   const record = {
     id: req.id,
     tabId: req.tabId,
@@ -1938,6 +1964,7 @@ function confirmViewOf(req) {
   return {
     kind: req.kind,
     origin: req.origin,
+    target: req.target,
     providerLabel: req.providerLabel,
     destination: req.destination,
     title: (req.payload && req.payload.title) || "",
@@ -1948,7 +1975,7 @@ function confirmViewOf(req) {
   };
 }
 
-async function resolvePending(id, approved) {
+async function resolvePending(id, approved, choice) {
   const req = await dropPending(id);
   try { chrome.alarms.clear(CONFIRM_ALARM + id); } catch {}
   if (!req) return;
@@ -1966,6 +1993,12 @@ async function resolvePending(id, approved) {
     const sites = got[LLM_SITES_KEY] || {};
     sites[req.origin] = { allowed: true, at: Date.now() };
     await localSet({ [LLM_SITES_KEY]: sites });
+  }
+  // The Create panel may have switched trackers; both carry title + body.
+  if (choice && req.kind === "tracker" && bridgeLib().isIssueTracker(req.target)) {
+    req.choice = choice;
+    req.target = choice.tracker;
+    req.providerLabel = TB_PROVIDER_LABELS[choice.tracker] || choice.tracker;
   }
   await runAndReport(id, req.tabId, req);
 }
@@ -2060,14 +2093,8 @@ async function resolveTabCaptureStreamId(tabId) {
 async function callTrackerFromWorker(api, req) {
   const got = await localGet([INT_KEY], {});
   const cfg = got[INT_KEY] || {};
-  if (req.target === "github") {
-    if (!(await hasHostAccess(api.PROVIDER_ORIGINS.github))) throw new Error(noAccessMessage("api.github.com"));
-    return api.postGitHubIssue(cfg.github, { title: req.payload.title, body: req.payload.body });
-  }
-  if (req.target === "linear") {
-    if (!(await hasHostAccess(api.PROVIDER_ORIGINS.linear))) throw new Error(noAccessMessage("api.linear.app"));
-    return api.postLinearIssue(cfg.linear, { title: req.payload.title, body: req.payload.body });
-  }
+  const adapter = api.trackerAdapter(req.target);
+  if (adapter) return createViaAdapter(api, adapter, req, cfg);
   // Slack: with host access the worker is not bound by page CORS, so it reads
   // the REAL response instead of guessing — this is what resolves the Phase 6
   // Slack item. Without access, fall back to the opaque no-cors post rather
@@ -2078,6 +2105,241 @@ async function callTrackerFromWorker(api, req) {
 
 function noAccessMessage(host) {
   return "TraceBug doesn't have access to " + host + " yet. Open TraceBug settings and save this integration again to allow it.";
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Tracker connect + the Create panel — ADR 010
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Credentials: OAuth sign-ins in chrome.storage.local `tb_tracker_auth_v1`,
+// pasted tokens in `tb_integrations_v1` (unchanged, still honoured). Only this
+// worker reads either. The confirm window and the options page get display
+// data — account name, repo/team names, labels — and never a token. The page
+// under test gets nothing from here at all: every tb:tracker:* message must
+// come from an extension page (provider-bridge.js validateExtensionPageSender).
+
+const TRACKER_AUTH_KEY = "tb_tracker_auth_v1";
+const TRACKER_PREFS_KEY = "tb_tracker_prefs_v1";
+// Device-flow state between polls. Session storage: it must survive a worker
+// restart mid-sign-in, and must not outlive the browser session.
+const DEVICE_FLOW_KEY = "tb_device_flow_v1";
+
+const trackerAuthStore = {
+  read: async () => (await localGet([TRACKER_AUTH_KEY], {}))[TRACKER_AUTH_KEY] || {},
+  write: (map) => localSet({ [TRACKER_AUTH_KEY]: map }),
+};
+
+/**
+ * Does this build offer Connect at all? Feature detection, not a user-agent
+ * check: only a manifest that declares `identity` as optional (the Chrome
+ * build — build-ext.mjs strips it for Firefox, where it cannot be optional)
+ * gets the sign-in UI. Everywhere else the pasted-token paths stay as they are.
+ */
+function oauthUiSupported() {
+  try { return (chrome.runtime.getManifest().optional_permissions || []).includes("identity"); }
+  catch { return false; }
+}
+
+function authContext(adapter, integrations) {
+  const c = adapter.connect();
+  return { store: trackerAuthStore, tracker: adapter.id, label: adapter.label, integrations, spec: c ? c.spec : null };
+}
+
+async function hasAllHosts(patterns) {
+  for (const p of patterns || []) {
+    if (!(await hasHostAccess(p))) return false;
+  }
+  return true;
+}
+
+function hostOfPattern(pattern) {
+  return String(pattern || "").replace(/^https?:\/\//, "").replace(/\/\*$/, "");
+}
+
+/** Labels typed in settings before ADR 010 — the default field values. */
+function legacyFields(tracker, integrations) {
+  const i = integrations || {};
+  if (tracker === "github" && i.github && Array.isArray(i.github.labels) && i.github.labels.length) {
+    return { labels: i.github.labels.slice() };
+  }
+  return {};
+}
+
+async function rememberChoice(tracker, container, fields) {
+  const got = await localGet([TRACKER_PREFS_KEY], {});
+  const prefs = got[TRACKER_PREFS_KEY] || {};
+  prefs[tracker] = { container, fields: fields || {}, at: Date.now() };
+  await localSet({ [TRACKER_PREFS_KEY]: prefs });
+}
+
+async function createViaAdapter(api, adapter, req, integrations) {
+  if (!(await hasAllHosts(adapter.apiHosts))) throw new Error(noAccessMessage(hostOfPattern(adapter.apiHosts[0])));
+  const choice = req.choice || null;
+  const container = (choice && choice.container) || api.legacyContainer(adapter.id, integrations);
+  if (!container) throw new Error("Pick a " + adapter.containerNoun.toLowerCase() + " to file the issue in.");
+  const fields = choice ? choice.fields : legacyFields(adapter.id, integrations);
+  const result = await api.withTrackerAuth(authContext(adapter, integrations), (auth) =>
+    adapter.createIssue(auth, container, fields, { title: req.payload.title, body: req.payload.body }));
+  if (choice) await rememberChoice(adapter.id, container, fields);
+  result.label = adapter.label;
+  // The worker opens the issue, not the page: a page's window.open after an
+  // async round trip is a popup the browser blocks. Only an https URL on the
+  // tracker's own host is opened — the URL came over the network.
+  if (api.isTrustedIssueUrl(adapter.id, result.url)) {
+    try { await chrome.tabs.create({ url: result.url, active: true }); result.opened = true; } catch {}
+  }
+  return result;
+}
+
+async function trackerStatusList(api) {
+  const got = await localGet([INT_KEY, TRACKER_AUTH_KEY, TRACKER_PREFS_KEY], {});
+  const integrations = got[INT_KEY] || {};
+  const map = got[TRACKER_AUTH_KEY] || {};
+  const prefs = got[TRACKER_PREFS_KEY] || {};
+  const ui = oauthUiSupported();
+  return api.ISSUE_TRACKERS.map((id) => {
+    const a = api.trackerAdapter(id);
+    const c = ui ? a.connect() : null;
+    const p = prefs[id];
+    return Object.assign({
+      id,
+      label: a.label,
+      containerNoun: a.containerNoun,
+      canConnect: !!c,
+      connectFlow: c ? c.flow : null,
+      // What Connect must request. The window calls permissions.request with
+      // this from the click handler itself — an await first would lose the
+      // user gesture the browser requires.
+      connectPermissions: c ? { permissions: c.flow === "pkce" ? ["identity"] : [], origins: c.hosts } : null,
+      apiHosts: a.apiHosts,
+      last: p
+        ? { container: p.container || "", fields: p.fields || {} }
+        : { container: api.legacyContainer(id, integrations), fields: legacyFields(id, integrations) },
+    }, api.describeAuth(id, map, integrations));
+  });
+}
+
+async function finishConnect(api, adapter, tokens) {
+  let account = "";
+  try { account = await adapter.whoAmI({ via: "oauth", token: tokens.accessToken }); } catch {}
+  await api.saveOAuth(trackerAuthStore, adapter.id, tokens, account || undefined, Date.now());
+  return { connected: true, account };
+}
+
+async function connectTracker(api, adapter) {
+  if (!oauthUiSupported()) return { error: "Sign-in isn't available in this browser yet. Use a token in TraceBug settings." };
+  const c = adapter.connect();
+  if (!c) return { error: adapter.label + " sign-in isn't set up in this build. Use a token in TraceBug settings." };
+  if (!(await hasAllHosts(c.hosts))) return { needsAccess: c.hosts };
+
+  if (c.flow === "device") {
+    const code = await api.requestDeviceCode(c.spec, Date.now());
+    const all = await sessionGet(DEVICE_FLOW_KEY, {});
+    all[adapter.id] = { deviceCode: code.deviceCode, interval: code.interval, expiresAt: code.expiresAt };
+    await sessionSet({ [DEVICE_FLOW_KEY]: all });
+    // The user code is meant to be read by the user. The device code is the
+    // secret half, and stays in this worker.
+    return { flow: "device", userCode: code.userCode, verificationUri: code.verificationUri,
+      interval: code.interval, expiresAt: code.expiresAt };
+  }
+
+  if (!(chrome.identity && chrome.identity.launchWebAuthFlow && chrome.identity.getRedirectURL)) {
+    return { error: "TraceBug needs permission to open the " + adapter.label + " sign-in window. Click Connect again and allow it." };
+  }
+  const pair = await api.createPkcePair();
+  const state = api.randomToken(16);
+  const redirectUri = chrome.identity.getRedirectURL();
+  const url = api.buildAuthorizeUrl(c.spec, { redirectUri, state, challenge: pair.challenge });
+  let back;
+  try {
+    back = await chrome.identity.launchWebAuthFlow({ url, interactive: true });
+  } catch {
+    return { error: adapter.label + " sign-in was closed before it finished." };
+  }
+  const code = api.parseRedirect(back, state, adapter.label);
+  const tokens = await api.exchangeCode(c.spec, { code, verifier: pair.verifier, redirectUri }, Date.now());
+  return finishConnect(api, adapter, tokens);
+}
+
+/** One device-flow poll, driven by the window at the server's interval. */
+async function pollTrackerConnect(api, adapter) {
+  const c = adapter.connect();
+  if (!c || c.flow !== "device") return { error: "There is no sign-in to finish." };
+  const all = await sessionGet(DEVICE_FLOW_KEY, {});
+  const pending = all[adapter.id];
+  if (!pending) return { error: "This sign-in code is no longer valid. Click Connect again." };
+  let r;
+  try {
+    r = await api.pollDeviceToken(c.spec, pending, Date.now());
+  } catch (err) {
+    delete all[adapter.id];
+    await sessionSet({ [DEVICE_FLOW_KEY]: all });
+    throw err;
+  }
+  if (r.status === "pending") {
+    all[adapter.id] = Object.assign({}, pending, { interval: r.interval });
+    await sessionSet({ [DEVICE_FLOW_KEY]: all });
+    return { status: "pending", interval: r.interval };
+  }
+  delete all[adapter.id];
+  await sessionSet({ [DEVICE_FLOW_KEY]: all });
+  return Object.assign({ status: "done" }, await finishConnect(api, adapter, r.tokens));
+}
+
+async function disconnectTracker(api, adapter) {
+  await api.forgetOAuth(trackerAuthStore, adapter.id);
+  const got = await localGet([TRACKER_PREFS_KEY], {});
+  const prefs = got[TRACKER_PREFS_KEY] || {};
+  delete prefs[adapter.id];
+  await localSet({ [TRACKER_PREFS_KEY]: prefs });
+  // GitHub's revoke endpoint needs the client secret we don't have (ADR 010 §6),
+  // so the window links the user to where they can revoke it themselves.
+  return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/apps/authorizations" : null };
+}
+
+async function handleTrackerUi(message, sender) {
+  const b = bridgeLib();
+  const api = providerApi();
+  if (!b || !api || typeof api.trackerAdapter !== "function") {
+    return { error: "TraceBug could not load its tracker code. Reload the extension." };
+  }
+  if (b.TRACKER_UI_VERBS.indexOf(message.type) === -1) return { error: "Unsupported request type." };
+  let base = "";
+  try { base = chrome.runtime.getURL(""); } catch {}
+  if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base)) return { error: "Rejected." };
+
+  if (message.type === "tb:tracker:status") {
+    return { trackers: await trackerStatusList(api), oauthUi: oauthUiSupported() };
+  }
+
+  const adapter = api.trackerAdapter(message.tracker);
+  if (!adapter) return { error: "Unknown tracker." };
+  const integrations = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+  try {
+    switch (message.type) {
+      case "tb:tracker:containers": {
+        if (!(await hasAllHosts(adapter.apiHosts))) return { needsAccess: adapter.apiHosts };
+        const items = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => adapter.listContainers(auth));
+        return { items };
+      }
+      case "tb:tracker:fields": {
+        const container = typeof message.container === "string" ? message.container.trim().slice(0, 300) : "";
+        if (!container) return { fields: [] };
+        if (!(await hasAllHosts(adapter.apiHosts))) return { needsAccess: adapter.apiHosts };
+        const fields = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => adapter.listFields(auth, container));
+        return { fields };
+      }
+      case "tb:tracker:connect": return await connectTracker(api, adapter);
+      case "tb:tracker:connect-poll": return await pollTrackerConnect(api, adapter);
+      case "tb:tracker:disconnect": return await disconnectTracker(api, adapter);
+      default: return { error: "Unsupported request type." };
+    }
+  } catch (err) {
+    return {
+      error: api.mapProviderError(err, adapter.label),
+      reconnect: !!(err && err.name === "ReconnectNeededError"),
+    };
+  }
 }
 
 async function callLLMFromWorker(api, req) {

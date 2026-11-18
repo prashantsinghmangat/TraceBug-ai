@@ -121,14 +121,15 @@ export default defineConfig([
   // Phase 2b moved every provider call into the service worker, which cannot
   // import the page SDK. Rather than hand-duplicate ~200 lines of fetch and
   // parse logic (model ids, API-version headers, error mapping) in plain JS,
-  // the shared layer in src/providers/api.ts is bundled here as an IIFE that
+  // the shared layer in src/providers/ (api.ts plus the ADR 010 tracker and
+  // OAuth modules, gathered by worker.ts) is bundled here as an IIFE that
   // publishes `TraceBugProviderAPI`. background.js loads it with
   // importScripts() on Chrome and as a background script on Firefox.
   //
-  // src/providers/api.ts must stay free of DOM, window and localStorage for
+  // Everything worker.ts pulls in must stay free of DOM, window and localStorage for
   // this to run in a worker — see the header comment in that file.
   {
-    entry: { "tracebug-provider-api": "src/providers/api.ts" },
+    entry: { "tracebug-provider-api": "src/providers/worker.ts" },
     format: ["iife"],
     globalName: "TraceBugProviderAPI",
     dts: false,

@@ -75,7 +75,8 @@ describe('tabCapture is a required Chrome permission', () => {
   it('is left out of the base manifest the Firefox build uses', () => {
     const base = json('build/manifest.base.json');
     expect(base.permissions).not.toContain('tabCapture');
-    expect(base.optional_permissions).toBeUndefined();
+    // ADR 010 put `identity` here (stripped again for Firefox); tabCapture never.
+    expect(base.optional_permissions ?? []).not.toContain('tabCapture');
   });
 
   it('is added by the Chrome build alongside offscreen', () => {

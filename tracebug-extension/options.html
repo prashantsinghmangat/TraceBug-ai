@@ -129,6 +129,11 @@
     }
     .siterow button { padding: 5px 10px; font-size: 12px; }
     a { color: #FF8590; }
+    /* ADR 010: sign-in row + the token fallback tucked under Advanced. */
+    .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
+    .advanced { margin-top: 10px; }
+    .advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; }
   </style>
 </head>
 <body>
@@ -174,34 +179,61 @@
 
     <div class="card">
       <h2>GitHub <span class="pill" id="ghPill">Not configured</span></h2>
-      <p class="hint">Personal access token with <code>repo</code> scope. Issues are created directly from your browser.</p>
-      <label>Token
-        <input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" />
-      </label>
-      <label>Repository
-        <input id="ghRepo" type="text" spellcheck="false" placeholder="owner/repo" />
-      </label>
-      <div class="row">
-        <button id="ghSave" type="button">Save</button>
-        <button class="ghost" id="ghClear" type="button">Remove</button>
+      <!-- ADR 010: sign-in first (shown only where this build supports it),
+           the pasted token as the advanced fallback. -->
+      <div class="tracker-acct" data-tracker="github">
+        <p class="hint acct-line"></p>
+        <div class="row">
+          <button class="acct-connect" type="button" hidden>Connect GitHub</button>
+          <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
+        </div>
+        <div class="device" hidden>
+          <p class="hint">Enter <b class="device-code"></b> on <a class="device-link" href="#">github.com/login/device</a>.</p>
+        </div>
+        <div class="status acct-status"></div>
       </div>
-      <div class="status" id="ghStatus"></div>
+      <details class="advanced" id="ghAdvanced">
+        <summary>Advanced: use a token</summary>
+        <p class="hint">Personal access token with <code>repo</code> scope. Issues are created directly from your browser. You pick the repository when you create an issue.</p>
+        <label>Token
+          <input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" />
+        </label>
+        <label>Default repository (optional)
+          <input id="ghRepo" type="text" spellcheck="false" placeholder="owner/repo" />
+        </label>
+        <div class="row">
+          <button id="ghSave" type="button">Save</button>
+          <button class="ghost" id="ghClear" type="button">Remove</button>
+        </div>
+        <div class="status" id="ghStatus"></div>
+      </details>
     </div>
 
     <div class="card">
       <h2>Linear <span class="pill" id="lnPill">Not configured</span></h2>
-      <p class="hint">Personal API key and the team the issue is filed under.</p>
-      <label>API key
-        <input id="lnKey" type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" />
-      </label>
-      <label>Team ID
-        <input id="lnTeam" type="text" spellcheck="false" placeholder="TEAM" />
-      </label>
-      <div class="row">
-        <button id="lnSave" type="button">Save</button>
-        <button class="ghost" id="lnClear" type="button">Remove</button>
+      <div class="tracker-acct" data-tracker="linear">
+        <p class="hint acct-line"></p>
+        <div class="row">
+          <button class="acct-connect" type="button" hidden>Connect Linear</button>
+          <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
+        </div>
+        <div class="status acct-status"></div>
       </div>
-      <div class="status" id="lnStatus"></div>
+      <details class="advanced" id="lnAdvanced">
+        <summary>Advanced: use a token</summary>
+        <p class="hint">Personal API key. You pick the team when you create an issue.</p>
+        <label>API key
+          <input id="lnKey" type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" />
+        </label>
+        <label>Default team ID (optional)
+          <input id="lnTeam" type="text" spellcheck="false" placeholder="TEAM" />
+        </label>
+        <div class="row">
+          <button id="lnSave" type="button">Save</button>
+          <button class="ghost" id="lnClear" type="button">Remove</button>
+        </div>
+        <div class="status" id="lnStatus"></div>
+      </details>
     </div>
 
     <div class="card">

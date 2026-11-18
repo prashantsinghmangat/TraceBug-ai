@@ -141,8 +141,10 @@ async function refreshPills() {
   const r = await get([INT_KEY, AI_KEY]);
   const i = r[INT_KEY] || {};
   const a = r[AI_KEY] || null;
-  pill($("ghPill"), !!(i.github && i.github.token && i.github.repo));
-  pill($("lnPill"), !!(i.linear && i.linear.apiKey && i.linear.teamId));
+  // A credential is enough since ADR 010 (the repo/team is picked when filing).
+  // renderTrackerAccounts() then refines these with any OAuth sign-in.
+  pill($("ghPill"), !!(i.github && i.github.token));
+  pill($("lnPill"), !!(i.linear && i.linear.apiKey));
   pill($("slPill"), !!(i.slack && i.slack.webhookUrl));
   pill($("aiPill"), !!(a && a.provider && (a.provider === "ollama" || a.apiKey)));
 
@@ -339,7 +341,7 @@ async function saveGitHub(granted) {
   const repo = $("ghRepo").value.trim();
   const token = await keptSecret("github", "ghToken");
   if (!token) { say(status, "Enter a personal access token.", "err"); return; }
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { say(status, 'Repository must look like "owner/repo".', "err"); return; }
+  if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) { say(status, 'Repository must look like "owner/repo".', "err"); return; }
   const note = accessNote(granted, "api.github.com");
   if (await saveProvider("github", { token, repo }, status, note)) $("ghToken").value = "";
 }
@@ -353,7 +355,6 @@ async function saveLinear(granted) {
   const teamId = $("lnTeam").value.trim();
   const apiKey = await keptSecret("linear", "lnKey");
   if (!apiKey) { say(status, "Enter a Linear API key.", "err"); return; }
-  if (!teamId) { say(status, "Enter the team ID.", "err"); return; }
   const note = accessNote(granted, "api.linear.app");
   if (await saveProvider("linear", { apiKey, teamId }, status, note)) $("lnKey").value = "";
 }
@@ -452,10 +453,136 @@ async function renderLlmSites() {
   void refresh();
 })();
 
+// ── Tracker accounts (ADR 010) ──────────────────────────────────────────────
+// Sign-in state comes from the worker (tb:tracker:status), which answers this
+// page because it is an extension page. It carries the account NAME and how
+// it is connected — never a token. Connect is shown only where the build
+// supports it (the worker decides by feature detection), so Firefox keeps
+// exactly the pasted-token cards it had.
+
+function trackerMsg(type, extra) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(Object.assign({ type }, extra || {}), (res) => {
+        void chrome.runtime.lastError;
+        resolve(res || null);
+      });
+    } catch { resolve(null); }
+  });
+}
+
+const PILL_IDS = { github: "ghPill", linear: "lnPill" };
+const ADVANCED_IDS = { github: "ghAdvanced", linear: "lnAdvanced" };
+const acctPolls = {};
+
+async function renderTrackerAccounts() {
+  const res = await trackerMsg("tb:tracker:status");
+  if (!res || !Array.isArray(res.trackers)) return;
+  res.trackers.forEach((t) => {
+    const box = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"]');
+    if (!box) return;
+    const line = box.querySelector(".acct-line");
+    let text = "";
+    if (t.via === "oauth") text = "Connected" + (t.account ? " as " + t.account : "") + ".";
+    else if (t.via === "token") text = "Using a token." + (t.needsReconnect ? " Your " + t.label + " sign-in expired." : "");
+    else if (t.needsReconnect) text = "Your " + t.label + " sign-in expired. Reconnect to keep filing issues.";
+    else if (t.canConnect) text = "Connect " + t.label + " to pick repositories and fields when you file.";
+    line.textContent = text;
+    line.hidden = !text;
+    const connect = box.querySelector(".acct-connect");
+    connect.hidden = !t.canConnect || t.via === "oauth";
+    connect.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
+    connect.onclick = () => connectFromOptions(t, box);
+    const disconnect = box.querySelector(".acct-disconnect");
+    disconnect.hidden = t.via !== "oauth";
+    disconnect.onclick = () => disconnectFromOptions(t, box);
+    const pillEl = $(PILL_IDS[t.id]);
+    if (pillEl) {
+      pillEl.textContent = t.via === "oauth" ? "Connected" : t.connected ? "Configured" : t.needsReconnect ? "Reconnect" : "Not configured";
+      pillEl.className = "pill" + (t.connected ? " on" : t.needsReconnect ? " warn" : "");
+    }
+    // The token form is the main path wherever sign-in isn't offered.
+    const adv = $(ADVANCED_IDS[t.id]);
+    if (adv && !t.canConnect) adv.open = true;
+  });
+}
+
+function connectFromOptions(t, box) {
+  const status = box.querySelector(".acct-status");
+  const perm = t.connectPermissions || { permissions: [], origins: [] };
+  // permissions.request first, synchronously in the click (user gesture).
+  const ask = (perm.permissions.length || perm.origins.length)
+    ? new Promise((resolve) => {
+      try { chrome.permissions.request(perm, (g) => { void chrome.runtime.lastError; resolve(!!g); }); }
+      catch { resolve(false); }
+    })
+    : Promise.resolve(true);
+  ask.then(async (granted) => {
+    if (!granted) { say(status, "TraceBug needs that permission to sign in to " + t.label + ".", "err"); return; }
+    say(status, "Connecting to " + t.label + "…", "ok");
+    const res = await trackerMsg("tb:tracker:connect", { tracker: t.id });
+    if (!res || res.error) { say(status, (res && res.error) || "Could not connect.", "err"); return; }
+    if (res.flow === "device") {
+      const dev = box.querySelector(".device");
+      box.querySelector(".device-code").textContent = res.userCode || "";
+      const link = box.querySelector(".device-link");
+      link.textContent = String(res.verificationUri || "").replace(/^https:\/\//, "");
+      link.onclick = (e) => {
+        e.preventDefault();
+        try {
+          const u = new URL(res.verificationUri);
+          if (u.protocol === "https:") chrome.tabs.create({ url: u.toString() });
+        } catch {}
+      };
+      if (dev) dev.hidden = false;
+      say(status, "Waiting for you to enter the code…", "ok");
+      pollFromOptions(t, box, res.interval || 5);
+      return;
+    }
+    say(status, "Connected" + (res.account ? " as " + res.account : "") + ".", "ok");
+    await renderTrackerAccounts();
+  });
+}
+
+function pollFromOptions(t, box, seconds) {
+  clearTimeout(acctPolls[t.id]);
+  acctPolls[t.id] = setTimeout(async () => {
+    const status = box.querySelector(".acct-status");
+    const dev = box.querySelector(".device");
+    const res = await trackerMsg("tb:tracker:connect-poll", { tracker: t.id });
+    if (!res || res.error) {
+      if (dev) dev.hidden = true;
+      say(status, (res && res.error) || "Sign-in failed. Click Connect to try again.", "err");
+      return;
+    }
+    if (res.status === "pending") { pollFromOptions(t, box, res.interval || seconds); return; }
+    if (dev) dev.hidden = true;
+    say(status, "Connected" + (res.account ? " as " + res.account : "") + ".", "ok");
+    await renderTrackerAccounts();
+  }, Math.max(1, seconds) * 1000);
+}
+
+async function disconnectFromOptions(t, box) {
+  const status = box.querySelector(".acct-status");
+  const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id });
+  if (!res || res.error) { say(status, (res && res.error) || "Could not disconnect.", "err"); return; }
+  say(status, res.revokeUrl
+    ? "Disconnected. To revoke TraceBug's access entirely, visit " + res.revokeUrl
+    : "Disconnected.", "ok");
+  await renderTrackerAccounts();
+}
+
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && (changes.tb_tracker_auth_v1 || changes[INT_KEY])) renderTrackerAccounts();
+  });
+} catch {}
+
 // ── Boot ────────────────────────────────────────────────────────────────────
 
 applyProviderUI();
 refreshPills();
+renderTrackerAccounts();
 showMigrationNotices();
 renderLlmSites();
 

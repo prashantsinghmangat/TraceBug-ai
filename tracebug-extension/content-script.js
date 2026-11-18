@@ -156,15 +156,18 @@ safeRun(function () {
 // token here: the attribute is readable by every script on the page.
 var TB_INT_KEY = "tb_integrations_v1";
 var TB_AI_KEY = "tb_ai_config_v1";
+// ADR 010 OAuth sign-ins. Read here only to publish "connected" booleans.
+var TB_TRACKER_AUTH_KEY = "tb_tracker_auth_v1";
 
 safeRun(function () {
   if (!isExtAlive() || !document.documentElement) return;
 
-  function toStatus(integrations, ai, workerAnswer) {
+  function toStatus(integrations, ai, workerAnswer, auth) {
     var hostAccess = workerAnswer && workerAnswer.granted;
     var shortcut = (workerAnswer && workerAnswer.shortcut) || "";
     var i = integrations || {};
     var a = ai || null;
+    var o = auth || {};
     return {
       // Can TraceBug keep capturing after the user navigates to another
       // origin? Phase 1 made <all_urls> optional, so this is now a real
@@ -178,8 +181,10 @@ safeRun(function () {
       // the SDK needs to know when the browser owns Ctrl+Shift+B so one press
       // does not fire both the command and the in-page handler.
       shortcut: typeof shortcut === "string" ? shortcut : "",
-      github: !!(i.github && i.github.token && i.github.repo),
-      linear: !!(i.linear && i.linear.apiKey && i.linear.teamId),
+      // A credential is enough since ADR 010: the repo/team is picked in the
+      // extension's Create window, not typed in settings.
+      github: !!((i.github && i.github.token) || o.github),
+      linear: !!((i.linear && i.linear.apiKey) || o.linear),
       slack: !!(i.slack && i.slack.webhookUrl),
       // Ollama is local and needs no key, so "configured" means a provider is
       // chosen and either it's ollama or a key is present.
@@ -195,17 +200,18 @@ safeRun(function () {
 
   function readAndPublish() {
     try {
-      chrome.storage.local.get([TB_INT_KEY, TB_AI_KEY], function (r) {
+      chrome.storage.local.get([TB_INT_KEY, TB_AI_KEY, TB_TRACKER_AUTH_KEY], function (r) {
         var _ = chrome.runtime.lastError;
         var ints = r && r[TB_INT_KEY];
         var ai = r && r[TB_AI_KEY];
+        var auth = r && r[TB_TRACKER_AUTH_KEY];
         try {
           chrome.runtime.sendMessage({ type: "TB_HOST_ACCESS" }, function (res) {
             var _e = chrome.runtime.lastError;
-            publishStatus(toStatus(ints, ai, res));
+            publishStatus(toStatus(ints, ai, res, auth));
           });
         } catch (e2) {
-          publishStatus(toStatus(ints, ai, undefined));
+          publishStatus(toStatus(ints, ai, undefined, auth));
         }
       });
     } catch (e) {}
@@ -225,7 +231,7 @@ safeRun(function () {
   // SDK without a reload (tracebug-init.js observes the attribute).
   try {
     chrome.storage.onChanged.addListener(function (changes, area) {
-      if (area === "local" && (changes[TB_INT_KEY] || changes[TB_AI_KEY])) readAndPublish();
+      if (area === "local" && (changes[TB_INT_KEY] || changes[TB_AI_KEY] || changes[TB_TRACKER_AUTH_KEY])) readAndPublish();
     });
   } catch (e) {}
 });

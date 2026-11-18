@@ -351,3 +351,15 @@ will paste into public issues.
 Finally click **Report a TraceBug bug**. **Pass:** GitHub's new-issue form opens with the diagnostics
 in a collapsed block, nothing is submitted, and the URL is not so long the browser truncates it.
 
+
+### 21. Tracker Create panel (Phase 13, ADR 010) — real accounts, Chrome
+
+Chrome build, a real GitHub fine-grained or classic token saved under **Advanced: use a token** with no
+default repository. Capture a bug, click **Send to GitHub**. **Pass:** the window titled "Create an issue"
+lists your real repositories (including organisation ones), labels load after picking one, **Create issue**
+files it, the issue opens in a new tab, and the ticket shows "GitHub issue created #N". Send again:
+the same repository and labels are preselected. Repeat with a Linear API key: teams are listed by name.
+Check both with the OS in light and dark mode, and with the keyboard only (Tab, arrows, Space, Enter, Esc).
+
+Firefox (`npm run ext:firefox`): the settings cards show no Connect button, the token form is open, and
+the same send files the issue through the same window.

@@ -23,6 +23,8 @@
     }
   },
 
+  "optional_permissions": ["identity"],
+
   "optional_host_permissions": [
     "<all_urls>",
     "https://api.github.com/*",

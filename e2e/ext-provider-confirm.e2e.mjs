@@ -174,7 +174,9 @@ try {
     // The timeout must be on chrome.alarms, not setTimeout: a terminated
     // worker takes its timers with it.
     check("the timeout is armed as a chrome.alarms alarm", !!confirmAlarm, JSON.stringify(armed));
-    check("the timeout is ~2 minutes out", !!confirmAlarm && confirmAlarm.inMs > 100000 && confirmAlarm.inMs <= 121000,
+    // ADR 010: a tracker send's window includes signing in and picking a
+    // repo, so it gets 10 minutes; an AI analysis keeps 2 (provider-bridge.test.ts).
+    check("the timeout is ~10 minutes out", !!confirmAlarm && confirmAlarm.inMs > 580000 && confirmAlarm.inMs <= 601000,
       confirmAlarm ? Math.round(confirmAlarm.inMs / 1000) + "s" : "none");
   }
 
@@ -391,7 +393,7 @@ try {
   if (win5) { await win5.click("#cancel"); await sleep(700); }
 
   // ══ 8. A stale pending request is reaped and reported ═════════════════════
-  // The real timeout is two minutes on chrome.alarms, which is covered by the
+  // The real timeout (10 min for a tracker send) is on chrome.alarms, covered by the
   // alarm assertions above. This exercises the same cancel path through the
   // reaper, which is what runs when the worker was asleep at the deadline.
   const id6 = await page.evaluate(() => window.__tbSend({

@@ -18,21 +18,60 @@ var TraceBugProviderAPI = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // src/providers/api.ts
-  var api_exports = {};
-  __export(api_exports, {
+  // src/providers/worker.ts
+  var worker_exports = {};
+  __export(worker_exports, {
     DEFAULT_BASE_URLS: () => DEFAULT_BASE_URLS,
+    ISSUE_TRACKERS: () => ISSUE_TRACKERS,
+    ISSUE_URL_HOSTS: () => ISSUE_URL_HOSTS,
+    MAX_CONTAINERS: () => MAX_CONTAINERS,
+    NotConnectedError: () => NotConnectedError,
+    OAUTH_CLIENTS: () => OAUTH_CLIENTS,
+    OAuthError: () => OAuthError,
     PROVIDER_BODY_LIMITS: () => PROVIDER_BODY_LIMITS,
     PROVIDER_ORIGINS: () => PROVIDER_ORIGINS,
+    ProviderHttpError: () => ProviderHttpError,
+    REFRESH_SKEW_MS: () => REFRESH_SKEW_MS,
+    ReconnectNeededError: () => ReconnectNeededError,
     SYSTEM_PROMPT: () => SYSTEM_PROMPT,
+    TODO_OWNER_CLIENT_ID: () => TODO_OWNER_CLIENT_ID,
+    TRACKER_ADAPTERS: () => TRACKER_ADAPTERS,
+    base64url: () => base64url,
+    buildAuthorizeUrl: () => buildAuthorizeUrl,
     callLLM: () => callLLM,
     capProviderBody: () => capProviderBody,
+    createPkcePair: () => createPkcePair,
+    describeAuth: () => describeAuth,
+    describeOAuthError: () => describeOAuthError,
+    exchangeCode: () => exchangeCode,
+    forgetOAuth: () => forgetOAuth,
     friendlyStatus: () => friendlyStatus,
+    github: () => github,
+    hasOAuthClient: () => hasOAuthClient,
+    isTrustedIssueUrl: () => isTrustedIssueUrl,
+    legacyContainer: () => legacyContainer,
+    legacyToken: () => legacyToken,
+    linear: () => linear,
     mapProviderError: () => mapProviderError,
+    nextLink: () => nextLink,
+    parseJsonOrThrow: () => parseJsonOrThrow,
+    parseRedirect: () => parseRedirect,
+    parseTokenResponse: () => parseTokenResponse,
+    pkceChallenge: () => pkceChallenge,
+    pollDeviceToken: () => pollDeviceToken,
     postGitHubIssue: () => postGitHubIssue,
     postLinearIssue: () => postLinearIssue,
-    postSlackMessage: () => postSlackMessage
+    postSlackMessage: () => postSlackMessage,
+    randomToken: () => randomToken,
+    refreshTokens: () => refreshTokens,
+    requestDeviceCode: () => requestDeviceCode,
+    resolveAuth: () => resolveAuth,
+    saveOAuth: () => saveOAuth,
+    trackerAdapter: () => trackerAdapter,
+    withTrackerAuth: () => withTrackerAuth
   });
+
+  // src/providers/api.ts
   var DEFAULT_BASE_URLS = {
     anthropic: "https://api.anthropic.com",
     openai: "https://api.openai.com",
@@ -126,18 +165,25 @@ var TraceBugProviderAPI = (() => {
     }
     return null;
   }
+  var ProviderHttpError = class extends Error {
+    constructor(message, status) {
+      super(message);
+      this.name = "ProviderHttpError";
+      this.status = status;
+    }
+  };
   async function parseJsonOrThrow(res, label, kind) {
     let body;
     try {
       body = await res.json();
     } catch (e) {
-      if (!res.ok) throw new Error(friendlyStatus(res.status, label, kind));
+      if (!res.ok) throw new ProviderHttpError(friendlyStatus(res.status, label, kind), res.status);
       throw new Error(`${label} returned an unreadable response.`);
     }
     if (!res.ok) {
       const own = extractProviderError(body);
       const friendly = friendlyStatus(res.status, label, kind);
-      throw new Error(own && own !== friendly ? `${friendly} (${own})` : friendly);
+      throw new ProviderHttpError(own && own !== friendly ? `${friendly} (${own})` : friendly, res.status);
     }
     return body;
   }
@@ -172,8 +218,9 @@ var TraceBugProviderAPI = (() => {
       signal,
       headers: {
         "content-type": "application/json",
-        // Linear personal API keys go in Authorization verbatim (no "Bearer").
-        "authorization": config.apiKey
+        // Linear personal API keys go in Authorization verbatim (no "Bearer");
+        // OAuth access tokens do take it.
+        "authorization": config.bearer ? `Bearer ${config.apiKey}` : config.apiKey
       },
       body: JSON.stringify({
         query,
@@ -326,5 +373,490 @@ var TraceBugProviderAPI = (() => {
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  return __toCommonJS(api_exports);
+
+  // src/providers/oauth.ts
+  var OAuthError = class extends Error {
+    constructor(code, message, status) {
+      super(message);
+      this.name = "OAuthError";
+      this.code = code;
+      this.status = status;
+    }
+  };
+  function base64url(bytes) {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function randomToken(bytes = 32) {
+    const buf = new Uint8Array(bytes);
+    crypto.getRandomValues(buf);
+    return base64url(buf);
+  }
+  async function pkceChallenge(verifier) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    return base64url(new Uint8Array(digest));
+  }
+  async function createPkcePair() {
+    const verifier = randomToken(32);
+    return { verifier, challenge: await pkceChallenge(verifier) };
+  }
+  function buildAuthorizeUrl(spec, opts) {
+    if (!spec.authorizeUrl) throw new OAuthError("unsupported", `${spec.label} has no sign-in page configured.`);
+    const u = new URL(spec.authorizeUrl);
+    const p = u.searchParams;
+    p.set("response_type", "code");
+    p.set("client_id", spec.clientId);
+    p.set("redirect_uri", opts.redirectUri);
+    p.set("state", opts.state);
+    p.set("code_challenge", opts.challenge);
+    p.set("code_challenge_method", "S256");
+    if (spec.scope) p.set("scope", spec.scope);
+    for (const [k, v] of Object.entries(spec.authorizeParams || {})) p.set(k, v);
+    return u.toString();
+  }
+  function parseRedirect(redirectUrl, expectedState, label) {
+    let u;
+    try {
+      u = new URL(redirectUrl);
+    } catch (e) {
+      throw new OAuthError("bad_redirect", `${label} sign-in returned an unreadable address.`);
+    }
+    const p = u.searchParams;
+    const err = p.get("error");
+    if (err) throw new OAuthError(err, describeOAuthError(err, label, p.get("error_description")));
+    if (p.get("state") !== expectedState) {
+      throw new OAuthError("state_mismatch", `${label} sign-in could not be verified. Try connecting again.`);
+    }
+    const code = p.get("code");
+    if (!code) throw new OAuthError("no_code", `${label} sign-in did not return a code. Try connecting again.`);
+    return code;
+  }
+  function parseTokenResponse(json, now, label) {
+    const j = json && typeof json === "object" ? json : {};
+    if (typeof j.error === "string") {
+      throw new OAuthError(j.error, describeOAuthError(j.error, label, j.error_description));
+    }
+    const accessToken = typeof j.access_token === "string" ? j.access_token : "";
+    if (!accessToken) throw new OAuthError("no_token", `${label} did not return a token.`);
+    const secs = (v) => typeof v === "number" && v > 0 ? v : typeof v === "string" && +v > 0 ? +v : 0;
+    const out = { accessToken };
+    if (typeof j.refresh_token === "string" && j.refresh_token) out.refreshToken = j.refresh_token;
+    if (secs(j.expires_in)) out.expiresAt = now + secs(j.expires_in) * 1e3;
+    if (secs(j.refresh_token_expires_in)) out.refreshExpiresAt = now + secs(j.refresh_token_expires_in) * 1e3;
+    if (typeof j.scope === "string") out.scope = j.scope;
+    return out;
+  }
+  async function postForm(url, form, label, fetchFn, signal) {
+    const res = await fetchFn(url, {
+      method: "POST",
+      signal,
+      // GitHub answers form-encoded unless asked for JSON.
+      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: new URLSearchParams(form).toString()
+    });
+    let json = null;
+    try {
+      json = await res.json();
+    } catch (e) {
+    }
+    if (!res.ok && !(json && typeof json.error === "string")) {
+      throw new OAuthError(String(res.status), `${label} sign-in failed (HTTP ${res.status}).`, res.status);
+    }
+    return json;
+  }
+  async function exchangeCode(spec, opts, now, fetchFn = fetch, signal) {
+    const json = await postForm(spec.tokenUrl, {
+      grant_type: "authorization_code",
+      client_id: spec.clientId,
+      code: opts.code,
+      code_verifier: opts.verifier,
+      redirect_uri: opts.redirectUri
+    }, spec.label, fetchFn, signal);
+    return parseTokenResponse(json, now, spec.label);
+  }
+  async function refreshTokens(spec, refreshToken, now, fetchFn = fetch, signal) {
+    const json = await postForm(spec.tokenUrl, {
+      grant_type: "refresh_token",
+      client_id: spec.clientId,
+      refresh_token: refreshToken
+    }, spec.label, fetchFn, signal);
+    const next = parseTokenResponse(json, now, spec.label);
+    if (!next.refreshToken) next.refreshToken = refreshToken;
+    return next;
+  }
+  async function requestDeviceCode(spec, now, fetchFn = fetch, signal) {
+    if (!spec.deviceCodeUrl) throw new OAuthError("unsupported", `${spec.label} has no device sign-in configured.`);
+    const form = { client_id: spec.clientId };
+    if (spec.scope) form.scope = spec.scope;
+    const j = await postForm(spec.deviceCodeUrl, form, spec.label, fetchFn, signal) || {};
+    if (typeof j.error === "string") {
+      throw new OAuthError(j.error, describeOAuthError(j.error, spec.label, j.error_description));
+    }
+    if (typeof j.device_code !== "string" || typeof j.user_code !== "string" || typeof j.verification_uri !== "string") {
+      throw new OAuthError("bad_response", `${spec.label} did not return a sign-in code.`);
+    }
+    return {
+      deviceCode: j.device_code,
+      userCode: j.user_code,
+      verificationUri: j.verification_uri,
+      interval: typeof j.interval === "number" && j.interval > 0 ? j.interval : 5,
+      expiresAt: now + (typeof j.expires_in === "number" && j.expires_in > 0 ? j.expires_in : 900) * 1e3
+    };
+  }
+  async function pollDeviceToken(spec, code, now, fetchFn = fetch, signal) {
+    if (now >= code.expiresAt) {
+      throw new OAuthError("expired_token", describeOAuthError("expired_token", spec.label));
+    }
+    const j = await postForm(spec.tokenUrl, {
+      client_id: spec.clientId,
+      device_code: code.deviceCode,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+    }, spec.label, fetchFn, signal) || {};
+    if (j.error === "authorization_pending") return { status: "pending", interval: code.interval };
+    if (j.error === "slow_down") {
+      const asked = typeof j.interval === "number" && j.interval > 0 ? j.interval : 0;
+      return { status: "pending", interval: Math.max(asked, code.interval + 5) };
+    }
+    return { status: "done", tokens: parseTokenResponse(j, now, spec.label) };
+  }
+  function describeOAuthError(code, label, vendorText) {
+    switch (code) {
+      case "access_denied":
+        return `You declined access in ${label}. Click Connect to try again.`;
+      case "expired_token":
+        return `The ${label} sign-in code expired before it was entered. Click Connect to get a new one.`;
+      case "invalid_grant":
+        return `${label} no longer accepts this sign-in. Connect again.`;
+      case "device_flow_disabled":
+        return `${label} sign-in is not enabled for TraceBug's app yet. Use a token in TraceBug settings for now.`;
+      case "incorrect_client_credentials":
+      case "invalid_client":
+      case "unauthorized_client":
+        return `${label} did not recognise TraceBug's app. Use a token in TraceBug settings for now.`;
+      default:
+        return vendorText ? `${label} sign-in failed: ${vendorText}` : `${label} sign-in failed (${code}).`;
+    }
+  }
+
+  // src/providers/auth-store.ts
+  var ISSUE_TRACKERS = ["github", "linear"];
+  var REFRESH_SKEW_MS = 60 * 1e3;
+  var NotConnectedError = class extends Error {
+    constructor(label) {
+      super(`${label} is not connected \u2014 connect it in TraceBug, or add a token in settings.`);
+      this.name = "NotConnectedError";
+    }
+  };
+  var ReconnectNeededError = class extends Error {
+    constructor(label) {
+      super(`${label} needs you to reconnect \u2014 your sign-in expired or was revoked.`);
+      this.name = "ReconnectNeededError";
+    }
+  };
+  function legacyToken(tracker, i) {
+    if (!i) return "";
+    if (tracker === "github") return i.github && i.github.token || "";
+    if (tracker === "linear") return i.linear && i.linear.apiKey || "";
+    return "";
+  }
+  function legacyContainer(tracker, i) {
+    if (!i) return "";
+    if (tracker === "github") return i.github && i.github.repo || "";
+    if (tracker === "linear") return i.linear && i.linear.teamId || "";
+    return "";
+  }
+  var inflight = /* @__PURE__ */ new Map();
+  async function markReconnect(store, tracker) {
+    const map = await store.read();
+    const cur = map[tracker];
+    if (!cur) return;
+    map[tracker] = { ...cur, needsReconnect: true };
+    await store.write(map);
+  }
+  async function doRefresh(store, tracker, spec, now, fetchFn) {
+    const running = inflight.get(tracker);
+    if (running) return running;
+    const p = (async () => {
+      const map = await store.read();
+      const cur = map[tracker];
+      const rt = cur && cur.tokens.refreshToken;
+      if (!cur || !rt || cur.tokens.refreshExpiresAt && cur.tokens.refreshExpiresAt <= now) {
+        await markReconnect(store, tracker);
+        throw new ReconnectNeededError(spec.label);
+      }
+      let next;
+      try {
+        next = await refreshTokens(spec, rt, now, fetchFn);
+      } catch (err) {
+        if (err instanceof OAuthError && (err.code === "invalid_grant" || err.code === "bad_refresh_token" || err.status === 401)) {
+          await markReconnect(store, tracker);
+          throw new ReconnectNeededError(spec.label);
+        }
+        throw err;
+      }
+      const again = await store.read();
+      again[tracker] = { ...again[tracker] || cur, tokens: next, needsReconnect: false };
+      await store.write(again);
+      return next;
+    })();
+    inflight.set(tracker, p);
+    try {
+      return await p;
+    } finally {
+      inflight.delete(tracker);
+    }
+  }
+  async function resolveAuth(ctx) {
+    const now = (ctx.now || Date.now)();
+    const map = await ctx.store.read();
+    const o = map[ctx.tracker];
+    const pasted = legacyToken(ctx.tracker, ctx.integrations);
+    if (o && !o.needsReconnect) {
+      const exp = o.tokens.expiresAt;
+      if (!exp || exp - now > REFRESH_SKEW_MS) return { via: "oauth", token: o.tokens.accessToken, account: o.account };
+      if (ctx.spec) {
+        try {
+          const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch);
+          return { via: "oauth", token: t.accessToken, account: o.account };
+        } catch (err) {
+          if (!(err instanceof ReconnectNeededError) || !pasted) throw err;
+        }
+      } else if (!pasted) {
+        throw new ReconnectNeededError(ctx.label);
+      }
+    }
+    if (pasted) return { via: "token", token: pasted };
+    if (o) throw new ReconnectNeededError(ctx.label);
+    throw new NotConnectedError(ctx.label);
+  }
+  async function withTrackerAuth(ctx, fn) {
+    const auth = await resolveAuth(ctx);
+    try {
+      return await fn(auth);
+    } catch (err) {
+      if (auth.via !== "oauth" || statusOf(err) !== 401) throw err;
+      if (!ctx.spec) {
+        await markReconnect(ctx.store, ctx.tracker);
+        throw new ReconnectNeededError(ctx.label);
+      }
+      const now = (ctx.now || Date.now)();
+      const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch);
+      try {
+        return await fn({ ...auth, token: t.accessToken });
+      } catch (err2) {
+        if (statusOf(err2) === 401) {
+          await markReconnect(ctx.store, ctx.tracker);
+          throw new ReconnectNeededError(ctx.label);
+        }
+        throw err2;
+      }
+    }
+  }
+  function statusOf(err) {
+    const s = err && typeof err === "object" ? err.status : void 0;
+    return typeof s === "number" ? s : void 0;
+  }
+  async function saveOAuth(store, tracker, tokens, account, now) {
+    const map = await store.read();
+    map[tracker] = { tokens, account, connectedAt: now };
+    await store.write(map);
+  }
+  async function forgetOAuth(store, tracker) {
+    const map = await store.read();
+    const cur = map[tracker];
+    delete map[tracker];
+    await store.write(map);
+    return cur;
+  }
+  function describeAuth(tracker, map, integrations) {
+    const o = map[tracker];
+    const pasted = !!legacyToken(tracker, integrations);
+    if (o && !o.needsReconnect) return { connected: true, via: "oauth", account: o.account, needsReconnect: false };
+    if (pasted) return { connected: true, via: "token", needsReconnect: !!o };
+    return { connected: false, via: null, needsReconnect: !!o };
+  }
+
+  // src/providers/oauth-clients.ts
+  var TODO_OWNER_CLIENT_ID = "TODO_OWNER_CLIENT_ID";
+  var OAUTH_CLIENTS = {
+    /** GitHub App with Device Flow enabled (Issues: R/W, Metadata: R). */
+    github: TODO_OWNER_CLIENT_ID,
+    /** Linear OAuth app; PKCE, scopes `read,write`. */
+    linear: TODO_OWNER_CLIENT_ID,
+    /** Microsoft Entra app registration, multi-tenant, Azure DevOps delegated permission. */
+    ado: TODO_OWNER_CLIENT_ID,
+    /** gitlab.com application, "Confidential" unticked, scope `api`. */
+    gitlab: TODO_OWNER_CLIENT_ID
+  };
+  function hasOAuthClient(tracker) {
+    const id = OAUTH_CLIENTS[tracker];
+    return !!id && id !== TODO_OWNER_CLIENT_ID;
+  }
+
+  // src/providers/trackers.ts
+  var MAX_CONTAINERS = 500;
+  var MAX_LABELS = 300;
+  function asList(v) {
+    if (Array.isArray(v)) return v.filter((s) => typeof s === "string" && s);
+    return typeof v === "string" && v ? [v] : [];
+  }
+  var GH_API = "https://api.github.com";
+  function ghHeaders(auth) {
+    return {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${auth.token}`,
+      "x-github-api-version": "2022-11-28"
+    };
+  }
+  function nextLink(link) {
+    if (!link) return null;
+    for (const part of link.split(",")) {
+      const m = part.match(/<([^>]+)>\s*;\s*rel="next"/);
+      if (m) return m[1];
+    }
+    return null;
+  }
+  async function ghPages(auth, first, max, signal) {
+    const out = [];
+    let url = first;
+    while (url && out.length < max) {
+      if (!url.startsWith(GH_API + "/")) break;
+      const res = await fetch(url, { headers: ghHeaders(auth), signal });
+      const data = await parseJsonOrThrow(res, "GitHub", "tracker");
+      if (!Array.isArray(data)) break;
+      out.push(...data);
+      url = nextLink(res.headers.get("link"));
+    }
+    return out.slice(0, max);
+  }
+  var github = {
+    id: "github",
+    label: "GitHub",
+    containerNoun: "Repository",
+    apiHosts: ["https://api.github.com/*"],
+    connect() {
+      if (!hasOAuthClient("github")) return null;
+      return {
+        flow: "device",
+        // A GitHub App takes no scopes: its permissions are set on the app.
+        spec: {
+          label: "GitHub",
+          clientId: OAUTH_CLIENTS.github,
+          deviceCodeUrl: "https://github.com/login/device/code",
+          tokenUrl: "https://github.com/login/oauth/access_token"
+        },
+        hosts: ["https://github.com/*", "https://api.github.com/*"]
+      };
+    },
+    async whoAmI(auth, signal) {
+      const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+      const d = await parseJsonOrThrow(res, "GitHub", "tracker");
+      return d.login || "";
+    },
+    async listContainers(auth, signal) {
+      const repos = await ghPages(
+        auth,
+        `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+        MAX_CONTAINERS,
+        signal
+      );
+      return repos.filter((r) => typeof r.full_name === "string" && !r.archived).map((r) => ({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : void 0 }));
+    },
+    async listFields(auth, container, signal) {
+      if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
+      const labels = await ghPages(auth, `${GH_API}/repos/${container}/labels?per_page=100`, MAX_LABELS, signal);
+      const options = labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name, label: l.name }));
+      return [{
+        key: "labels",
+        label: "Labels",
+        kind: "multi",
+        options,
+        note: "GitHub drops labels silently unless you can push to the repository."
+      }];
+    },
+    async createIssue(auth, container, values, content, signal) {
+      return postGitHubIssue({ token: auth.token, repo: container, labels: asList(values.labels) }, content, signal);
+    }
+  };
+  function linearAuthHeader(auth) {
+    return auth.via === "oauth" ? `Bearer ${auth.token}` : auth.token;
+  }
+  async function linearQuery(auth, query, signal) {
+    var _a;
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json", authorization: linearAuthHeader(auth) },
+      body: JSON.stringify({ query })
+    });
+    const data = await parseJsonOrThrow(res, "Linear", "tracker");
+    if (Array.isArray(data.errors) && data.errors.length) {
+      throw new Error(((_a = data.errors[0]) == null ? void 0 : _a.message) || "Linear rejected the request.");
+    }
+    return data.data || {};
+  }
+  var linear = {
+    id: "linear",
+    label: "Linear",
+    containerNoun: "Team",
+    apiHosts: ["https://api.linear.app/*"],
+    connect() {
+      if (!hasOAuthClient("linear")) return null;
+      return {
+        flow: "pkce",
+        spec: {
+          label: "Linear",
+          clientId: OAUTH_CLIENTS.linear,
+          authorizeUrl: "https://linear.app/oauth/authorize",
+          tokenUrl: "https://api.linear.app/oauth/token",
+          scope: "read,write"
+        },
+        hosts: ["https://api.linear.app/*"]
+      };
+    },
+    async whoAmI(auth, signal) {
+      const d = await linearQuery(auth, "query { viewer { name email } }", signal);
+      return d.viewer && (d.viewer.email || d.viewer.name) || "";
+    },
+    async listContainers(auth, signal) {
+      const d = await linearQuery(
+        auth,
+        "query { teams(first: 250) { nodes { id key name } } }",
+        signal
+      );
+      return (d.teams && d.teams.nodes || []).filter((t) => typeof t.id === "string").map((t) => ({ id: t.id, label: t.name || t.key || t.id, detail: t.key }));
+    },
+    // Labels, assignee, priority and project arrive in Phase 3.
+    async listFields() {
+      return [];
+    },
+    async createIssue(auth, container, _values, content, signal) {
+      return postLinearIssue(
+        { apiKey: auth.token, teamId: container, bearer: auth.via === "oauth" },
+        { title: content.title, body: capProviderBody("linear", content.body).text },
+        signal
+      );
+    }
+  };
+  var TRACKER_ADAPTERS = { github, linear };
+  function trackerAdapter(id) {
+    return Object.prototype.hasOwnProperty.call(TRACKER_ADAPTERS, id) ? TRACKER_ADAPTERS[id] : null;
+  }
+  var ISSUE_URL_HOSTS = {
+    github: ["github.com"],
+    linear: ["linear.app"]
+  };
+  function isTrustedIssueUrl(tracker, url) {
+    if (typeof url !== "string") return false;
+    let u;
+    try {
+      u = new URL(url);
+    } catch (e) {
+      return false;
+    }
+    if (u.protocol !== "https:") return false;
+    return (ISSUE_URL_HOSTS[tracker] || []).some((h) => u.hostname === h || u.hostname.endsWith("." + h));
+  }
+  return __toCommonJS(worker_exports);
 })();

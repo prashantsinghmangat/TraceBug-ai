@@ -788,6 +788,8 @@ var TraceBugModule = (() => {
         { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
         { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
         { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        // GitHub App user-to-server tokens and their refresh tokens (ADR 010)
+        { name: "github_user", re: /\bgh[ur]_[A-Za-z0-9]{30,}\b/g, replace: mask },
         // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
         { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
         { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
@@ -805,6 +807,8 @@ var TraceBugModule = (() => {
         { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
         // Linear / Vercel / Cloudflare / Discord
         { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+        // Linear OAuth access tokens (ADR 010)
+        { name: "linear_oauth", re: /\blin_oauth_[A-Za-z0-9]{32,}\b/g, replace: mask },
         { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
         // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
         // session IDs, etc. that don't carry a recognizable prefix. Conservative:
@@ -21523,7 +21527,7 @@ var TraceBugModule = (() => {
       }));
     });
   }
-  function callProvider(verb, detail) {
+  function callProvider(verb, detail, timeoutMs = PROVIDER_TIMEOUT_MS) {
     return new Promise((resolve, reject) => {
       const id = nextId("tb_send");
       let settled = false;
@@ -21551,19 +21555,23 @@ var TraceBugModule = (() => {
       window.addEventListener("tracebug-provider-result", onResult);
       const timer = setTimeout(() => {
         finish(() => reject(new TraceBugCancelled("Send timed out waiting for confirmation.")));
-      }, PROVIDER_TIMEOUT_MS);
+      }, timeoutMs);
       window.dispatchEvent(new CustomEvent("tracebug-provider-request", {
         detail: { id, type: verb, data: detail }
       }));
     });
   }
   function sendTrackerViaBridge(provider, content) {
-    return callProvider("tb:provider:send", { provider, payload: content });
+    return callProvider(
+      "tb:provider:send",
+      { provider, payload: content },
+      provider === "slack" ? PROVIDER_TIMEOUT_MS : TRACKER_TIMEOUT_MS
+    );
   }
   function analyzeViaBridge(prompt) {
     return callProvider("tb:llm:analyze", { payload: { prompt } });
   }
-  var TraceBugCancelled, _rpcCounter, PROVIDER_TIMEOUT_MS;
+  var TraceBugCancelled, _rpcCounter, PROVIDER_TIMEOUT_MS, TRACKER_TIMEOUT_MS;
   var init_ext_rpc = __esm({
     "src/ext-rpc.ts"() {
       "use strict";
@@ -21575,6 +21583,7 @@ var TraceBugModule = (() => {
       };
       _rpcCounter = 0;
       PROVIDER_TIMEOUT_MS = 15e4;
+      TRACKER_TIMEOUT_MS = 10 * 60 * 1e3 + 3e4;
     }
   });
 
@@ -32276,13 +32285,13 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     try {
       body = await res.json();
     } catch (e2) {
-      if (!res.ok) throw new Error(friendlyStatus(res.status, label, kind));
+      if (!res.ok) throw new ProviderHttpError(friendlyStatus(res.status, label, kind), res.status);
       throw new Error(`${label} returned an unreadable response.`);
     }
     if (!res.ok) {
       const own = extractProviderError(body);
       const friendly = friendlyStatus(res.status, label, kind);
-      throw new Error(own && own !== friendly ? `${friendly} (${own})` : friendly);
+      throw new ProviderHttpError(own && own !== friendly ? `${friendly} (${own})` : friendly, res.status);
     }
     return body;
   }
@@ -32317,8 +32326,9 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       signal,
       headers: {
         "content-type": "application/json",
-        // Linear personal API keys go in Authorization verbatim (no "Bearer").
-        "authorization": config.apiKey
+        // Linear personal API keys go in Authorization verbatim (no "Bearer");
+        // OAuth access tokens do take it.
+        "authorization": config.bearer ? `Bearer ${config.apiKey}` : config.apiKey
       },
       body: JSON.stringify({
         query,
@@ -32471,7 +32481,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  var DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE;
+  var DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
   var init_api = __esm({
     "src/providers/api.ts"() {
       "use strict";
@@ -32488,6 +32498,13 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       };
       CUT_LOOKBACK = 1e3;
       FENCE_RESERVE = 4;
+      ProviderHttpError = class extends Error {
+        constructor(message, status) {
+          super(message);
+          this.name = "ProviderHttpError";
+          this.status = status;
+        }
+      };
     }
   });
 
@@ -34907,11 +34924,12 @@ ${report.steps}`;
     try {
       const result2 = await createTrackerIssue(provider, report);
       const ref = result2.ref ? ` ${result2.ref}` : "";
+      const where = result2.label || TRACKER_LABELS[provider];
       if (result2.url) {
-        window.open(result2.url, "_blank", "noopener,noreferrer");
-        showToast(`\u2713 ${TRACKER_LABELS[provider]} issue created${ref}`, root2);
+        if (!result2.opened) window.open(result2.url, "_blank", "noopener,noreferrer");
+        showToast(`\u2713 ${where} issue created${ref}`, root2);
       } else {
-        showToast(`\u2713 Sent to ${TRACKER_LABELS[provider]}`, root2);
+        showToast(`\u2713 Sent to ${where}`, root2);
       }
       if (screenshots2.length) _downloadAllScreenshots(screenshots2);
       _downloadVideoIfPresent();

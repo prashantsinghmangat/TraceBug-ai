@@ -20,6 +20,33 @@
 
   var TRACKERS = ["github", "linear", "slack"];
 
+  // Trackers that take a title + body and can be picked in the confirm
+  // window's Create panel (ADR 010). Slack is a webhook with its own shape.
+  var ISSUE_TRACKERS = ["github", "linear"];
+
+  // ADR 010 §4: the Create panel's list/connect messages. These return repo,
+  // team and account NAMES, which are private, so they are accepted only from
+  // the extension's own pages (see validateExtensionPageSender) — never from a
+  // content script, so the page under test can neither call them nor read the
+  // answers.
+  var TRACKER_UI_VERBS = [
+    "tb:tracker:status",
+    "tb:tracker:containers",
+    "tb:tracker:fields",
+    "tb:tracker:connect",
+    "tb:tracker:connect-poll",
+    "tb:tracker:disconnect",
+  ];
+
+  // The pages allowed to send them.
+  var TRACKER_UI_PAGES = ["confirm-send.html", "options.html"];
+
+  // What a Create-panel choice may carry, at most.
+  var MAX_CONTAINER_CHARS = 300;
+  var MAX_FIELD_KEYS = 20;
+  var MAX_FIELD_VALUES = 100;
+  var MAX_VALUE_CHARS = 300;
+
   // Payload shape, per target. The page may send THESE KEYS AND NO OTHERS.
   // Note what is absent: repo, teamId, webhookUrl, token, apiKey, model,
   // baseUrl, provider URLs. The worker reads all of those from
@@ -50,6 +77,9 @@
   // Pending confirmations.
   var MAX_PENDING_TOTAL = 3;                  // across all tabs
   var CONFIRM_TIMEOUT_MS = 120 * 1000;
+  // A tracker send can include signing in and picking a repo, which takes
+  // longer than reading a prompt. Still bounded, so nothing waits forever.
+  var TRACKER_CONFIRM_TIMEOUT_MS = 10 * 60 * 1000;
 
   function isVerb(verb) {
     return VERBS.indexOf(verb) !== -1;
@@ -98,6 +128,65 @@
     // An extension page in a subframe has no business deciding either.
     if (sender.frameId !== undefined && sender.frameId !== 0) return false;
     return sender.url === confirmUrl || sender.url.indexOf(confirmUrl + "?") === 0;
+  }
+
+  /**
+   * Is this message from one of our own extension pages (`pages`, file names
+   * relative to the extension root)? Same guard as validateConfirmSender:
+   * `sender.url` is set by the browser from the sending document, and a content
+   * script keeps the HOST page's URL, so the page under test can never pass.
+   * `extBase` is chrome.runtime.getURL("").
+   */
+  function validateExtensionPageSender(sender, runtimeId, extBase, pages) {
+    if (!sender || typeof sender !== "object") return false;
+    if (!runtimeId || sender.id !== runtimeId) return false;
+    if (!extBase || typeof sender.url !== "string") return false;
+    if (sender.frameId !== undefined && sender.frameId !== 0) return false;
+    var list = Array.isArray(pages) ? pages : TRACKER_UI_PAGES;
+    for (var i = 0; i < list.length; i++) {
+      var full = extBase + list[i];
+      if (sender.url === full || sender.url.indexOf(full + "?") === 0 || sender.url.indexOf(full + "#") === 0) return true;
+    }
+    return false;
+  }
+
+  function isIssueTracker(t) {
+    return typeof t === "string" && ISSUE_TRACKERS.indexOf(t) !== -1;
+  }
+
+  /**
+   * Validate and REBUILD the Create panel's choice: which tracker, which
+   * container, which field values. It comes from our own window, but it is
+   * still input — rebuilt key by key, capped, strings only.
+   */
+  function validateChoice(choice) {
+    if (!choice || typeof choice !== "object" || Array.isArray(choice)) return { ok: false, error: "Malformed choice." };
+    if (!isIssueTracker(choice.tracker)) return { ok: false, error: "Unknown tracker." };
+    var container = choice.container;
+    if (typeof container !== "string" || !container.trim()) return { ok: false, error: "Pick where to file the issue." };
+    if (container.length > MAX_CONTAINER_CHARS) return { ok: false, error: "That destination name is too long." };
+    var fields = {};
+    var src = choice.fields;
+    if (src != null) {
+      if (typeof src !== "object" || Array.isArray(src)) return { ok: false, error: "Malformed fields." };
+      var keys = Object.keys(src);
+      if (keys.length > MAX_FIELD_KEYS) return { ok: false, error: "Too many fields." };
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (!/^[a-zA-Z][\w-]{0,40}$/.test(k)) return { ok: false, error: "Bad field name." };
+        var v = src[k];
+        var list = Array.isArray(v) ? v : [v];
+        if (list.length > MAX_FIELD_VALUES) return { ok: false, error: 'Too many values for "' + k + '".' };
+        var clean = [];
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] !== "string") return { ok: false, error: 'Field "' + k + '" must be text.' };
+          if (list[j].length > MAX_VALUE_CHARS) return { ok: false, error: 'A value for "' + k + '" is too long.' };
+          if (list[j]) clean.push(list[j]);
+        }
+        fields[k] = Array.isArray(v) ? clean : (clean[0] || "");
+      }
+    }
+    return { ok: true, choice: { tracker: choice.tracker, container: container.trim(), fields: fields } };
   }
 
   function byteLen(str) {
@@ -256,8 +345,8 @@
   function destinationLabel(target, cfg) {
     var c = cfg || {};
     switch (target) {
-      case "github": return (c.github && c.github.repo) || "(no repository set)";
-      case "linear": return (c.linear && c.linear.teamId) ? "team " + c.linear.teamId : "(no team set)";
+      case "github": return (c.github && c.github.repo) || "(choose a repository)";
+      case "linear": return (c.linear && c.linear.teamId) ? "team " + c.linear.teamId : "(choose a team)";
       case "slack": return "your configured Slack webhook";
       default: return "";
     }
@@ -294,6 +383,10 @@
   var api = {
     VERBS: VERBS,
     TRACKERS: TRACKERS,
+    ISSUE_TRACKERS: ISSUE_TRACKERS,
+    TRACKER_UI_VERBS: TRACKER_UI_VERBS,
+    TRACKER_UI_PAGES: TRACKER_UI_PAGES,
+    TRACKER_CONFIRM_TIMEOUT_MS: TRACKER_CONFIRM_TIMEOUT_MS,
     SHAPES: SHAPES,
     MAX_FIELD_BYTES: MAX_FIELD_BYTES,
     MAX_TOTAL_BYTES: MAX_TOTAL_BYTES,
@@ -305,6 +398,9 @@
     isVerb: isVerb,
     validateSender: validateSender,
     validateConfirmSender: validateConfirmSender,
+    validateExtensionPageSender: validateExtensionPageSender,
+    isIssueTracker: isIssueTracker,
+    validateChoice: validateChoice,
     validatePayload: validatePayload,
     validateRequest: validateRequest,
     rateLimit: rateLimit,
