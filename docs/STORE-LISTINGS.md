@@ -204,7 +204,7 @@ arguably wrong already.
   "Bug capture collects nothing. Optional data collection is requested only when the user types an email for Site
   Audit sign-in or the update list (and the usage counts only if they tick that box)." Check `web-ext lint` stays
   at the baseline.
-- Privacy policy (tracebug.dev/privacy) already describes both, names the private contact (nexgentalk@gmail.com,
+- Privacy policy (tracebug.dev/privacy) already describes both, names the private contact (tracebugdev@gmail.com,
   `CONTACT_EMAIL` in `website/lib/site.ts`) and the delete path.
 
 **Disclose if they change** (found in a code review, 2026-10-26):

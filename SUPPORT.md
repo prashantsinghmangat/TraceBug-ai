@@ -31,7 +31,7 @@ Firefox and Safari, use the npm SDK. See the [browser support matrix](README.md#
 
 **Do not open a public issue for security vulnerabilities.** See [SECURITY.md](SECURITY.md)
 — report privately via GitHub's "Report a vulnerability" (Security → Advisories) or
-the maintainer contact in [package.json](package.json) / [GitHub profile](https://github.com/prashantsinghmangat).
+email **tracebugdev@gmail.com**.
 
 ## How TraceBug handles its own errors
 

@@ -11,8 +11,8 @@ security and data-handling seriously.
 
 Report privately through GitHub's **[private vulnerability reporting](https://github.com/prashantsinghmangat/TraceBug-ai/security/advisories/new)**
 (the repo's **Security → Advisories → Report a vulnerability** button). If that
-isn't available to you, contact the maintainer via the `author` field in
-[`package.json`](package.json) / the [GitHub profile](https://github.com/prashantsinghmangat).
+isn't available to you, email **tracebugdev@gmail.com** (the `author` field in
+[`package.json`](package.json)).
 
 Please include:
 

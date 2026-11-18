@@ -208,7 +208,8 @@ async function loadContainers() {
   const t = panel.current;
   if (!t) return;
   const seq = ++panel.loadSeq;
-  panelMsg("Loading " + t.containerNoun.toLowerCase() + "s…");
+  const noun = t.containerNoun.toLowerCase();
+  panelMsg("Loading " + (noun.endsWith("y") ? noun.slice(0, -1) + "ies" : noun + "s") + "…");
   const res = await send("tb:tracker:containers", { tracker: t.id });
   if (seq !== panel.loadSeq) return;
   if (needsAccess(res)) { panelMsg(""); return; }

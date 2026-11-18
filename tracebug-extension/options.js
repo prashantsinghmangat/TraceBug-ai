@@ -495,6 +495,8 @@ async function renderTrackerAccounts() {
     connect.onclick = () => connectFromOptions(t, box);
     const disconnect = box.querySelector(".acct-disconnect");
     disconnect.hidden = t.via !== "oauth";
+    // No button to show → no empty row under the account line.
+    connect.parentElement.hidden = connect.hidden && disconnect.hidden;
     disconnect.onclick = () => disconnectFromOptions(t, box);
     const pillEl = $(PILL_IDS[t.id]);
     if (pillEl) {

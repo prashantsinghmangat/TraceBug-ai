@@ -15,7 +15,7 @@ export const SITE = {
 } as const;
 
 // The one inbox for help, sales, feedback and privacy requests (replies to our emails go here too).
-export const CONTACT_EMAIL = "nexgentalk@gmail.com";
+export const CONTACT_EMAIL = "tracebugdev@gmail.com";
 
 export const LINKS = {
   chrome: "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj",
