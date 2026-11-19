@@ -3,10 +3,13 @@
 // ADR 010, Phase 13 step 2: the Jam-style GitHub flow with NOTHING pasted.
 // Fresh profile, no token anywhere:
 //   Send to GitHub → Create window offers Connect GitHub → click → the code is
-//   shown and github.com/login/device opens → (GitHub approves on the 2nd poll)
-//   → "as octo" → repos from the app's installations → labels, assignee,
-//   milestone → Create issue → the issue opens in a new tab.
-// Then Disconnect from settings forgets the sign-in.
+//   shown large and GitHub's device page opens in a POPUP WINDOW → the poll's
+//   token (the only success signal) → popup closed, TraceBug refocused, "as
+//   octo" → repos, labels, assignee, milestone → Create → "Created #3".
+// Plus the edge cases of docs/audit/github-step2-plan.md: clipboard refused,
+// offline poll, popup closed early + Reopen, slow_down, access_denied,
+// expired_token, popup that can't open (tab instead), Reconnect keeping the
+// choices, settings and onboarding.
 //
 // GitHub (github.com device flow + api.github.com) is stubbed with
 // context.route, which Chromium applies to the extension worker's fetches.
@@ -59,6 +62,10 @@ let issuePosts = 0;
 // While true, GitHub refuses the access token and the refresh token alike —
 // a revoked sign-in. Cleared when a new device-flow token is issued.
 let revoked = false;
+// What GitHub's token endpoint answers a device-code poll:
+//   "pending" | "approve" | "deny" | "expire" | "slow" (once) | "offline" (once)
+let tokenMode = "pending";
+const pollTimes = [];
 const json = (route, body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 await ctx.route("https://github.com/**", async (route) => {
@@ -74,7 +81,14 @@ await ctx.route("https://github.com/**", async (route) => {
       return json(route, revoked ? { error: "bad_refresh_token" } : { access_token: ACCESS, expires_in: 28800 });
     }
     polls++;
-    if (polls === 1) return json(route, { error: "authorization_pending" });
+    pollTimes.push(Date.now());
+    const mode = tokenMode;
+    if (mode === "slow" || mode === "offline") tokenMode = "pending";
+    if (mode === "offline") return route.abort("internetdisconnected");
+    if (mode === "slow") return json(route, { error: "slow_down", interval: 6 });
+    if (mode === "deny") return json(route, { error: "access_denied", error_description: "The user has denied your application access." });
+    if (mode === "expire") return json(route, { error: "expired_token" });
+    if (mode !== "approve") return json(route, { error: "authorization_pending" });
     revoked = false;
     return json(route, { access_token: ACCESS, refresh_token: REFRESH, expires_in: 28800, refresh_token_expires_in: 15897600, token_type: "bearer" });
   }
@@ -107,6 +121,44 @@ try {
   let sw = ctx.serviceWorkers()[0];
   if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
   const extId = new URL(sw.url()).host;
+
+  // GitHub's device page opens in a popup window the WORKER creates. Route
+  // stubs don't reach extension-opened windows, so the worker's windows.create
+  // (and its tabs.create fallback) get about:blank instead of the real
+  // github.com — and the URLs asked for are recorded. Nothing here ever tells
+  // the worker what the popup shows: only the token endpoint decides.
+  await sw.evaluate(() => {
+    self.__popups = [];
+    self.__tabs = [];
+    self.__failPopup = false;
+    const gh = (u) => /^https:\/\/github\.com\//.test(String(u));
+    const realWin = chrome.windows.create.bind(chrome.windows);
+    chrome.windows.create = (opts) => {
+      if (!(opts && gh(opts.url))) return realWin(opts);
+      if (self.__failPopup) return Promise.reject(new Error("windows.create refused"));
+      self.__popups.push({ url: opts.url, type: opts.type });
+      return realWin(Object.assign({}, opts, { url: "about:blank" }));
+    };
+    const realTab = chrome.tabs.create.bind(chrome.tabs);
+    chrome.tabs.create = (opts) => {
+      if (!(opts && gh(opts.url))) return realTab(opts);
+      self.__tabs.push(opts.url);
+      return realTab(Object.assign({}, opts, { url: "about:blank" }));
+    };
+    self.__focused = [];
+    const update = chrome.windows.update.bind(chrome.windows);
+    chrome.windows.update = (id, info, cb) => {
+      if (info && info.focused) self.__focused.push(id);
+      return update(id, info, cb);
+    };
+  });
+  const popups = () => sw.evaluate(() => self.__popups);
+  const deviceState = () => sw.evaluate(async () => ((await chrome.storage.session.get("tb_device_flow_v1")).tb_device_flow_v1 || {}).github || null);
+  const windowExists = (id) => sw.evaluate((wid) => chrome.windows.get(wid).then(() => true, () => false), id);
+  const tabExists = (id) => sw.evaluate((tid) => chrome.tabs.get(tid).then(() => true, () => false), id);
+
+  check("the worker has no handler that reads the popup's address",
+    await sw.evaluate(() => typeof onDevicePopupUrl === "undefined" && typeof isDeviceSuccessUrl === "undefined"));
 
   const stored0 = await sw.evaluate(() => chrome.storage.local.get(["tb_integrations_v1", "tb_tracker_auth_v1"]));
   check("fresh profile: no token and no sign-in stored", !stored0.tb_integrations_v1 && !stored0.tb_tracker_auth_v1);
@@ -159,25 +211,74 @@ try {
   check("there is no token field anywhere in the window", (await win.$$("input[type=password]")).length === 0);
   check("Create waits for the connection", await win.isDisabled("#send"));
 
-  // Record the tab Connect asks for instead of loading the real github.com:
-  // Playwright's route stubs don't reach tabs an extension opens.
+  // The window's own tab opens are recorded too; the clipboard is refused.
   await win.evaluate(() => {
     window.__opened = [];
     chrome.tabs.create = (opts) => { window.__opened.push(opts && opts.url); return Promise.resolve({ id: -1 }); };
+    navigator.clipboard.writeText = () => Promise.reject(new Error("denied"));
   });
   await win.click("#connect");
-  await win.waitForFunction(() => window.__opened.length > 0, null, { timeout: 8000 }).catch(() => {});
-  const opened = await win.evaluate(() => window.__opened);
-  check("Connect opens github.com/login/device by itself", opened[0] === "https://github.com/login/device", JSON.stringify(opened));
-  await win.waitForSelector("#deviceBox:not([hidden])", { timeout: 5000 }).catch(() => {});
-  check("the code to enter is shown", (await win.textContent("#userCode")).trim() === "ABCD-1234");
+  await win.waitForSelector("#deviceBox:not([hidden])", { timeout: 8000 }).catch(() => {});
+  const pop1 = await popups();
+  check("1. Connect opens GitHub's device page in a popup window",
+    pop1.length === 1 && pop1[0].url === "https://github.com/login/device" && pop1[0].type === "popup", JSON.stringify(pop1));
+  check("…and no tab", (await win.evaluate(() => window.__opened.length)) === 0 && (await sw.evaluate(() => self.__tabs.length)) === 0);
+  check("2. the code is shown large and selectable", (await win.textContent("#userCode")).trim() === "ABCD-1234" &&
+    (await win.$eval("#userCode", (e) => parseFloat(getComputedStyle(e).fontSize))) >= 28 &&
+    (await win.$eval("#userCode", (e) => getComputedStyle(e).userSelect)) === "all");
+  check("…with the clipboard refused: a Copy button and a 'copy or select' hint",
+    (await win.isVisible("#copyCode")) && /Copy the code \(or select it\)/.test(await win.textContent("#deviceHint")),
+    await win.textContent("#deviceHint"));
+  check("…and no Reopen button while the popup is open", !(await win.isVisible("#openDevice")));
 
-  // GitHub says "pending" once, then approves. The window keeps polling alone.
+  // 3. Pending for a while: nothing about the popup ever "connects" it.
+  await sleep(2500);
+  check("3. while GitHub says pending, the window keeps polling and stays unconnected",
+    polls >= 2 && !/as octo/.test(await win.textContent("#account")), String(polls));
+
+  // 4. A poll fails at the network: not final, polling goes on.
+  tokenMode = "offline";
+  await win.waitForFunction(() => /still trying/.test(document.getElementById("panelMsg").textContent || ""), null, { timeout: 8000 }).catch(() => {});
+  check("4. a poll that can't reach GitHub says \"still trying\" and keeps the code",
+    /still trying/.test(await win.textContent("#panelMsg")) && !!(await deviceState()) && (await deviceState()).deviceCode === "dc_e2e");
+
+  // 5. The user closes GitHub's window early: polling continues, Reopen is offered.
+  const stA = await deviceState();
+  const pollsBefore = polls;
+  await sw.evaluate((wid) => chrome.windows.remove(wid), stA && stA.popupWindowId);
+  await win.waitForSelector("#openDevice:not([hidden])", { timeout: 8000 }).catch(() => {});
+  check("5. closing GitHub's window early offers \"Reopen GitHub\" and says the code still works",
+    (await win.isVisible("#openDevice")) && (await win.textContent("#openDevice")).trim() === "Reopen GitHub" &&
+    /code still works/.test(await win.textContent("#panelMsg")), (await win.textContent("#panelMsg")).trim());
+  await sleep(1500);
+  check("…and polling goes on", polls > pollsBefore && !!(await deviceState()), `${pollsBefore} → ${polls}`);
+  await win.click("#openDevice");
+  await sleep(500);
+  check("…Reopen GitHub opens the device page again in a popup",
+    (await popups()).length === 2 && !(await win.isVisible("#openDevice")), JSON.stringify(await popups()));
+
+  // 6. slow_down: the next poll waits the server's longer interval.
+  tokenMode = "slow";
+  await win.waitForFunction(() => true);
+  const slowAt = await (async () => { for (let i = 0; i < 40 && tokenMode === "slow"; i++) await sleep(200); return pollTimes[pollTimes.length - 1]; })();
+  const nAfterSlow = pollTimes.length;
+  await (async () => { for (let i = 0; i < 60 && pollTimes.length === nAfterSlow; i++) await sleep(200); })();
+  const gap = pollTimes[nAfterSlow] - slowAt;
+  check("6. after slow_down the next poll waits the new interval (≥ 5.5 s)", gap >= 5500, `${gap} ms`);
+
+  // 7. Authorize: the token is the only success signal.
+  tokenMode = "approve";
+  const st1 = await deviceState();
   await win.waitForFunction(() => /as octo/.test(document.getElementById("account").textContent || ""), null, { timeout: 15000 });
-  check('after approval the window says "as octo"', true);
-  check("it polled through authorization_pending", polls === 2, String(polls));
+  check('7. the token arrives → the window says "as octo"', true);
+  check("…the worker closed the popup", !(await windowExists(st1.popupWindowId)));
+  check("…and brought the TraceBug window back to the front",
+    st1.returnWindowId != null && (await sw.evaluate(() => self.__focused)).includes(st1.returnWindowId));
+  const stDone = await deviceState();
+  check("…and kept only 'done' (no device code) for a second page to read", !!stDone && stDone.done === true && !stDone.deviceCode,
+    JSON.stringify(stDone));
   check("no request to GitHub's sign-in endpoints carried a client secret",
-    oauthBodies.length >= 2 && oauthBodies.every((b) => !/client_secret/.test(b) && /client_id=Iv23/.test(b)), oauthBodies.join(" | "));
+    oauthBodies.length >= 2 && oauthBodies.every((b) => !/client_secret/.test(b) && /client_id=Iv23/.test(b)), oauthBodies.join(" | ").slice(0, 200));
   check("the device code never reached the window", !(await win.content()).includes("dc_e2e"));
 
   await win.waitForFunction(() => document.querySelectorAll("#containerList option").length > 0, null, { timeout: 8000 });
@@ -194,6 +295,7 @@ try {
 
   // ── The sign-in is revoked on GitHub before Create ──
   revoked = true;
+  tokenMode = "pending";
   await win.click("#send");
   await win.waitForSelector("#connect:not([hidden])", { timeout: 10000 }).catch(() => {});
   check('a revoked sign-in turns into "Reconnect GitHub" in the panel',
@@ -201,10 +303,13 @@ try {
   check("nothing was filed, and the page heard nothing yet",
     issuePosts === 0 && (await page.evaluate(() => window.__tbResults.length)) === 0);
 
+  // 8. Reconnect from the Create window keeps the choices.
   await win.click("#connect");
+  await win.waitForSelector("#deviceBox:not([hidden])", { timeout: 8000 }).catch(() => {});
+  tokenMode = "approve";
   await win.waitForFunction(() => /as octo/.test(document.getElementById("account").textContent || ""), null, { timeout: 15000 }).catch(() => {});
   await win.waitForSelector('fieldset[data-field="labels"] button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
-  check("after reconnecting, the repo is kept", (await win.inputValue("#container")) === REPO);
+  check("8. after reconnecting, the repo is kept", (await win.inputValue("#container")) === REPO);
   check("…and the label, assignee and milestone",
     (await win.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true" &&
     (await win.inputValue('select[data-field="assignee"]')) === "octo" &&
@@ -236,8 +341,8 @@ try {
   const gh = stored.tb_tracker_auth_v1 && stored.tb_tracker_auth_v1.github;
   check("the sign-in is stored in extension storage with its expiry",
     !!gh && gh.tokens.accessToken === ACCESS && gh.tokens.refreshToken === REFRESH && gh.tokens.expiresAt > Date.now() && gh.account === "octo");
-  const sess = await sw.evaluate(() => chrome.storage.session.get("tb_device_flow_v1"));
-  check("the finished device code is cleared", !(sess.tb_device_flow_v1 && sess.tb_device_flow_v1.github));
+  const sess = await deviceState();
+  check("the device code is gone from session storage", !sess || !sess.deviceCode, JSON.stringify(sess));
 
   // ── Settings: account, Disconnect, token form folded away ──
   const opt = await ctx.newPage();
@@ -271,18 +376,53 @@ try {
   check("settings offers Connect GitHub again",
     await opt.isVisible('.tracker-acct[data-tracker="github"] .acct-connect'));
 
+  const acct = '.tracker-acct[data-tracker="github"]';
+  const statusText = () => opt.textContent(acct + " .acct-status");
+  // Regression: a status message used to overwrite the line's classes, and
+  // Connect from settings then silently did nothing.
+  check("settings: the GitHub status line survives its own messages",
+    await opt.evaluate((a) => !!document.querySelector(a + " .acct-status.status"), acct));
+  // 9. access_denied → "Cancelled", Connect again; the popup is closed.
+  tokenMode = "deny";
+  await opt.click(acct + " .acct-connect");
+  await opt.waitForFunction((a) => /Cancelled/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 10000 }).catch(() => {});
+  const popDeny = (await popups()).length;
+  check('9. declined on GitHub → "Cancelled", Connect GitHub offered again',
+    /Cancelled/.test(await statusText()) && (await opt.textContent(acct + " .acct-connect")).trim() === "Connect GitHub" &&
+    !(await opt.isVisible(acct + " .device")), await statusText());
+  check("…the sign-in state is cleared", (await deviceState()) === null);
+  const lastPop = await sw.evaluate(async () => (await chrome.windows.getAll({ populate: true })).filter((w) => w.type === "popup" && w.tabs.some((t) => t.url === "about:blank")).length);
+  check("…and the GitHub popup was closed", lastPop === 0, `${popDeny} popups opened, ${lastPop} left`);
+
+  // 10. expired_token → "Code expired", Get a new code.
+  tokenMode = "expire";
+  await opt.click(acct + " .acct-connect");
+  await opt.waitForFunction((a) => /Code expired/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 10000 }).catch(() => {});
+  check('10. an expired code → "Code expired" and "Get a new code"',
+    /Code expired/.test(await statusText()) && (await opt.textContent(acct + " .acct-connect")).trim() === "Get a new code", await statusText());
+  check("…the sign-in state is cleared", (await deviceState()) === null);
+
   // ── Connect from onboarding, then pick the default repository there ──
   await welcome.reload();
   await welcome.waitForSelector("#trConnect:not([hidden])", { timeout: 5000 }).catch(() => {});
-  await welcome.evaluate(() => {
-    window.__opened = [];
-    chrome.tabs.create = (opts) => { window.__opened.push(opts && opts.url); return Promise.resolve({ id: -1 }); };
-  });
+  // 11. The popup can't be created: a normal tab opens instead, and is closed on the token.
+  const before = (await popups()).length;
+  tokenMode = "pending";
+  await sw.evaluate(() => { self.__failPopup = true; });
   await welcome.click("#trConnect");
+  await welcome.waitForSelector("#trCodeLine:not([hidden])", { timeout: 8000 }).catch(() => {});
+  await sleep(500);
+  const tabs11 = await sw.evaluate(() => self.__tabs);
+  const st11 = await deviceState();
+  check("11. welcome page: when the popup can't open, the device page opens in a tab",
+    (await popups()).length === before && tabs11[tabs11.length - 1] === "https://github.com/login/device" && st11 && st11.popupTabId != null,
+    JSON.stringify(tabs11));
+  check("…and the hint says GitHub tab", /GitHub tab/.test(await welcome.textContent("#trStatus")), await welcome.textContent("#trStatus"));
+  tokenMode = "approve";
   await welcome.waitForSelector("#trPickWrap:not([hidden])", { timeout: 15000 }).catch(() => {});
-  check("welcome page: Connect opens GitHub's device page",
-    (await welcome.evaluate(() => window.__opened[0])) === "https://github.com/login/device");
   await welcome.waitForFunction(() => document.querySelectorAll("#trPick option").length > 1, null, { timeout: 5000 }).catch(() => {});
+  check("…the worker closed that tab on the token", !(await tabExists(st11.popupTabId)));
+  await sw.evaluate(() => { self.__failPopup = false; });
   check("welcome page: right after connecting, it asks for the default repository",
     (await welcome.isVisible("#trPick")) && /pick where new issues go/.test(await welcome.textContent("#trStatus")),
     await welcome.textContent("#trStatus"));

@@ -133,7 +133,7 @@
     .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
     .advanced { margin-top: 10px; }
     .advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-    .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; }
+    .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; font-size: 26px; user-select: all; }
   </style>
 </head>
 <body>
@@ -188,7 +188,11 @@
           <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
         <div class="device" hidden>
-          <p class="hint">Enter <b class="device-code"></b> on github.com/login/device.</p>
+          <p class="hint">Your code: <b class="device-code"></b></p>
+          <div class="row">
+            <button class="ghost device-copy" type="button">Copy code</button>
+            <button class="ghost device-reopen" type="button" hidden>Reopen GitHub</button>
+          </div>
         </div>
         <!-- Right after connecting: where the Create panel starts. -->
         <label class="acct-default-wrap" hidden>Default repository

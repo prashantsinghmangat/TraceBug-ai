@@ -9,8 +9,12 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 Connect once — from the welcome page (step 5), TraceBug settings (GitHub card), or the first time you send:
 
 1. Capture a bug and click **Send to GitHub** in the ticket. TraceBug opens its own **Create GitHub issue** window.
-2. The first time, click **Connect GitHub**. TraceBug copies a short code and opens `github.com/login/device`.
-   Paste the code, click **Authorize**, and come back: the window says "as <your login>" by itself.
+2. The first time, click **Connect GitHub**. TraceBug copies a short code and opens GitHub's sign-in page in a
+   small window (a tab, if the window can't open). Press **Ctrl+V** (⌘V on a Mac), click **Continue**, then
+   **Authorize**. When GitHub hands TraceBug the sign-in, TraceBug closes that window and comes back saying "as <your
+   login>". If copying failed, use **Copy code** or select the code. Closed GitHub's window too early? Click
+   **Reopen GitHub**; the code still works until it expires. Declined on GitHub shows "Cancelled"; an expired code
+   offers **Get a new code**.
    - GitHub asks you to install **TraceBug Dev** on the repositories it may file into. Add more any time from the
      **Add repositories** link in the window.
 3. Pick the **Repository** (settings and the welcome page ask for a default right after you connect), tick

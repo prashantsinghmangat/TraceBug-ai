@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync } fr
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { swapGitHubApp } from "./github-app-swap.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXT_DIR = join(__dirname, "..");          // tracebug-extension/
@@ -214,10 +215,28 @@ function buildTarget(name, manifest) {
   cpSync(AXE_SRC, join(outDir, AXE_DEST));
   if (existsSync(AXE_LICENSE_SRC)) cpSync(AXE_LICENSE_SRC, join(outDir, AXE_LICENSE_DEST));
   writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
-  console.log(`[OK] ${name}: dist/${name}/  (v${version})`);
+  if (STORE) useProductionGitHubApp(outDir);
+  console.log(`[OK] ${name}: dist/${name}/  (v${version})${STORE ? "  [store: production GitHub App]" : ""}`);
 }
 
-const targets = process.argv.slice(2);
+/**
+ * Store builds (`npm run zip:ext` → `--store`) file through the production
+ * GitHub App; everything else (`npm run build:ext`, the unpacked dev folder,
+ * the e2e suites) keeps "TraceBug Dev". The ids are public client ids, swapped
+ * in the copied worker bundle only. Throws if the dev id isn't found, so a
+ * renamed constant can't silently ship the dev app.
+ */
+function useProductionGitHubApp(outDir) {
+  const apps = JSON.parse(readFileSync(join(EXT_DIR, "build", "github-apps.json"), "utf8"));
+  const file = join(outDir, "tracebug-provider-api.js");
+  writeFileSync(file, swapGitHubApp(readFileSync(file, "utf8"), apps));
+  if (apps.production.clientId === "TODO_OWNER_CLIENT_ID") {
+    console.warn("[warn] production GitHub App client id is a placeholder: this store build has no Connect GitHub (token path only).");
+  }
+}
+
+const STORE = process.argv.includes("--store");
+const targets = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const wantChrome = targets.length === 0 || targets.includes("chrome");
 const wantFirefox = targets.length === 0 || targets.includes("firefox");
 

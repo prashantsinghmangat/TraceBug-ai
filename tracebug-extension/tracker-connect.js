@@ -29,6 +29,10 @@
     });
   }
 
+  function pasteKeys() {
+    return /Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌘V" : "Ctrl+V";
+  }
+
   function openHttps(url) {
     let u;
     try { u = new URL(url); } catch { return; }
@@ -38,11 +42,34 @@
 
   const timers = {};
 
+  /** What to tell the user about the code, by how GitHub's page was opened. */
+  function codeHint(copied, opened) {
+    const where = opened === "tab" ? "GitHub tab" : "GitHub window";
+    return copied
+      ? "Code copied — in the " + where + ", press " + pasteKeys() + ", then Continue and Authorize. This page updates by itself."
+      : "Copy the code (or select it) and paste it in the " + where + ", then Continue and Authorize. This page updates by itself.";
+  }
+
+  /** The line shown while a poll is still pending. */
+  function pendingLine(res, opened) {
+    if (res.popupClosed) return "The GitHub window is closed. Reopen it to finish — your code still works.";
+    if (res.retrying) return "Can't reach GitHub — still trying…";
+    return null;
+  }
+
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text || ""); return true; } catch { return false; }
+  }
+
   /**
-   * Start sign-in from a click handler.
-   * ui.say(text, isErr) — one status line
-   * ui.code(userCode)   — show the device code (null hides it)
-   * ui.done(account)    — connected
+   * Start sign-in from a click handler. The worker opens GitHub's device page
+   * (a popup window, else a tab) and closes it when the token arrives — the
+   * token is the only "connected" signal.
+   * ui.say(text, isErr)    — one status line
+   * ui.code(userCode)      — show the code, large and selectable (null hides it)
+   * ui.reopen(on)          — show/hide the "Reopen GitHub" button
+   * ui.final(code)         — the code ended (access_denied, expired_token, …): relabel Connect
+   * ui.done(account)       — connected
    */
   function connect(t, ui) {
     return requestPermissions(t.connectPermissions).then(async (granted) => {
@@ -52,14 +79,11 @@
       if (!res || res.error) { ui.say((res && res.error) || "Could not connect.", true); return; }
       if (res.flow === "device") {
         ui.code(res.userCode || "");
-        // One click: copy the code and open the page that asks for it.
-        let copied = false;
-        try { await navigator.clipboard.writeText(res.userCode || ""); copied = true; } catch {}
-        openHttps(res.verificationUri || "");
-        ui.say(copied
-          ? "Code copied. Paste it on GitHub and click Authorize — this page updates by itself."
-          : "Enter the code on GitHub and click Authorize — this page updates by itself.");
-        poll(t, ui, res.interval || 5);
+        const copied = await copy(res.userCode);
+        // Nothing could be opened by the worker: offer the button instead.
+        ui.reopen(!res.opened);
+        ui.say(codeHint(copied, res.opened));
+        poll(t, ui, res.interval || 5, res.opened, codeHint(copied, res.opened));
         return;
       }
       ui.code(null);
@@ -67,19 +91,33 @@
     });
   }
 
-  function poll(t, ui, seconds) {
+  function poll(t, ui, seconds, opened, hint) {
     clearTimeout(timers[t.id]);
     timers[t.id] = setTimeout(async () => {
       const res = await msg("tb:tracker:connect-poll", { tracker: t.id });
       if (!res || res.error) {
         ui.code(null);
+        ui.reopen(false);
+        if (ui.final) ui.final((res && res.code) || "error");
         ui.say((res && res.error) || "Sign-in failed. Click Connect to try again.", true);
         return;
       }
-      if (res.status === "pending") { poll(t, ui, res.interval || seconds); return; }
+      if (res.status === "pending") {
+        ui.reopen(!!res.popupClosed);
+        ui.say(pendingLine(res, opened) || hint);
+        poll(t, ui, res.interval || seconds, opened, hint);
+        return;
+      }
       ui.code(null);
+      ui.reopen(false);
       ui.done(res.account || "");
     }, Math.max(1, seconds) * 1000);
+  }
+
+  /** "Reopen GitHub": the worker focuses or reopens the device page. */
+  async function reopen(t) {
+    const res = await msg("tb:tracker:connect-show", { tracker: t.id });
+    return !!(res && res.ok);
   }
 
   /**
@@ -120,5 +158,5 @@
     return res.items.length;
   }
 
-  root.TraceBugTrackerConnect = { msg, connect, fillDefaultPicker, openHttps };
+  root.TraceBugTrackerConnect = { msg, connect, reopen, copy, fillDefaultPicker, openHttps, pasteKeys };
 })(typeof self !== "undefined" ? self : this);

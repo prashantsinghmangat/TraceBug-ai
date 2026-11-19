@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'tracebug-extension');
-const sandbox: Record<string, unknown> = {};
+// The service worker has URL; the device-page checks use it.
+const sandbox: Record<string, unknown> = { URL };
 const ctx = createContext(sandbox);
 runInContext(readFileSync(join(extDir, 'provider-bridge.js'), 'utf8'), ctx);
 
@@ -460,6 +461,21 @@ describe('tracker UI messages are for extension pages only', () => {
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'confirm-send.html?id=x' }, EXT_ID, BASE)).toBe(true);
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html', tab: { id: 3 }, frameId: 0 }, EXT_ID, BASE)).toBe(true);
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'welcome.html', tab: { id: 4 }, frameId: 0 }, EXT_ID, BASE)).toBe(true);
+  });
+
+  it('opens only GitHub\'s own device page (https, github.com, /login/device)', () => {
+    const B = B10 as unknown as Record<string, (u: unknown) => boolean>;
+    expect(B.isDeviceVerificationUrl('https://github.com/login/device')).toBe(true);
+    expect(B.isDeviceVerificationUrl('https://github.com/login/device/')).toBe(true);
+    expect(B.isDeviceVerificationUrl('http://github.com/login/device')).toBe(false);
+    expect(B.isDeviceVerificationUrl('https://github.com.evil.test/login/device')).toBe(false);
+    expect(B.isDeviceVerificationUrl('https://evil.test/login/device')).toBe(false);
+    expect(B.isDeviceVerificationUrl('https://github.com/login/device/success')).toBe(false);
+    expect(B.isDeviceVerificationUrl(null)).toBe(false);
+  });
+
+  it('never reads the popup\'s address: there is no "success page" check at all', () => {
+    expect((B10 as unknown as Record<string, unknown>).isDeviceSuccessUrl).toBeUndefined();
   });
 
   it('lets settings/onboarding save a default repo, still never from the page', () => {

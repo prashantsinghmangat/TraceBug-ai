@@ -160,6 +160,16 @@ describe('device flow', () => {
     await expect(pollDeviceToken(SPEC, CODE, 1000, f.fn)).rejects.toThrow(/declined access/);
   });
 
+  it('ends the code with a named, coded OAuthError — and a network failure is not one (the worker keeps polling)', async () => {
+    for (const code of ['access_denied', 'expired_token']) {
+      const f = formFetch(json({ error: code }));
+      await expect(pollDeviceToken(SPEC, CODE, 1000, f.fn)).rejects.toMatchObject({ name: 'OAuthError', code });
+    }
+    const offline = async () => { throw new TypeError('Failed to fetch'); };
+    await expect(pollDeviceToken(SPEC, CODE, 1000, offline as unknown as typeof fetch))
+      .rejects.toSatisfy((e: Error) => e.name !== 'OAuthError');
+  });
+
   it('returns the tokens when the user approved', async () => {
     const f = formFetch(json({ access_token: 'ghu_x', refresh_token: 'ghr_y', expires_in: 28800 }));
     const r = await pollDeviceToken(SPEC, CODE, 0, f.fn);

@@ -350,6 +350,11 @@ async function initTrackerStep() {
   }
 
   let row = await render();
+  const reopenBtn = document.getElementById("trReopen");
+  document.getElementById("trCopy").addEventListener("click", async () => {
+    if (await C.copy(document.getElementById("trCode").textContent || "")) say("Code copied — press " + C.pasteKeys() + " on GitHub.");
+  });
+  reopenBtn.addEventListener("click", () => { if (row) C.reopen(row); });
   btn.addEventListener("click", () => {
     if (!row) return;
     C.connect(row, {
@@ -358,6 +363,8 @@ async function initTrackerStep() {
         document.getElementById("trCode").textContent = code || "";
         codeLine.hidden = !code;
       },
+      reopen: (on) => { reopenBtn.hidden = !on; },
+      final: (code) => { btn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + row.label; },
       done: async () => {
         row = await render();
         say(status.textContent + " Now pick where new issues go.");

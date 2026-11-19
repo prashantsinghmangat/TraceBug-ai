@@ -2382,7 +2382,7 @@ async function finishConnect(api, adapter, tokens) {
   return { connected: true, account };
 }
 
-async function connectTracker(api, adapter) {
+async function connectTracker(api, adapter, sender) {
   if (!oauthUiSupported()) return { error: "Sign-in isn't available in this browser yet. Use a token in TraceBug settings." };
   const c = adapter.connect();
   if (!c) return { error: adapter.label + " sign-in isn't set up in this build. Use a token in TraceBug settings." };
@@ -2390,13 +2390,27 @@ async function connectTracker(api, adapter) {
 
   if (c.flow === "device") {
     const code = await api.requestDeviceCode(c.spec, Date.now());
+    const state = {
+      deviceCode: code.deviceCode, interval: code.interval, expiresAt: code.expiresAt,
+      verificationUri: code.verificationUri,
+      // Where to bring the user back to: the window/tab that clicked Connect.
+      returnWindowId: sender && sender.tab ? sender.tab.windowId : null,
+      returnTabId: sender && sender.tab ? sender.tab.id : null,
+    };
+    // A new code replaces any earlier one: close the page that one opened.
+    const prev = (await sessionGet(DEVICE_FLOW_KEY, {}))[adapter.id];
+    if (prev && !prev.done) closeDevicePage(prev, false);
+    // GitHub's page goes in a small popup window of its own (a normal tab if
+    // that fails), closed by us once the token arrives.
+    const opened = await openDevicePage(code.verificationUri);
+    Object.assign(state, opened.ids);
     const all = await sessionGet(DEVICE_FLOW_KEY, {});
-    all[adapter.id] = { deviceCode: code.deviceCode, interval: code.interval, expiresAt: code.expiresAt };
+    all[adapter.id] = state;
     await sessionSet({ [DEVICE_FLOW_KEY]: all });
     // The user code is meant to be read by the user. The device code is the
     // secret half, and stays in this worker.
     return { flow: "device", userCode: code.userCode, verificationUri: code.verificationUri,
-      interval: code.interval, expiresAt: code.expiresAt };
+      interval: code.interval, expiresAt: code.expiresAt, opened: opened.how };
   }
 
   if (!(chrome.identity && chrome.identity.launchWebAuthFlow && chrome.identity.getRedirectURL)) {
@@ -2417,29 +2431,142 @@ async function connectTracker(api, adapter) {
   return finishConnect(api, adapter, tokens);
 }
 
-/** One device-flow poll, driven by the window at the server's interval. */
+// ── The device-flow sign-in popup ──────────────────────────────────────────
+// GitHub's device page opens in a small popup window (a normal tab if the
+// window can't be created). The ONLY success signal is the token arriving on
+// a poll: the popup's URL is never read. On the token, the worker closes the
+// popup if it is still open and brings back the TraceBug page that clicked
+// Connect. Closing the popup early changes nothing but a flag — polling goes
+// on until the code expires, and the page offers "Reopen GitHub".
+
+const DEVICE_POPUP = { type: "popup", width: 520, height: 760 };
+// A finished sign-in stays readable this long, so a second page that was also
+// polling (the Create window and settings, say) still hears "connected".
+const DEVICE_DONE_TTL_MS = 2 * 60 * 1000;
+// Device polls in flight, per tracker: a device code yields its token once.
+const devicePolling = new Set();
+
+/** Open GitHub's device page: a popup window, else a tab. → {how, ids}. */
+async function openDevicePage(url) {
+  const b = bridgeLib();
+  if (!b || !b.isDeviceVerificationUrl(url)) return { how: null, ids: {} };
+  try {
+    const win = await chrome.windows.create(Object.assign({ url, focused: true }, DEVICE_POPUP));
+    if (win && win.id != null) return { how: "popup", ids: { popupWindowId: win.id, popupTabId: null, popupClosed: false } };
+  } catch {}
+  try {
+    const tab = await chrome.tabs.create({ url, active: true });
+    if (tab && tab.id != null) return { how: "tab", ids: { popupWindowId: null, popupTabId: tab.id, popupClosed: false } };
+  } catch {}
+  return { how: null, ids: {} };
+}
+
+/** "Reopen GitHub": focus the popup if it is still there, or open it again. */
+async function showDevicePopup(tracker) {
+  const all = await sessionGet(DEVICE_FLOW_KEY, {});
+  const st = all[tracker];
+  if (!st || st.done) return { error: "There is no sign-in in progress. Click Connect again." };
+  if (st.popupWindowId != null && !st.popupClosed) {
+    try { await chrome.windows.update(st.popupWindowId, { focused: true }); return { ok: true, opened: "popup" }; } catch {}
+  }
+  const opened = await openDevicePage(st.verificationUri);
+  if (!opened.how) return { error: "Could not open GitHub's sign-in page." };
+  const again = await sessionGet(DEVICE_FLOW_KEY, {});
+  if (again[tracker]) {
+    again[tracker] = Object.assign(again[tracker], opened.ids);
+    await sessionSet({ [DEVICE_FLOW_KEY]: again });
+  }
+  return { ok: true, opened: opened.how };
+}
+
+/** Close what we opened on GitHub (if still open) and return to TraceBug. */
+function closeDevicePage(st, refocus) {
+  if (st.popupWindowId != null && !st.popupClosed) {
+    try { chrome.windows.remove(st.popupWindowId, () => void chrome.runtime.lastError); } catch {}
+  }
+  if (st.popupTabId != null) {
+    try { chrome.tabs.remove(st.popupTabId, () => void chrome.runtime.lastError); } catch {}
+  }
+  if (!refocus) return;
+  if (st.returnWindowId != null) {
+    try { chrome.windows.update(st.returnWindowId, { focused: true }, () => void chrome.runtime.lastError); } catch {}
+  }
+  if (st.returnTabId != null) {
+    try { chrome.tabs.update(st.returnTabId, { active: true }, () => void chrome.runtime.lastError); } catch {}
+  }
+}
+
+// OAuth answers that end this code for good. Anything else thrown by a poll
+// (offline, DNS, a 5xx) is passing: keep the code and keep polling.
+const DEVICE_FINAL = {
+  access_denied: "Cancelled — you declined on GitHub. Click Connect to try again.",
+  expired_token: "Code expired. Get a new code to connect.",
+};
+
+/**
+ * One device-flow poll, driven by the page at the server's interval. Answers:
+ *   {status: "pending", interval, popupClosed, retrying?}
+ *   {status: "done", connected, account}
+ *   {error, code}   — code is the OAuth error ("access_denied", "expired_token", …)
+ */
 async function pollTrackerConnect(api, adapter) {
   const c = adapter.connect();
-  if (!c || c.flow !== "device") return { error: "There is no sign-in to finish." };
+  if (!c || c.flow !== "device") return { error: "There is no sign-in to finish.", code: "no_flow" };
   const all = await sessionGet(DEVICE_FLOW_KEY, {});
   const pending = all[adapter.id];
-  if (!pending) return { error: "This sign-in code is no longer valid. Click Connect again." };
+  if (!pending) return { error: "This sign-in code is no longer valid. Click Connect again.", code: "no_flow" };
+  if (pending.done) {
+    return Date.now() - pending.doneAt < DEVICE_DONE_TTL_MS
+      ? { status: "done", connected: true, account: pending.account || "" }
+      : { error: "This sign-in code is no longer valid. Click Connect again.", code: "no_flow" };
+  }
+  if (devicePolling.has(adapter.id)) return { status: "pending", interval: pending.interval, popupClosed: !!pending.popupClosed };
+  devicePolling.add(adapter.id);
   let r;
   try {
     r = await api.pollDeviceToken(c.spec, pending, Date.now());
   } catch (err) {
-    delete all[adapter.id];
-    await sessionSet({ [DEVICE_FLOW_KEY]: all });
-    throw err;
+    if (!(err && err.name === "OAuthError")) {
+      // Not GitHub saying no — the network. The code is still good.
+      return { status: "pending", interval: pending.interval, popupClosed: !!pending.popupClosed, retrying: true };
+    }
+    const again = await sessionGet(DEVICE_FLOW_KEY, {});
+    delete again[adapter.id];
+    await sessionSet({ [DEVICE_FLOW_KEY]: again });
+    closeDevicePage(pending, false);
+    return { error: DEVICE_FINAL[err.code] || err.message || "Sign-in failed.", code: err.code || "error" };
+  } finally {
+    devicePolling.delete(adapter.id);
   }
+  const again = await sessionGet(DEVICE_FLOW_KEY, {});
+  const cur = again[adapter.id] || pending;
   if (r.status === "pending") {
-    all[adapter.id] = Object.assign({}, pending, { interval: r.interval });
-    await sessionSet({ [DEVICE_FLOW_KEY]: all });
-    return { status: "pending", interval: r.interval };
+    if (again[adapter.id]) {
+      again[adapter.id] = Object.assign(again[adapter.id], { interval: r.interval });
+      await sessionSet({ [DEVICE_FLOW_KEY]: again });
+    }
+    return { status: "pending", interval: r.interval, popupClosed: !!cur.popupClosed };
   }
-  delete all[adapter.id];
+  // The token: the one and only "signed in".
+  const done = await finishConnect(api, adapter, r.tokens);
+  again[adapter.id] = { done: true, doneAt: Date.now(), account: done.account || "" };
+  await sessionSet({ [DEVICE_FLOW_KEY]: again });
+  closeDevicePage(cur, true);
+  return Object.assign({ status: "done" }, done);
+}
+
+/** The user closed GitHub's window. Only a flag: polling goes on. */
+async function onDevicePopupClosed(windowId) {
+  const all = await sessionGet(DEVICE_FLOW_KEY, {});
+  const id = Object.keys(all).find((k) => all[k] && all[k].popupWindowId === windowId);
+  if (!id || all[id].done) return;
+  all[id].popupClosed = true;
+  all[id].popupWindowId = null;
   await sessionSet({ [DEVICE_FLOW_KEY]: all });
-  return Object.assign({ status: "done" }, await finishConnect(api, adapter, r.tokens));
+}
+
+if (chrome.windows && chrome.windows.onRemoved) {
+  chrome.windows.onRemoved.addListener((windowId) => { onDevicePopupClosed(windowId).catch(() => {}); });
 }
 
 async function disconnectTracker(api, adapter) {
@@ -2485,7 +2612,8 @@ async function handleTrackerUi(message, sender) {
         const fields = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => adapter.listFields(auth, container));
         return { fields };
       }
-      case "tb:tracker:connect": return await connectTracker(api, adapter);
+      case "tb:tracker:connect": return await connectTracker(api, adapter, sender);
+      case "tb:tracker:connect-show": return await showDevicePopup(adapter.id);
       case "tb:tracker:connect-poll": return await pollTrackerConnect(api, adapter);
       case "tb:tracker:disconnect": return await disconnectTracker(api, adapter);
       case "tb:tracker:set-default": {

@@ -37,6 +37,11 @@ sheet it deletes the oldest one (by version number, not date). Commit the new sh
 |---|---|---|---|
 | Chrome Web Store | `releases/tracebug-extension-v<x.y.z>.zip` | `npm run zip:ext` | Upload in the CWS developer dashboard |
 | Firefox Add-ons | `releases/tracebug-firefox-v<x.y.z>.zip` + a source zip | `npm run zip:ext` | Upload on addons.mozilla.org (Developer Hub) |
+
+`zip:ext` builds with `--store`: the packages file through the **production** GitHub App
+(`tracebug-extension/build/github-apps.json`, `production.clientId`). While that is the placeholder
+`TODO_OWNER_CLIENT_ID`, the build warns and the store packages have no Connect GitHub (the token path still works).
+`npm run build:ext` and the unpacked folder keep **TraceBug Dev**.
 | npm `tracebug-sdk` | repo root package (`dist/`) | `prepublishOnly` → `check:versions` + `build` | `npm publish` from the repo root |
 | npm `tracebug` (MCP CLI) | `packages/tracebug/bin.mjs` | `npm run build:cli` | `npm publish ./packages/tracebug` |
 | MCP Registry | `packages/tracebug/server.json` | hand-edited (version fields) | `mcp-publisher publish` |

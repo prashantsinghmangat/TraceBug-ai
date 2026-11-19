@@ -334,7 +334,8 @@
     .tr-status { font-size: 12.5px; color: var(--ai-text); }
     .tr-status.err { color: #FF8590; }
     .tr-code { font-size: 13px; color: var(--ai-text); margin: 12px 0 0; }
-    .tr-code b { font-family: var(--mono); font-size: 18px; letter-spacing: .12em; color: var(--ai-title); }
+    .tr-code .btn-sec { margin: 0 0 0 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; }
+    .tr-code b { user-select: all; font-family: var(--mono); font-size: 28px; letter-spacing: .12em; color: var(--ai-title); }
     .tr-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 13px; color: var(--ai-title); max-width: 420px; }
     .tr-pick select {
       font: inherit; font-size: 13px; color: var(--ai-code-text);
@@ -542,7 +543,11 @@
         <button class="btn" id="trConnect" type="button">Connect GitHub</button>
         <span class="tr-status" id="trStatus" role="status" aria-live="polite"></span>
       </div>
-      <p class="tr-code" id="trCodeLine" hidden>Your code: <b id="trCode"></b></p>
+      <div class="tr-code" id="trCodeLine" hidden>
+        Your code: <b id="trCode"></b>
+        <button class="btn-sec" id="trCopy" type="button">Copy code</button>
+        <button class="btn-sec" id="trReopen" type="button" hidden>Reopen GitHub</button>
+      </div>
       <label class="tr-pick" id="trPickWrap" hidden>Default repository
         <select id="trPick"></select>
       </label>

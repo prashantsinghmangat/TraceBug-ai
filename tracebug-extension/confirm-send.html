@@ -144,6 +144,7 @@
       border-radius: 6px;
       padding: 6px 10px;
     }
+    .code.big { font-size: 30px; padding: 8px 14px; letter-spacing: .14em; user-select: all; }
     fieldset { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
     legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
     .opts {
@@ -221,11 +222,11 @@
           <a href="#" id="settingsLink">Use a token in TraceBug settings</a>
         </div>
         <div class="pblock" id="deviceBox" hidden>
-          <span class="plabel">Paste this code on the GitHub page that opened, then click Authorize:</span>
+          <span class="plabel" id="deviceHint"></span>
           <div class="prow">
-            <span class="code" id="userCode"></span>
+            <span class="code big" id="userCode"></span>
             <button type="button" class="ghost small" id="copyCode">Copy</button>
-            <button type="button" class="small" id="openDevice">Open sign-in page</button>
+            <button type="button" class="ghost small" id="openDevice" hidden>Reopen GitHub</button>
           </div>
         </div>
       </div>

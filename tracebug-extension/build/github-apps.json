@@ -1,0 +1,5 @@
+{
+  "_comment": "Public GitHub App client ids (ADR 010) — never a secret. `dev` must match OAUTH_CLIENTS.github and GITHUB_APP_INSTALL_URL in src/providers/oauth-clients.ts (tests/github-apps.test.ts checks). build-ext.mjs --store (npm run zip:ext) swaps dev for production in dist/. A production clientId of TODO_OWNER_CLIENT_ID ships store builds without Connect GitHub (token path only).",
+  "dev": { "name": "TraceBug Dev", "clientId": "Iv23lidsU0w7Ezzc9qyb", "slug": "tracebug-dev" },
+  "production": { "name": "TraceBug", "clientId": "TODO_OWNER_CLIENT_ID", "slug": "tracebug" }
+}

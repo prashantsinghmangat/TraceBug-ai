@@ -368,8 +368,9 @@ the same send files the issue through the same window.
 
 Chrome build, settings with **no** GitHub token (Remove it if one is saved). The GitHub App **TraceBug Dev** is
 installed on your account for at least one repository. Capture a bug → **Send to GitHub** → **Connect GitHub**.
-**Pass:** a github.com/login/device tab opens with the code already on your clipboard; after Authorize the window
-comes back by itself saying "as <your login>", lists exactly the repos the app is installed on, loads labels,
+**Pass:** GitHub's device page opens in a small popup window with the code on your clipboard (Ctrl+V works);
+after Continue + Authorize the popup closes itself and the window comes back saying "as <your login>" (closing
+the popup before Authorize shows "Reopen GitHub", and the same code still works), lists exactly the repos the app is installed on, loads labels,
 assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N" — no tab opens until you click
 the link, which opens the issue with them set. Settings → GitHub then reads "Connected as <login>" with a Default
 repository picker; **Disconnect** returns it to "Connect GitHub". Also: welcome page step 5 → Connect GitHub →

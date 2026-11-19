@@ -123,7 +123,11 @@ function set(obj) {
 
 function say(el, msg, kind, extra) {
   el.textContent = extra ? msg + extra : msg;
-  el.className = "status" + (kind ? " " + kind : "");
+  // Only swap the state class: other classes are hooks (the tracker cards find
+  // their line by `.acct-status`; overwriting className once lost it for good).
+  el.classList.add("status");
+  el.classList.remove("ok", "err");
+  if (kind) el.classList.add(kind);
   // A decline note has to stay on screen — it is the one thing the user has
   // to act on. Only a clean success self-clears.
   if (kind === "ok" && !extra) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
@@ -522,12 +526,21 @@ function connectFromOptions(t, box) {
   const dev = box.querySelector(".device");
   // TraceBugTrackerConnect (tracker-connect.js) asks for permissions inside
   // this click, copies the device code, opens GitHub's page and polls.
+  const connectBtn = box.querySelector(".acct-connect");
+  const reopenBtn = box.querySelector(".device-reopen");
+  box.querySelector(".device-copy").onclick = async () => {
+    const code = box.querySelector(".device-code").textContent || "";
+    if (await TraceBugTrackerConnect.copy(code)) say(status, "Code copied — press " + TraceBugTrackerConnect.pasteKeys() + " on GitHub.", "ok", " ");
+  };
+  reopenBtn.onclick = () => TraceBugTrackerConnect.reopen(t);
   TraceBugTrackerConnect.connect(t, {
-    say: (text, isErr) => say(status, text, isErr ? "err" : "ok", isErr ? "" : " "),
+    say: (text, isErr) => say(status, text, isErr ? "err" : "ok", " "),
     code: (code) => {
       box.querySelector(".device-code").textContent = code || "";
       if (dev) dev.hidden = !code;
     },
+    reopen: (on) => { reopenBtn.hidden = !on; },
+    final: (code) => { connectBtn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + t.label; },
     done: async (account) => {
       say(status, "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
       await renderTrackerAccounts();

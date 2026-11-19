@@ -403,6 +403,11 @@ function bringToFront() {
   } catch {}
 }
 
+/** The paste shortcut, as the user's keyboard labels it. */
+function pasteKeys() {
+  return /Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌘V" : "Ctrl+V";
+}
+
 function openExternal(url) {
   let u;
   try { u = new URL(url); } catch { return; }
@@ -424,16 +429,19 @@ async function onConnect() {
   if (res.flow === "device") {
     put("userCode", res.userCode || "");
     $("openDevice").dataset.url = res.verificationUri || "";
-    put("openDevice", "Open " + String(res.verificationUri || "").replace(/^https:\/\//, ""));
     show("deviceBox", true);
-    // One click: copy the code and open the page that asks for it. The copy can
-    // fail (the click's user activation may have lapsed); the code stays on
-    // screen with its own Copy button either way.
+    // The worker opened GitHub's page (res.opened: a popup window, else a tab)
+    // and closes it when the token arrives — the token is the only "connected"
+    // signal. The copy can fail (the click's user activation may have lapsed);
+    // the code is selectable and has its own Copy button either way.
     const copied = await copyText(res.userCode || "");
-    openExternal(res.verificationUri || "");
-    panelMsg(copied
-      ? "Code copied. Paste it on GitHub and click Authorize — this window carries on by itself."
-      : "Enter the code on GitHub and click Authorize — this window carries on by itself.");
+    show("openDevice", !res.opened);
+    const where = res.opened === "tab" ? "GitHub tab" : "GitHub window";
+    panel.deviceHint = copied
+      ? "Code copied — in the " + where + ", press " + pasteKeys() + ", then Continue and Authorize."
+      : "Copy the code (or select it) and paste it in the " + where + ", then Continue and Authorize.";
+    put("deviceHint", panel.deviceHint);
+    panelMsg("This window carries on by itself once you authorize.");
     schedulePoll(t.id, res.interval || 5);
     return;
   }
@@ -448,10 +456,20 @@ function schedulePoll(id, seconds) {
     const res = await send("tb:tracker:connect-poll", { tracker: id });
     if (!res || res.error) {
       show("deviceBox", false);
+      const code = res && res.code;
+      // The code ended: cancelled on GitHub, expired, or refused.
+      $("connect").textContent = code === "expired_token" ? "Get a new code" : "Connect " + (panel.current ? panel.current.label : "");
       panelMsg((res && res.error) || "Sign-in failed. Click Connect to try again.", true);
       return;
     }
-    if (res.status === "pending") { schedulePoll(id, res.interval || seconds); return; }
+    if (res.status === "pending") {
+      show("openDevice", !!res.popupClosed);
+      panelMsg(res.popupClosed
+        ? "The GitHub window is closed. Reopen it to finish — your code still works."
+        : res.retrying ? "Can't reach GitHub — still trying…" : "This window carries on by itself once you authorize.");
+      schedulePoll(id, res.interval || seconds);
+      return;
+    }
     show("deviceBox", false);
     bringToFront();
     panelMsg("Connected" + (res.account ? " as " + res.account : "") + ".");
@@ -477,13 +495,18 @@ function wirePanel() {
     try { chrome.runtime.openOptionsPage(); } catch {}
   });
   $("copyCode").addEventListener("click", async () => {
-    if (await copyText($("userCode").textContent || "")) panelMsg("Code copied.");
+    if (await copyText($("userCode").textContent || "")) panelMsg("Code copied — press " + pasteKeys() + " on GitHub.");
   });
   $("manageLink").addEventListener("click", (e) => {
     e.preventDefault();
     openExternal($("manageLink").dataset.url || "");
   });
-  $("openDevice").addEventListener("click", () => openExternal($("openDevice").dataset.url || ""));
+  $("openDevice").addEventListener("click", async () => {
+    const t = panel.current;
+    const res = t ? await send("tb:tracker:connect-show", { tracker: t.id }) : null;
+    if (res && res.ok) { show("openDevice", false); panelMsg("This window carries on by itself once you authorize."); return; }
+    openExternal($("openDevice").dataset.url || "");
+  });
   $("allowAccess").addEventListener("click", async () => {
     let origins = [];
     try { origins = JSON.parse($("allowAccess").dataset.origins || "[]"); } catch {}

@@ -38,6 +38,8 @@
     "tb:tracker:disconnect",
     // Settings / onboarding: the repo/team to start from next time.
     "tb:tracker:set-default",
+    // "Reopen GitHub": focus the sign-in popup, or open it again.
+    "tb:tracker:connect-show",
   ];
 
   // The pages allowed to send them.
@@ -153,6 +155,20 @@
 
   function isIssueTracker(t) {
     return typeof t === "string" && ISSUE_TRACKERS.indexOf(t) !== -1;
+  }
+
+  function parseHttps(url) {
+    if (typeof url !== "string") return null;
+    try {
+      var u = new URL(url);
+      return u.protocol === "https:" ? u : null;
+    } catch (e) { return null; }
+  }
+
+  /** The device page we may open in the sign-in popup: GitHub's, https only. */
+  function isDeviceVerificationUrl(url) {
+    var u = parseHttps(url);
+    return !!u && u.hostname === "github.com" && /^\/login\/device\/?$/.test(u.pathname);
   }
 
   /**
@@ -400,6 +416,7 @@
     validateConfirmSender: validateConfirmSender,
     validateExtensionPageSender: validateExtensionPageSender,
     isIssueTracker: isIssueTracker,
+    isDeviceVerificationUrl: isDeviceVerificationUrl,
     validateChoice: validateChoice,
     validatePayload: validatePayload,
     validateRequest: validateRequest,
