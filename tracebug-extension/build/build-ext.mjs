@@ -87,6 +87,7 @@ const SHARED_FILES = [
   "welcome.html",
   "confirm-send.js",
   "confirm-send.html",
+  "create-issue.html",
   "signin.js",
   "signin.html",
   "player.js",
@@ -168,8 +169,14 @@ function firefoxManifest() {
   // and hides Connect there, leaving the pasted-token paths (Chrome first).
   const optional = (base.optional_permissions || []).filter((p) => p !== "identity");
   const { optional_permissions: _drop, ...rest } = base;
+  // Phase 13 Step 3: the in-page Create panel is Chrome-first. Firefox keeps
+  // the extension window (content-script.js panelCapable() reads this list),
+  // so its build doesn't expose create-issue.html at all.
+  const war = (base.web_accessible_resources || [])
+    .filter((e) => !(e.resources || []).includes("create-issue.html"));
   return {
     ...rest,
+    web_accessible_resources: war,
     ...(optional.length ? { optional_permissions: optional } : {}),
     version,
     // Firefox event pages have no importScripts, so the worker-side scripts
@@ -204,6 +211,9 @@ function buildTarget(name, manifest) {
   mkdirSync(outDir, { recursive: true });
 
   for (const f of SHARED_FILES) {
+    // The in-page panel is Chrome-only (firefoxManifest): don't ship a page
+    // the Firefox manifest can never open.
+    if (name === "firefox" && f === "create-issue.html") continue;
     const src = join(EXT_DIR, f);
     if (!existsSync(src)) throw new Error(`missing shared file: ${f}`);
     cpSync(src, join(outDir, f));

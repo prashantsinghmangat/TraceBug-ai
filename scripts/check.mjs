@@ -7,7 +7,7 @@
 //   node scripts/check.mjs             fast gates: typecheck, lint, test, build
 //   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions, e2e:quality,
 //                                      e2e:audit, e2e:audit-ext, e2e:audit-gate, e2e:email-ask, e2e:annotate,
-//                                      e2e:trim, e2e:video-cut, e2e:ticket-view, e2e:shot-editor, e2e:tracker, e2e:github-connect, e2e:firefox-token (draw toolbar Chromium + Firefox; ticket video
+//                                      e2e:trim, e2e:video-cut, e2e:ticket-view, e2e:shot-editor, e2e:tracker, e2e:github-connect, e2e:firefox-token, e2e:inpage-panel (draw toolbar Chromium + Firefox; ticket video
 //                                      trim UI; the cut in Firefox + installed Chrome/Edge; report-quality benchmark on
 //                                      the real extension; Site Audit engine on a planted-defect
 //                                      page; the Audit action through the packaged extension; the tracker Create panel;
@@ -29,7 +29,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const FAST = ["typecheck", "lint", "test", "build"];
-const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality", "e2e:audit", "e2e:audit-ext", "e2e:audit-gate", "e2e:email-ask", "e2e:annotate", "e2e:trim", "e2e:video-cut", "e2e:ticket-view", "e2e:shot-editor", "e2e:tracker", "e2e:github-connect", "e2e:firefox-token"];
+const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality", "e2e:audit", "e2e:audit-ext", "e2e:audit-gate", "e2e:email-ask", "e2e:annotate", "e2e:trim", "e2e:video-cut", "e2e:ticket-view", "e2e:shot-editor", "e2e:tracker", "e2e:github-connect", "e2e:firefox-token", "e2e:inpage-panel"];
 /** Scripts that never exit on their own, so they can never be gates. */
 const INTERACTIVE = new Set(["ext:firefox", "dev", "test:watch", "ext:run"]);
 
@@ -126,7 +126,7 @@ for (const gate of gates) {
     // "ALL CHECKS PASSED — 84/84 checks passed" / "3 CHECK(S) FAILED — 81/84 checks passed"
     const m = out.match(/(\d+)\/(\d+) checks passed/);
     const label = { "e2e:quality": "report", "e2e:audit": "audit", "e2e:audit-ext": "extension audit",
-      "e2e:audit-gate": "audit sign-in gate", "e2e:email-ask": "email ask", "e2e:annotate": "annotate toolbar", "e2e:trim": "video trim UI", "e2e:video-cut": "video cut", "e2e:ticket-view": "ticket view", "e2e:shot-editor": "screenshot editor", "e2e:tracker": "tracker create panel", "e2e:github-connect": "GitHub connect", "e2e:firefox-token": "Firefox token path" }[gate] || "e2e";
+      "e2e:audit-gate": "audit sign-in gate", "e2e:email-ask": "email ask", "e2e:annotate": "annotate toolbar", "e2e:trim": "video trim UI", "e2e:video-cut": "video cut", "e2e:ticket-view": "ticket view", "e2e:shot-editor": "screenshot editor", "e2e:tracker": "tracker create panel", "e2e:github-connect": "GitHub connect", "e2e:firefox-token": "Firefox token path", "e2e:inpage-panel": "in-page Create panel" }[gate] || "e2e";
     if (m) note = `${m[1]}/${m[2]} ${label} checks`;
     else { ok = false; note = "no result line — see the output"; }
   }

@@ -68,6 +68,8 @@ export interface CreateIssueResult {
   /** The extension's Create panel already showed the result with its link:
    *  the page must not open the issue itself. */
   shown?: boolean;
+  /** Created from the in-page panel inside the ticket (Phase 13 Step 3). */
+  panel?: boolean;
   /** A retry found the issue an earlier, unclear attempt had already filed. */
   found?: boolean;
   /** Display name of the tracker it actually went to — the Create panel can switch. */

@@ -30,6 +30,22 @@ the extension is public.
      searchable repo/project picker, fields loaded from the tracker, and Create. The issue then opens in a new tab.
    - List and lookup messages (`tb:tracker:*`) are accepted **only from extension pages**, using a `sender.url` check
      like `validateConfirmSender`. A page cannot call them.
+   - **Updated 2026-11-19 (Phase 13 Step 3, owner-approved):** on Chrome the same panel is shown **inside the ticket**
+     as an extension frame, `create-issue.html` (web-accessible with `use_dynamic_url`; no new permission). It is
+     cross-origin to the page, so the reasoning above still holds: the page can't read repo names, people or field
+     values. Rules:
+     - the content script (never the page) mounts the frame;
+     - the worker issues a one-time nonce per request and hands it to the content script, which posts it into its
+       own frame only;
+     - the first frame presenting it is bound by tab + frameId, and only that frame may list, read or create;
+     - `postMessage` carries layout only and is checked by source window, origin and exact shape;
+     - Create arms after the frame has been fully visible for 500 ms (IntersectionObserver v2: not covered, faded
+       or transformed) and takes only trusted clicks;
+     - a port from the frame ties the request to it, so closing the ticket or navigating away cancels it;
+     - if the frame doesn't come up within 3.5 s, the extension window opens instead.
+
+     Firefox keeps the window (its build doesn't expose the frame). Design: `docs/audit/github-integration-design.md`
+     (local).
    - This replaces the brief's "extend `tb:provider:send` with list messages" and "panel in the ticket UI".
    - Side benefits: `permissions.request` needs a user gesture in an extension page, which this window is, and the
      panel works on strict-CSP sites for free.

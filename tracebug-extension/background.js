@@ -1281,6 +1281,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Step 3: the in-page Create panel (create-issue.html in a frame). Every
+  // panel message is checked against the request's tab, its bound frame and
+  // its one-time nonce (panelRequestFor).
+  if (typeof message.type === "string" && message.type.indexOf("tb:panel:") === 0) {
+    handlePanelMessage(message, sender)
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ ok: false, error: (err && err.message) || "Request failed." }));
+    return true;
+  }
+
   // ADR 010 §4: the Create panel and the options page. Extension pages only.
   if (typeof message.type === "string" && message.type.indexOf("tb:tracker:") === 0) {
     handleTrackerUi(message, sender)
@@ -1864,6 +1874,8 @@ async function handleProviderRequest(message, sender) {
     destination: b.destinationLabel(v.target, integrations),
     payload: cap.payload,
     cutWarning: cap.warning,
+    // Our content script (top frame) can show the in-page Create panel.
+    panel: message.panel === true && sender.frameId === 0 && b.isIssueTracker(v.target),
   });
 }
 
@@ -1921,6 +1933,14 @@ async function queueConfirmation(req) {
       error: "Send cancelled — the confirmation timed out.",
     });
   }
+  // An in-page panel still open for this tab is replaced by the new send
+  // (the ticket asked again) — unless it is creating right now.
+  for (const old of Object.keys(all)) {
+    const r = all[old];
+    if (!r || r.tabId !== req.tabId || r.mode !== "panel" || isInFlight(r)) continue;
+    delete all[old];
+    tellTab(r.tabId, { type: "tb:provider:result", id: old, cancelled: true, error: "Send cancelled." });
+  }
   const room = b.canQueue(all, req.tabId, now);
   if (!room.ok) {
     await sessionSet({ [PENDING_KEY]: all });
@@ -1959,6 +1979,11 @@ async function queueConfirmation(req) {
     windowId: null,
     // Random, made here, reused on every retry: nothing from the ticket.
     sendId: issueSend ? crypto.randomUUID() : undefined,
+    // In-page panel (Step 3) or the extension window. A panel request is
+    // bound to one frame by a one-time nonce the content script hands to it.
+    mode: req.panel && issueSend ? "panel" : "window",
+    nonce: req.panel && issueSend ? randomNonce() : undefined,
+    panelFrameId: null,
   };
   all[req.id] = record;
   await sessionSet({ [PENDING_KEY]: all });
@@ -1968,6 +1993,21 @@ async function queueConfirmation(req) {
   // would leave the page's promise hanging forever.
   if (expiresAt != null) { try { chrome.alarms.create(CONFIRM_ALARM + req.id, { when: expiresAt }); } catch {} }
 
+  // The content script mounts the panel; nothing opens here. If the frame
+  // can't load, it asks for the window instead (tb:panel:fallback).
+  if (record.mode === "panel") return { pending: true, id: req.id, panel: { nonce: record.nonce } };
+  return openConfirmWindow(record);
+}
+
+function randomNonce() {
+  const a = new Uint8Array(24);
+  crypto.getRandomValues(a);
+  return Array.from(a, (x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/** Open the extension-owned confirm window for a queued request. */
+async function openConfirmWindow(record) {
+  const req = record;
   try {
     const win = await chrome.windows.create({
       // The id is the ONLY thing in the URL — no report text in a URL bar,
@@ -1978,9 +2018,11 @@ async function queueConfirmation(req) {
       height: 680,
       focused: true,
     });
-    record.windowId = (win && win.id) != null ? win.id : null;
     const again = await sessionGet(PENDING_KEY, {});
-    if (again[req.id]) { again[req.id] = record; await sessionSet({ [PENDING_KEY]: again }); }
+    if (again[req.id]) {
+      again[req.id] = Object.assign(again[req.id], { windowId: (win && win.id) != null ? win.id : null, mode: "window", nonce: undefined });
+      await sessionSet({ [PENDING_KEY]: again });
+    }
   } catch {
     await dropPending(req.id);
     try { chrome.alarms.clear(CONFIRM_ALARM + req.id); } catch {}
@@ -2107,6 +2149,7 @@ async function runPanelCreate(api, id, req, choice) {
   try {
     const result = await callTrackerFromWorker(api, run);
     result.shown = true;
+    if (req.mode === "panel") result.panel = true;
     const was = await dropPending(id);
     try { chrome.alarms.clear(CONFIRM_ALARM + id); } catch {}
     if (was) tellTab(was.tabId, { type: "tb:provider:result", id, ok: true, result });
@@ -2129,6 +2172,119 @@ async function runPanelCreate(api, id, req, choice) {
       unclear,
     };
   }
+}
+
+// ── The in-page Create panel (Step 3) ──────────────────────────────────────
+// create-issue.html is web-accessible (use_dynamic_url) so the content script
+// can frame it in the ticket. Any page could frame it too, so nothing is
+// trusted by URL alone:
+//   - the frame must be OUR extension page (sender.id, chrome-extension: URL,
+//     path /create-issue.html) in a subframe of the request's tab;
+//   - it must present the request's one-time nonce, which only our content
+//     script has (it got it in the ack and posts it into its own frame);
+//   - the first frame to do so is bound by frameId, and only that frame may
+//     read the request, list repos or create.
+// The page never gets the nonce, a token, repo names or field values.
+
+function isPanelPage(sender) {
+  if (!sender || sender.id !== chrome.runtime.id || !sender.tab || typeof sender.url !== "string") return false;
+  if (!(sender.frameId > 0)) return false;
+  try {
+    const u = new URL(sender.url);
+    return u.protocol === "chrome-extension:" && u.pathname === "/create-issue.html";
+  } catch { return false; }
+}
+
+/** The panel request this sender is bound to (tracker UI verbs), or null. */
+async function boundPanelFor(sender) {
+  if (!isPanelPage(sender)) return null;
+  const all = await sessionGet(PENDING_KEY, {});
+  const id = Object.keys(all).find((k) => {
+    const r = all[k];
+    return r && r.mode === "panel" && r.tabId === sender.tab.id && r.panelFrameId === sender.frameId;
+  });
+  return id ? all[id] : null;
+}
+
+/** Validate a panel message → the request, or an error. `bind` binds a first hello. */
+async function panelRequestFor(message, sender, bind) {
+  if (!isPanelPage(sender)) return { error: "Rejected." };
+  const id = typeof message.id === "string" ? message.id : "";
+  const nonce = typeof message.nonce === "string" ? message.nonce : "";
+  const all = await sessionGet(PENDING_KEY, {});
+  const req = all[id];
+  if (!req || req.mode !== "panel" || !req.nonce || req.tabId !== sender.tab.id || nonce !== req.nonce) {
+    return { error: "This request is no longer waiting. Send it again from the ticket." };
+  }
+  if (req.panelFrameId == null) {
+    if (!bind) return { error: "Rejected." };
+    req.panelFrameId = sender.frameId;
+    await sessionSet({ [PENDING_KEY]: all });
+  } else if (req.panelFrameId !== sender.frameId) {
+    return { error: "Rejected." };
+  }
+  return { req, id };
+}
+
+async function handlePanelMessage(message, sender) {
+  switch (message.type) {
+    case "tb:panel:hello": {
+      const got = await panelRequestFor(message, sender, true);
+      if (got.error) return { ok: false, error: got.error };
+      // The frame's parent must be the page that asked.
+      if (message.parentOrigin !== got.req.origin) return { ok: false, error: "Rejected." };
+      return { ok: true, request: confirmViewOf(got.req) };
+    }
+    case "tb:panel:create": {
+      const got = await panelRequestFor(message, sender, false);
+      if (got.error) return { ok: false, error: got.error };
+      const b = bridgeLib();
+      const c = b ? b.validateChoice(message.choice) : { ok: false, error: "Reload the extension." };
+      if (!c.ok) return { ok: false, error: c.error };
+      return createFromPanel(got.id, c.choice);
+    }
+    case "tb:panel:cancel": {
+      const got = await panelRequestFor(message, sender, false);
+      if (got.error) return { ok: false, error: got.error };
+      if (isInFlight(got.req)) return { ok: false, error: "Already creating this issue…" };
+      await resolvePending(got.id, false, null);
+      return { ok: true };
+    }
+    case "tb:panel:fallback": {
+      // From OUR content script (top frame of the request's tab, page URL):
+      // the frame didn't come up — use the extension window instead.
+      if (!sender || sender.id !== chrome.runtime.id || !sender.tab || sender.frameId !== 0) return { ok: false, error: "Rejected." };
+      const all = await sessionGet(PENDING_KEY, {});
+      const req = all[message.id];
+      if (!req || req.mode !== "panel" || req.tabId !== sender.tab.id || message.nonce !== req.nonce || req.panelFrameId != null) {
+        return { ok: false, error: "Rejected." };
+      }
+      const res = await openConfirmWindow(req);
+      return res && res.pending ? { ok: true } : { ok: false, error: (res && res.error) || "Could not open the window." };
+    }
+    default:
+      return { ok: false, error: "Unsupported request type." };
+  }
+}
+
+// The panel frame holds a port open for its lifetime. When it goes — ticket
+// closed, page navigated or reloaded, tab closed — so does the request,
+// unless a create is running (that one finishes and reports to the page).
+if (chrome.runtime && chrome.runtime.onConnect) {
+  chrome.runtime.onConnect.addListener((port) => {
+    if (!port || typeof port.name !== "string" || port.name.indexOf("tb-panel:") !== 0) return;
+    const id = port.name.slice("tb-panel:".length);
+    const sender = port.sender;
+    boundPanelFor(sender).then((req) => {
+      if (!req || req.id !== id) { try { port.disconnect(); } catch {} return; }
+      port.onDisconnect.addListener(async () => {
+        const all = await sessionGet(PENDING_KEY, {});
+        const r = all[id];
+        if (!r || r.mode !== "panel" || r.panelFrameId !== sender.frameId || isInFlight(r)) return;
+        await resolvePending(id, false, null);
+      });
+    }).catch(() => {});
+  });
 }
 
 // ── The actual call ────────────────────────────────────────────────────────
@@ -2589,7 +2745,7 @@ async function handleTrackerUi(message, sender) {
   if (b.TRACKER_UI_VERBS.indexOf(message.type) === -1) return { error: "Unsupported request type." };
   let base = "";
   try { base = chrome.runtime.getURL(""); } catch {}
-  if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base)) return { error: "Rejected." };
+  if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base) && !(await boundPanelFor(sender))) return { error: "Rejected." };
 
   if (message.type === "tb:tracker:status") {
     return { trackers: await trackerStatusList(api), oauthUi: oauthUiSupported() };

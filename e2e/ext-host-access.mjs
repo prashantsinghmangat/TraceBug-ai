@@ -80,3 +80,23 @@ export function withGrantedTabCapture(extDir, label = "ext") {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8");
   return dest;
 }
+
+/**
+ * Phase 13 Step 3: in a Chrome build, Send to GitHub/Linear opens the in-page
+ * Create panel and the extension window is the fallback. Suites written
+ * against the window keep testing it (same confirm-send.js, and what Firefox
+ * ships) by dropping the panel's web_accessible_resources entry from their
+ * copy — content-script.js panelCapable() then picks the window, exactly as
+ * in the Firefox build. Modifies the copy in place.
+ *
+ * @param {string} copyDir  a directory returned by withGrantedHostAccess
+ * @returns {string} the same directory
+ */
+export function withoutInPagePanel(copyDir) {
+  const manifestPath = join(copyDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.web_accessible_resources = (manifest.web_accessible_resources || [])
+    .filter((e) => !(e.resources || []).includes("create-issue.html"));
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8");
+  return copyDir;
+}

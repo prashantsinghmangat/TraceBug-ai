@@ -18,11 +18,11 @@ import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname } from "node:path";
-import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { withGrantedHostAccess, withoutInPagePanel } from "./ext-host-access.mjs";
 import { extensionLaunchOptions, EXT_DIST_DIR, PUBLIC_DIR, requireBuilt } from "./paths.mjs";
 
 const EXT_SRC = requireBuilt(EXT_DIST_DIR, "run `npm run build:ext` first");
-const EXT = withGrantedHostAccess(EXT_SRC, "github-connect");
+const EXT = withoutInPagePanel(withGrantedHostAccess(EXT_SRC, "github-connect")); // the window path; the panel is ext-inpage-panel
 
 const PORT = 4924;
 const SITE = `http://localhost:${PORT}/try.html`;

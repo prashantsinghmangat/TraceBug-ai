@@ -19,7 +19,19 @@
 const $ = (id) => document.getElementById(id);
 
 const params = new URLSearchParams(location.search);
-const ID = params.get("id") || "";
+
+// Phase 13 Step 3: the same panel, framed in the ticket (create-issue.html).
+// There the request id and its one-time nonce arrive by postMessage from our
+// content script, every call to the worker carries the nonce, Create waits
+// until the frame has been fully visible for a moment and takes only a real
+// click, and Close/Cancel tell the parent to remove the frame.
+const EMBED = /\/create-issue\.html$/.test(location.pathname);
+let ID = EMBED ? "" : (params.get("id") || "");
+let NONCE = "";
+let PARENT_ORIGIN = "";
+// The frame must be fully on screen (and, where Chrome can tell, not covered
+// or faded) for this long before Create works.
+const ARM_MS = 500;
 
 let decided = false;
 let deadline = 0;
@@ -101,6 +113,7 @@ const panel = {
   loadSeq: 0,
   keep: null,            // choices held across a reconnect: {tracker, container, fields}
   busy: false,           // a create is in flight
+  armed: !EMBED,         // EMBED: fully visible for ARM_MS
 };
 
 function show(id, on) {
@@ -127,7 +140,7 @@ function selectedContainer() {
 function syncCreateButton() {
   if (!panel.active || decided) return;
   const t = panel.current;
-  $("send").disabled = panel.busy || !(t && t.connected && selectedContainer());
+  $("send").disabled = panel.busy || !panel.armed || !(t && t.connected && selectedContainer());
   put("destination", selectedContainer() || "(choose below)");
   put("provider", t ? t.label : "");
 }
@@ -534,15 +547,17 @@ function wirePanel() {
 
 const ISSUE_HOSTS = { github: ["github.com"], linear: ["linear.app"] };
 
-async function createIssue() {
+async function createIssue(e) {
   if (decided || panel.busy || $("send").disabled) return;
+  // In the page, only a real click (or key press) — not one a script made.
+  if (EMBED && !(e && e.isTrusted)) return;
   const choice = collectChoice();
   panel.busy = true;
   $("send").disabled = true;
   $("cancel").disabled = true;
   panelMsg("");
   put("countdown", "Creating…");
-  const res = await send("tb:confirm:create", { id: ID, choice });
+  const res = await send(EMBED ? "tb:panel:create" : "tb:confirm:create", { id: ID, nonce: NONCE, choice });
   panel.busy = false;
   $("cancel").disabled = false;
   put("countdown", "");
@@ -598,7 +613,7 @@ async function startPanel(target) {
   wirePanel();
   show("panel", true);
   // The panel already says where it goes; no Destination/Via rows, no timer.
-  $("meta").hidden = true;
+  if ($("meta")) $("meta").hidden = true;
   if (tick) clearInterval(tick);
   put("countdown", "");
   $("send").textContent = "Create issue";
@@ -608,7 +623,92 @@ async function startPanel(target) {
   return true;
 }
 
+// ── Embedded in the ticket ────────────────────────────────────────────────
+
+function postParent(msg) {
+  if (PARENT_ORIGIN) { try { window.parent.postMessage(msg, PARENT_ORIGIN); } catch {} }
+}
+
+function closeEmbedded() {
+  stopPolling();
+  postParent({ type: "tb-panel-close" });
+}
+
+/** The port that ties the request to this frame: when the frame goes, the
+ *  worker cancels it (unless a create is running). Reconnects if the worker
+ *  restarted under it. */
+function connectPanelPort(tries) {
+  let port;
+  try { port = chrome.runtime.connect({ name: "tb-panel:" + ID }); } catch { return; }
+  port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError;
+    if (!decided && (tries || 0) < 5) setTimeout(() => connectPanelPort((tries || 0) + 1), 300);
+  });
+}
+
+function watchSize() {
+  const report = () => postParent({ type: "tb-panel-size", height: Math.ceil(document.documentElement.scrollHeight) });
+  try { new ResizeObserver(report).observe(document.body); } catch {}
+  report();
+}
+
+/** Create arms only after the frame has been fully visible for ARM_MS. With
+ *  IntersectionObserver v2 (Chrome) "visible" also means not covered,
+ *  faded or transformed by the page; elsewhere it means fully on screen. */
+function watchVisibility() {
+  let timer = 0;
+  const set = (visible) => {
+    clearTimeout(timer);
+    if (!visible) { panel.armed = false; syncCreateButton(); return; }
+    if (panel.armed) return;
+    timer = setTimeout(() => { panel.armed = true; syncCreateButton(); }, ARM_MS);
+  };
+  const onEntries = (entries) => {
+    const en = entries[entries.length - 1];
+    const full = en.isIntersecting && en.intersectionRatio >= 0.99;
+    set(full && (en.isVisible === undefined || en.isVisible === true));
+  };
+  let io;
+  try { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1], trackVisibility: true, delay: 100 }); }
+  catch { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1] }); }
+  io.observe(document.body);
+}
+
+const NONCE_RE = /^[0-9a-f]{48}$/;
+let embedStarting = false;
+
+function loadEmbedded() {
+  const onInit = async (e) => {
+    // Only from our parent, once, in the exact shape the content script sends.
+    // The page shares that window and could post too, but it has no nonce: a
+    // forged init fails at the worker and the real one still gets through.
+    if (ID || embedStarting || e.source !== window.parent) return;
+    const d = e.data;
+    if (!d || typeof d !== "object" || Array.isArray(d) || Object.keys(d).length !== 4) return;
+    if (d.type !== "tb-panel-init" || typeof d.id !== "string" || !d.id || d.id.length > 200) return;
+    if (typeof d.nonce !== "string" || !NONCE_RE.test(d.nonce)) return;
+    if (d.theme !== "auto" && d.theme !== "light" && d.theme !== "dark") return;
+    embedStarting = true;
+    const res = await send("tb:panel:hello", { id: d.id, nonce: d.nonce, parentOrigin: e.origin });
+    embedStarting = false;
+    if (!res || !res.ok || !res.request) return;
+    window.removeEventListener("message", onInit);
+    ID = d.id;
+    NONCE = d.nonce;
+    PARENT_ORIGIN = e.origin;
+    if (d.theme !== "auto") document.documentElement.dataset.theme = d.theme;
+    connectPanelPort(0);
+    postParent({ type: "tb-panel-ready" });
+    watchSize();
+    watchVisibility();
+    $("send").disabled = true;
+    await startPanel(res.request.target);
+  };
+  window.addEventListener("message", onInit);
+}
+
 async function load() {
+  if (EMBED) { loadEmbedded(); return; }
   if (!ID) { fatal("This confirmation window has no request id."); return; }
 
   const res = await send("tb:confirm:get", { id: ID });
@@ -684,9 +784,20 @@ async function decide(approved) {
   window.close();
 }
 
-$("send").addEventListener("click", () => (panel.active ? createIssue() : decide(true)));
+$("send").addEventListener("click", (e) => (panel.active ? createIssue(e) : decide(true)));
+
+async function cancelEmbedded() {
+  if (panel.busy) return;
+  if (!decided) {
+    decided = true;
+    await send("tb:panel:cancel", { id: ID, nonce: NONCE });
+  }
+  closeEmbedded();
+}
+
 $("cancel").addEventListener("click", () => {
   if (panel.busy) return;
+  if (EMBED) { cancelEmbedded(); return; }
   // After a create, the request is already settled: Close just closes.
   if (decided && panel.active) { window.close(); return; }
   decide(false);
@@ -695,6 +806,7 @@ $("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || panel.busy) return;
+  if (EMBED) { e.stopPropagation(); cancelEmbedded(); return; }
   if (decided && panel.active) { window.close(); return; }
   decide(false);
 });
@@ -703,7 +815,8 @@ document.addEventListener("keydown", (e) => {
 // windows.onRemoved, so this is belt-and-braces for the case where the window
 // is closed in a way that still runs unload handlers.
 window.addEventListener("beforeunload", () => {
-  if (decided) return;
+  // Embedded: the port closing tells the worker.
+  if (decided || EMBED) return;
   decided = true;
   try { chrome.runtime.sendMessage({ type: "tb:confirm:decide", id: ID, approved: false }); } catch {}
 });

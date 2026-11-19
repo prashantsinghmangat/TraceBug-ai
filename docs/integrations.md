@@ -41,7 +41,18 @@ Saving asks the browser for access to that one tracker's API host. Then **Send t
 same **Create an issue** window: tracker, a searchable **Repository** / **Team** picker listed from your account,
 GitHub labels, assignee and milestone, and **Create issue**.
 
-### The Create window
+### The Create panel (in the ticket) and the Create window
+
+On Chrome, **Send to GitHub** (or Linear) opens a small **Create a [GitHub ▾] issue** panel right inside the ticket,
+above its buttons. It starts with your last repository, labels, assignee and milestone, so a repeat bug is one
+click on **Create issue**; it then shows **Created #N** with a link, and the ticket stays open. The panel is an
+extension frame: the site you're testing can't read what's in it (repository names, people, labels), and
+**Create issue** only works after the panel has been fully on screen for half a second, not covered or faded,
+and only for a real click or key press. Escape or **Cancel** closes it; closing the ticket or leaving the page
+cancels it. If a site stops the panel from loading, the separate **Create** window opens instead. Firefox uses
+the window.
+
+The window:
 
 - It shows the title and body exactly as they will be sent, with warnings (remote images, @mentions, a shortened body).
 - Nothing is sent until you click **Create issue**; closing the window cancels. The window has no time limit:
@@ -57,9 +68,10 @@ GitHub labels, assignee and milestone, and **Create issue**.
     asks Linear for an issue with that id.
 - Only one Create per ticket runs at a time: a second click, or a second message, is refused while the first runs.
 - If your sign-in expired or was revoked, the window shows **Reconnect GitHub** and keeps your choices.
-- **Why a separate window:** the ticket runs inside the page you are testing, so anything shown there — your
-  private repository names, teams, people — could be read by that site. The Create window belongs to the
-  extension; the page only ever hands it the report text. Credentials live in the extension's own storage.
+- **Why not plain page UI:** the ticket runs inside the page you are testing, so anything drawn there by the page
+  — your private repository names, teams, people — could be read by that site. The panel (a cross-origin
+  extension frame) and the window both belong to the extension; the page only ever hands them the report text.
+  Credentials live in the extension's own storage.
 - GitHub's API can't attach files, so the recording and screenshots download when the issue is created; drag them
   into the issue (the body says which files).
 

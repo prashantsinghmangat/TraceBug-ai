@@ -569,14 +569,17 @@ window.addEventListener("tracebug-provider-request", (e) => safeRun(() => {
 
   const forward = (extra) => {
     const msg = { type, id, data: Object.assign({ provider, payload }, extra || {}) };
+    // Set HERE, not by the page: this script can show the in-page panel.
+    if (type === "tb:provider:send" && panelCapable()) msg.panel = true;
     safeSendMessage(msg, (response) => safeRun(() => {
       const err = (chrome.runtime && chrome.runtime.lastError && chrome.runtime.lastError.message)
         || (response && response.error)
         || (!response ? "Extension context invalidated" : null);
       // An ack only ever reports a REJECTION. Success means a confirmation
-      // window is open and the outcome will arrive later as
-      // tb:provider:result — see src/ext-rpc.ts.
-      if (err) ack(err);
+      // window (or the in-page panel) is open and the outcome will arrive
+      // later as tb:provider:result — see src/ext-rpc.ts.
+      if (err) { ack(err); return; }
+      if (response && response.panel && typeof response.panel.nonce === "string") mountCreatePanel(id, response.panel.nonce);
     }));
   };
 
@@ -599,6 +602,112 @@ window.addEventListener("tracebug-provider-request", (e) => safeRun(() => {
   }
   forward();
 }));
+
+// ── In-page Create panel (Phase 13 Step 3) ─────────────────────────────────
+// create-issue.html, framed inside the ticket's footer. Cross-origin to the
+// page, so the page can't read the repo names, labels or people in it, and it
+// never gets the one-time nonce: the worker hands it to THIS script, which
+// posts it into its own frame only. Messages from the frame are accepted only
+// from that frame's window, with the extension's origin, in an exact shape;
+// they carry layout and nothing else. If the frame doesn't say "ready" in
+// time (a CSP that blocks it, a page that tampers with it), the extension
+// window opens instead.
+var PANEL_PAGE = "create-issue.html";
+var PANEL_READY_MS = 3500;
+var activePanel = null;
+
+/** Only builds that declare the panel as web-accessible (Chrome) frame it. */
+function panelCapable() {
+  try {
+    var war = chrome.runtime.getManifest().web_accessible_resources || [];
+    return war.some(function (e) { return e && Array.isArray(e.resources) && e.resources.indexOf(PANEL_PAGE) !== -1; });
+  } catch (e) { return false; }
+}
+
+function ticketTheme() {
+  var root = document.getElementById("tracebug-root");
+  var t = root && root.getAttribute("data-tb-theme");
+  return t === "dark" || t === "light" ? t : "auto";
+}
+
+function unmountCreatePanel() {
+  if (!activePanel) return;
+  var p = activePanel;
+  activePanel = null;
+  clearTimeout(p.timer);
+  window.removeEventListener("message", p.onMessage);
+  if (p.observer) p.observer.disconnect();
+  if (p.slot && p.slot.parentNode) p.slot.parentNode.removeChild(p.slot);
+}
+
+function panelFallback(id, nonce) {
+  unmountCreatePanel();
+  safeSendMessage({ type: "tb:panel:fallback", id: id, nonce: nonce }, function () { void chrome.runtime.lastError; });
+}
+
+function mountCreatePanel(id, nonce) {
+  unmountCreatePanel();
+  var modal = document.getElementById("tracebug-quick-bug-modal");
+  var anchor = modal && modal.querySelector(".tb-qb-footer .tb-qb-actions");
+  if (!anchor) { panelFallback(id, nonce); return; }
+
+  // getURL gives the per-session dynamic URL (use_dynamic_url); the loaded
+  // document's origin is the extension's own. Both are ours, nothing else is.
+  var src = chrome.runtime.getURL(PANEL_PAGE);
+  var extOrigin, extOrigins;
+  try {
+    extOrigin = new URL(src).origin;
+    extOrigins = [extOrigin, "chrome-extension://" + chrome.runtime.id];
+  } catch (e) { panelFallback(id, nonce); return; }
+
+  var slot = document.createElement("div");
+  slot.setAttribute("data-tb-create-panel", "");
+  slot.style.cssText = "margin:0 0 12px;";
+  var frame = document.createElement("iframe");
+  frame.src = src;
+  frame.title = "Create an issue";
+  // The device code's Copy button needs the clipboard inside the frame.
+  frame.setAttribute("allow", "clipboard-write");
+  frame.style.cssText = "display:block;width:100%;height:150px;border:0;border-radius:10px;background:transparent;color-scheme:normal;";
+  slot.appendChild(frame);
+  anchor.parentNode.insertBefore(slot, anchor);
+
+  var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null };
+  p.onMessage = function (e) {
+    // Only our frame, from the extension's origin, in an exact shape.
+    if (!activePanel || activePanel !== p || e.source !== frame.contentWindow || extOrigins.indexOf(e.origin) === -1) return;
+    var d = e.data;
+    if (!d || typeof d !== "object" || Array.isArray(d) || typeof d.type !== "string") return;
+    if (d.type === "tb-panel-ready" && Object.keys(d).length === 1) {
+      p.ready = true;
+      clearTimeout(p.timer);
+    } else if (d.type === "tb-panel-size" && Object.keys(d).length === 2 &&
+      typeof d.height === "number" && isFinite(d.height) && d.height >= 40 && d.height <= 1400) {
+      frame.style.height = Math.ceil(d.height) + "px";
+    } else if (d.type === "tb-panel-close" && Object.keys(d).length === 1) {
+      unmountCreatePanel();
+    }
+  };
+  window.addEventListener("message", p.onMessage);
+  frame.addEventListener("load", function () {
+    if (activePanel !== p) return;
+    try {
+      // Only our frame's window, and only if it is still our document.
+      var doc = frame.contentWindow;
+      extOrigins.forEach(function (o) {
+        try { doc.postMessage({ type: "tb-panel-init", id: id, nonce: nonce, theme: ticketTheme() }, o); } catch (e) {}
+      });
+    } catch (e) { /* the timer falls back */ }
+  });
+  p.timer = setTimeout(function () { if (activePanel === p && !p.ready) panelFallback(id, nonce); }, PANEL_READY_MS);
+  // Ticket closed (or the page removed the frame): stop listening. The
+  // frame's port closing tells the worker to cancel.
+  p.observer = new MutationObserver(function () {
+    if (activePanel === p && !frame.isConnected) unmountCreatePanel();
+  });
+  p.observer.observe(document.documentElement, { childList: true, subtree: true });
+  activePanel = p;
+}
 
 // ── Provider outcome fan-out ───────────────────────────────────────────────
 // The worker sends the result to THIS tab's top frame only, after the user has

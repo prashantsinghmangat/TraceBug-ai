@@ -11,12 +11,12 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { withGrantedHostAccess, withoutInPagePanel } from "./ext-host-access.mjs";
 import { extensionLaunchOptions, EXT_DIST_DIR, requireBuilt } from "./paths.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EXT_SRC = requireBuilt(EXT_DIST_DIR, "run `npm run build:ext` first");
-const EXT = withGrantedHostAccess(EXT_SRC, "gh-send-confirm");
+const EXT = withoutInPagePanel(withGrantedHostAccess(EXT_SRC, "gh-send-confirm")); // the window path; the panel is ext-inpage-panel
 const PUBLIC_DIR = join(REPO, "website", "public");
 
 const PORT = 4921;

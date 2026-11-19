@@ -2364,7 +2364,9 @@ async function _fileViaTracker(
     if (screenshots.length) _downloadAllScreenshots(screenshots);
     _downloadVideoIfPresent();
     _clearDraft();
-    setTimeout(close, 300);
+    // The in-page Create panel shows "Created #N" with its link inside this
+    // ticket — keep the ticket open so it stays readable; the user closes it.
+    if (!result.panel) setTimeout(close, 300);
     return true;
   } catch (err) {
     // Cancelling the extension's confirmation window is a deliberate stop, not
@@ -3409,11 +3411,19 @@ function _injectStyles(): void {
        ticket modal never visibly appeared — "click Stop, nothing happens". */
     #${MODAL_ID}.tb-qb-overlay {
       position: fixed; inset: 0; z-index: 2147483647;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
       display: flex; align-items: center; justify-content: center;
       padding: 20px; pointer-events: auto;
       animation: tracebug-qb-fade-in 0.15s ease;
     }
+    /* The dim + blur sit on a layer BEHIND the dialog, not on the overlay
+       itself: a filter on an ancestor makes IntersectionObserver v2 report the
+       in-page Create panel (an extension frame in the footer) as "not
+       visible", and its Create button only arms when visible. Same look. */
+    #${MODAL_ID}.tb-qb-overlay::before {
+      content: ""; position: absolute; inset: 0; z-index: 0;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    }
+    #${MODAL_ID}.tb-qb-overlay > * { position: relative; z-index: 1; }
     #${MODAL_ID} .tb-qb-shell {
       background: var(--tb-bg-secondary, #11151A);
       border: 1px solid var(--tb-border, #1F2630);

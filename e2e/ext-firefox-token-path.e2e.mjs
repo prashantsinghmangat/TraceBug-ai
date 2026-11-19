@@ -20,7 +20,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname } from "node:path";
-import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { withGrantedHostAccess, withoutInPagePanel } from "./ext-host-access.mjs";
 import { extensionLaunchOptions, EXT_DIST_DIR, PUBLIC_DIR, requireBuilt } from "./paths.mjs";
 
 const EXT_SRC = requireBuilt(EXT_DIST_DIR, "run `npm run build:ext` first");
@@ -52,12 +52,14 @@ if (existsSync(ffPath)) {
   const scripts = (ff.background && ff.background.scripts) || [];
   check("Firefox: the worker loads the bridge, the provider API and background.js",
     ["provider-bridge.js", "tracebug-provider-api.js", "background.js"].every((f) => scripts.includes(f)), JSON.stringify(scripts));
+  check("Firefox: no in-page Create panel (Chrome first) — not web-accessible, not packaged",
+    !JSON.stringify(ff.web_accessible_resources || []).includes("create-issue.html") && !existsSync(join(FF_DIR, "create-issue.html")));
   check("Firefox: the Create window and settings are packaged",
     ["confirm-send.html", "confirm-send.js", "options.html", "options.js"].every((f) => existsSync(join(FF_DIR, f))));
 }
 
 // ── 2. The shared code, with Firefox's permissions ─────────────────────────
-const EXT = withGrantedHostAccess(EXT_SRC, "firefox-shape");
+const EXT = withoutInPagePanel(withGrantedHostAccess(EXT_SRC, "firefox-shape")); // the window path; the panel is ext-inpage-panel
 const mPath = join(EXT, "manifest.json");
 const m = JSON.parse(readFileSync(mPath, "utf8"));
 m.optional_permissions = (m.optional_permissions || []).filter((p) => p !== "identity");

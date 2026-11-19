@@ -121,6 +121,7 @@ the same step.
 | `tb:rec:*` | page SDK ↔ offscreen | `background.js` ~L1222 relay; `started` ~L1131, `persist` ~L1149, `handleRecordingMessage` (start/stop side effects) ~L1380 |
 | `tb:provider:send`, `tb:llm:analyze` | page SDK | `background.js` ~L1228 → `provider-bridge.js` → `tracebug-provider-api.js` |
 | `tb:confirm:get`, `tb:confirm:decide` | `confirm-send.html` | `background.js` ~L1236, ~L1249 |
+| `tb:panel:hello/create/cancel` (in-page panel frame, nonce-bound) · `tb:panel:fallback` (content script) · port `tb-panel:<id>` | `create-issue.html` (runs `confirm-send.js` in EMBED mode), mounted by `content-script.js` `mountCreatePanel` | `background.js` `handlePanelMessage` / `panelRequestFor` / `boundPanelFor` |
 | `tb:confirm:create` (Create panel: result/error back to the window; marker + duplicate check) | `confirm-send.html` | `background.js` `createFromPanel` |
 | `tb:tracker:*` (status, containers, fields, connect, connect-poll, connect-show, disconnect, set-default); device page: `openDevicePage` (popup, tab fallback) / `pollTrackerConnect` (token = only success signal) / `onDevicePopupClosed` (flag only); GitHub App per build: `build/github-apps.json` + `build/github-app-swap.mjs` (`build-ext.mjs --store`) | `confirm-send.html`, `options.html`, `welcome.html` only | `background.js` `handleTrackerUi`; page helper `tracker-connect.js` |
 
