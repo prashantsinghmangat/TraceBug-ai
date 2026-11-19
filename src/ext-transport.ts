@@ -36,15 +36,22 @@ export function isExtensionMode(): boolean {
   return _mode === "extension";
 }
 
+export type DefaultTracker = "github" | "linear" | "slack";
+
 /** Which integrations are configured — no secrets, just yes/no. */
 export interface IntegrationStatus {
   github: boolean;
   linear: boolean;
   slack: boolean;
   ai: boolean;
+  /** The tracker the ticket's main send button targets (Integrations hub). */
+  defaultTracker: DefaultTracker | null;
+  /** A connection needs reconnecting or has an error: the status icon's dot. */
+  trackerAttention: boolean;
 }
 
-const EMPTY: IntegrationStatus = { github: false, linear: false, slack: false, ai: false };
+const EMPTY: IntegrationStatus = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false };
+const DEFAULT_TRACKERS: readonly DefaultTracker[] = ["github", "linear", "slack"];
 
 let _status: IntegrationStatus = { ...EMPTY };
 
@@ -63,6 +70,10 @@ export function setIntegrationStatus(status: Partial<IntegrationStatus> | null |
     linear: !!status.linear,
     slack: !!status.slack,
     ai: !!status.ai,
+    // Only a known id survives: anything else is "no default".
+    defaultTracker: DEFAULT_TRACKERS.includes(status.defaultTracker as DefaultTracker)
+      ? status.defaultTracker as DefaultTracker : null,
+    trackerAttention: status.trackerAttention === true,
   };
 }
 

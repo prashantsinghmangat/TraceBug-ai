@@ -1015,8 +1015,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // `connectable` (ADR 010): trackers this build can sign in to, so the
     // ticket offers "Send to GitHub" before anyone has connected — the Create
     // window is where Connect lives. Booleans only, like the rest of caps.
-    Promise.all([hasHostAccess("<all_urls>"), boundQuickCaptureShortcut()])
-      .then(([granted, shortcut]) => sendResponse({ granted, shortcut, connectable: connectableTrackers() }))
+    // `integrations`: the default tracker's id and an "anything needs
+    // attention" flag for the ticket's send button — never a repo, team or
+    // account name (pageIntegrationHint).
+    Promise.all([hasHostAccess("<all_urls>"), boundQuickCaptureShortcut(), pageIntegrationHintNow()])
+      .then(([granted, shortcut, integrations]) => sendResponse({ granted, shortcut, connectable: connectableTrackers(), integrations }))
       .catch(() => sendResponse({ granted: false, shortcut: "", connectable: {} }));
     return true; // async
   }
@@ -1275,7 +1278,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const b = bridgeLib();
     const c = b ? b.validateChoice(message.choice) : { ok: false, error: "Reload the extension." };
     if (!c.ok) { sendResponse({ ok: false, error: c.error }); return false; }
-    createFromPanel(String(message.id || ""), c.choice)
+    createFromPanel(String(message.id || ""), c.choice, { attach: message.attach !== false })
       .then((res) => sendResponse(res))
       .catch((err) => sendResponse({ ok: false, error: (err && err.message) || "Could not create the issue." }));
     return true;
@@ -2135,7 +2138,7 @@ function ticketKey(req) {
  * (network, timeout) the retry looks for the hidden marker first — GitHub has
  * no idempotency key, and a create that landed must not be filed twice.
  */
-async function createFromPanel(id, choice) {
+async function createFromPanel(id, choice, opts) {
   const api = providerApi();
   if (!api) return { ok: false, error: "TraceBug could not load its provider code. Reload the extension." };
   const busy = { ok: false, error: "Already creating this issue…", busy: true };
@@ -2161,19 +2164,21 @@ async function createFromPanel(id, choice) {
       req.firstTarget = { tracker: choice.tracker, container: choice.container };
     }
     await sessionSet({ [PENDING_KEY]: all });
-    return await runPanelCreate(api, id, req, choice);
+    return await runPanelCreate(api, id, req, choice, opts || {});
   } finally {
     creating.delete(id);
     if (key) creating.delete(key);
   }
 }
 
-async function runPanelCreate(api, id, req, choice) {
+async function runPanelCreate(api, id, req, choice, opts) {
   const run = Object.assign({}, req, {
     choice,
     target: choice.tracker,
     providerLabel: TB_PROVIDER_LABELS[choice.tracker] || choice.tracker,
     fromPanel: true,
+    // The user declined access to Linear's storage in the panel: file without files.
+    attachDeclined: opts.attach === false,
   });
   try {
     const result = await callTrackerFromWorker(api, run);
@@ -2274,7 +2279,7 @@ async function handlePanelMessage(message, sender) {
       const b = bridgeLib();
       const c = b ? b.validateChoice(message.choice) : { ok: false, error: "Reload the extension." };
       if (!c.ok) return { ok: false, error: c.error };
-      return createFromPanel(got.id, c.choice);
+      return createFromPanel(got.id, c.choice, { attach: message.attach !== false });
     }
     case "tb:panel:cancel": {
       const got = await panelRequestFor(message, sender, false);
@@ -2437,6 +2442,9 @@ function noAccessMessage(host) {
 
 const TRACKER_AUTH_KEY = "tb_tracker_auth_v1";
 const TRACKER_PREFS_KEY = "tb_tracker_prefs_v1";
+// Integrations hub: the connection the ticket's main send button targets
+// ("github" | "linear" | "slack"). Unset = the first connection.
+const TRACKER_DEFAULT_KEY = "tb_tracker_default_v1";
 // Device-flow state between polls. Session storage: it must survive a worker
 // restart mid-sign-in, and must not outlive the browser session.
 const DEVICE_FLOW_KEY = "tb_device_flow_v1";
@@ -2494,10 +2502,15 @@ function legacyFields(tracker, integrations) {
   return {};
 }
 
-async function rememberChoice(tracker, container, fields) {
+async function rememberChoice(tracker, container, fields, containerLabel) {
   const got = await localGet([TRACKER_PREFS_KEY], {});
   const prefs = got[TRACKER_PREFS_KEY] || {};
-  prefs[tracker] = { container, fields: fields || {}, at: Date.now() };
+  const prev = prefs[tracker];
+  // The display name ("ENG · Engineering") for the status tooltip; kept while
+  // the container is unchanged.
+  const label = typeof containerLabel === "string" ? containerLabel.trim().slice(0, 300)
+    : (prev && prev.container === container ? prev.containerLabel || "" : "");
+  prefs[tracker] = { container, containerLabel: label, fields: fields || {}, at: Date.now() };
   await localSet({ [TRACKER_PREFS_KEY]: prefs });
 }
 
@@ -2519,7 +2532,26 @@ async function createViaAdapter(api, adapter, req, integrations) {
         req.firstAttemptAt || Date.now(), AbortSignal.timeout(CREATE_TIMEOUT_MS));
       if (found) { found.found = true; return found; }
     }
-    const attachments = req.attachments && req.attachments.length ? await loadAttachments(req.id) : [];
+    let attachments = req.attachments && req.attachments.length ? await loadAttachments(req.id) : [];
+    // Linear's storage is an optional host, asked for on the first send with
+    // files. Declined (or never granted): file the issue and name the files.
+    let skipped = null;
+    if (attachments.length && adapter.id === "linear" && (api.LINEAR_UPLOAD_ORIGINS || []).length) {
+      const up = await linearUploadAccess(api);
+      if (req.attachDeclined || !up.uploadGranted) {
+        const reason = req.attachDeclined
+          ? "you didn't allow access to " + up.uploadWhere
+          : "TraceBug doesn't have access to " + up.uploadWhere;
+        skipped = attachments.map((f) => ({ name: f.name, reason }));
+        attachments = [];
+      }
+    }
+    if (skipped) {
+      const r = await adapter.createIssue(auth, container, fields,
+        { title: req.payload.title, body: req.payload.body, sendId, attachments }, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+      r.notAttached = skipped.concat(r.notAttached || []);
+      return r;
+    }
     return adapter.createIssue(auth, container, fields,
       { title: req.payload.title, body: req.payload.body, sendId, attachments },
       // Uploads ride on the same request: allow them their own time.
@@ -2537,17 +2569,28 @@ async function createViaAdapter(api, adapter, req, integrations) {
   return result;
 }
 
+/** Linear's upload origin(s) as host patterns, and whether they're granted. */
+async function linearUploadAccess(api) {
+  const patterns = (api.LINEAR_UPLOAD_ORIGINS || []).map((o) => o + "/*");
+  return {
+    uploadOrigins: patterns,
+    uploadGranted: patterns.length ? await hasAllHosts(patterns) : false,
+    uploadWhere: patterns.length ? api.uploadStorageName(api.LINEAR_UPLOAD_ORIGINS[0]) : "",
+  };
+}
+
 async function trackerStatusList(api) {
+  const upload = await linearUploadAccess(api);
   const got = await localGet([INT_KEY, TRACKER_AUTH_KEY, TRACKER_PREFS_KEY], {});
   const integrations = got[INT_KEY] || {};
   const map = got[TRACKER_AUTH_KEY] || {};
   const prefs = got[TRACKER_PREFS_KEY] || {};
   const ui = oauthUiSupported();
-  return api.ISSUE_TRACKERS.map((id) => {
+  return Promise.all(api.ISSUE_TRACKERS.map(async (id) => {
     const a = api.trackerAdapter(id);
     const c = ui ? a.connect() : null;
     const p = prefs[id];
-    return Object.assign({
+    return Object.assign(id === "linear" ? upload : {}, {
       id,
       label: a.label,
       containerNoun: a.containerNoun,
@@ -2556,19 +2599,44 @@ async function trackerStatusList(api) {
       // What Connect must request. The window calls permissions.request with
       // this from the click handler itself — an await first would lose the
       // user gesture the browser requires.
-      connectPermissions: c ? {
-        permissions: c.flow === "pkce" ? ["identity"] : [],
-        // Linear: its upload host too, so attachments work from the first issue.
-        origins: c.hosts.concat(id === "linear" ? (api.LINEAR_UPLOAD_ORIGINS || []).map((o) => o + "/*") : []),
-      } : null,
+      connectPermissions: c ? { permissions: c.flow === "pkce" ? ["identity"] : [], origins: c.hosts } : null,
       apiHosts: a.apiHosts,
       // "Add repositories" link — only meaningful once signed in through the app.
       manageUrl: map[id] && !map[id].needsReconnect ? (a.manageUrl || null) : null,
       last: p
-        ? { container: p.container || "", fields: p.fields || {} }
+        ? { container: p.container || "", containerLabel: p.containerLabel || "", fields: p.fields || {} }
         : { container: api.legacyContainer(id, integrations), fields: legacyFields(id, integrations) },
+      // false = the API host was granted once and has since been removed: the
+      // hub shows Error. Asked only where there is a credential to use it.
+      hostsGranted: map[id] || api.describeAuth(id, map, integrations).connected ? await hasAllHosts(a.apiHosts) : undefined,
     }, api.describeAuth(id, map, integrations));
-  });
+  }));
+}
+
+/** Slack's webhook as a hub row — it has no adapter, sign-in or default. */
+function slackStatusRow(integrations) {
+  const on = !!(integrations && integrations.slack && integrations.slack.webhookUrl);
+  return { id: "slack", label: "Slack", connected: on, via: on ? "webhook" : null, needsReconnect: false };
+}
+
+/** The status model (integration-status.ts) over every connection. */
+async function integrationSummary(api, trackers) {
+  const got = await localGet([INT_KEY, TRACKER_DEFAULT_KEY], {});
+  const rows = (trackers || await trackerStatusList(api)).map((t) => ({
+    id: t.id, label: t.label, connected: t.connected, via: t.via, account: t.account,
+    needsReconnect: t.needsReconnect, hostsGranted: t.hostsGranted,
+    container: t.last && t.last.container, containerLabel: t.last && t.last.containerLabel,
+  }));
+  rows.push(slackStatusRow(got[INT_KEY]));
+  return api.summarizeIntegrations(rows, got[TRACKER_DEFAULT_KEY] || null);
+}
+
+/** The ticket's half: an id and a flag (see TB_HOST_ACCESS). */
+async function pageIntegrationHintNow() {
+  const api = providerApi();
+  if (!api || typeof api.summarizeIntegrations !== "function") return { defaultTracker: null, attention: false };
+  try { return api.pageIntegrationHint(await integrationSummary(api)); }
+  catch { return { defaultTracker: null, attention: false }; }
 }
 
 async function finishConnect(api, adapter, tokens) {
@@ -2793,7 +2861,19 @@ async function handleTrackerUi(message, sender) {
   if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base) && !(await boundPanelFor(sender))) return { error: "Rejected." };
 
   if (message.type === "tb:tracker:status") {
-    return { trackers: await trackerStatusList(api), oauthUi: oauthUiSupported() };
+    const trackers = await trackerStatusList(api);
+    const integrations = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+    return {
+      trackers,
+      slack: slackStatusRow(integrations),
+      summary: await integrationSummary(api, trackers),
+      oauthUi: oauthUiSupported(),
+    };
+  }
+  if (message.type === "tb:tracker:set-primary") {
+    if (["github", "linear", "slack"].indexOf(message.tracker) === -1) return { error: "Unknown tracker." };
+    await localSet({ [TRACKER_DEFAULT_KEY]: message.tracker });
+    return { ok: true };
   }
 
   const adapter = api.trackerAdapter(message.tracker);
@@ -2823,7 +2903,8 @@ async function handleTrackerUi(message, sender) {
         const prev = ((await localGet([TRACKER_PREFS_KEY], {}))[TRACKER_PREFS_KEY] || {})[adapter.id];
         // Same repo as last time keeps its labels; a new one starts clean.
         await rememberChoice(adapter.id, c.choice.container,
-          prev && prev.container === c.choice.container ? prev.fields : {});
+          prev && prev.container === c.choice.container ? prev.fields : {},
+          typeof message.label === "string" ? message.label : undefined);
         return { ok: true };
       }
       default: return { error: "Unsupported request type." };

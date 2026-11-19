@@ -483,12 +483,18 @@ describe('tracker UI messages are for extension pages only', () => {
     expect(B10.VERBS).not.toContain('tb:tracker:set-default');
   });
 
+  it('lets the popup run the Integrations hub (set-primary), still never from the page', () => {
+    expect(B10.TRACKER_UI_VERBS).toContain('tb:tracker:set-primary');
+    expect(B10.VERBS).not.toContain('tb:tracker:set-primary');
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'popup.html', frameId: 0 }, EXT_ID, BASE)).toBe(true);
+  });
+
   it('rejects our own content script — it carries the host page URL', () => {
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: 'https://evil.test/confirm-send.html', tab: { id: 1 }, frameId: 0 }, EXT_ID, BASE)).toBe(false);
   });
 
   it('rejects other extension pages, other extensions and subframes', () => {
-    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'popup.html' }, EXT_ID, BASE)).toBe(false);
+    expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'player.html' }, EXT_ID, BASE)).toBe(false);
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html.evil' }, EXT_ID, BASE)).toBe(false);
     expect(B10.validateExtensionPageSender({ id: 'other', url: BASE + 'options.html' }, EXT_ID, BASE)).toBe(false);
     expect(B10.validateExtensionPageSender({ id: EXT_ID, url: BASE + 'options.html', frameId: 2 }, EXT_ID, BASE)).toBe(false);

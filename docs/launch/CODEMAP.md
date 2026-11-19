@@ -65,6 +65,14 @@ the same step.
   declares optional `identity`; Firefox build strips it). Bridge: `provider-bridge.js` `validateExtensionPageSender`,
   `validateChoice`, `TRACKER_UI_VERBS`. UI: `confirm-send.js` "Create panel" (`startPanel`, `selectTracker`,
   `loadContainers`, `loadFields`, `collectChoice`), `options.js` "Tracker accounts" (`renderTrackerAccounts`).
+  **Integrations hub (step 5):** status model `src/providers/integration-status.ts` (`summarizeIntegrations`,
+  `pageIntegrationHint`; in the worker bundle) → worker `integrationSummary` / `pageIntegrationHintNow` (status
+  answer `summary`, TB_HOST_ACCESS `integrations`), default key `tb_tracker_default_v1` (`tb:tracker:set-primary`).
+  UI `integrations-hub.js` + `.css` (`mount(container, {mode, handoff, tokenPath, onSummary})`: tabs, rows, roving
+  grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) and `options.js`
+  (`#integrations`, deep links `#integrations:connect=<id>` / `:token=<id>`). Ticket: `quick-bug.ts`
+  `_primaryTarget`/`_sendButtonHtml`/`_trackerStatusHtml`, logos `src/ui/brand-logos.ts` (copy in the hub JS).
+  Tests `tests/integration-status.test.ts`, e2e `e2e/ext-integrations-hub.e2e.mjs` (`e2e:hub`).
   `connectableTrackers()` rides on the `TB_HOST_ACCESS` answer so the page offers "Send to GitHub" before any
   sign-in. GitHub App repos: `trackers.ts` `github.listContainers` walks `/user/installations` for OAuth tokens.
   Tests `tests/tracker-{oauth,auth-store,adapters}.test.ts`; e2e `e2e/ext-tracker-create.e2e.mjs` (`e2e:tracker`,
@@ -124,7 +132,7 @@ the same step.
 | Attachments (Linear, step 4): page `quick-bug.ts` `_trackerAttachments` → `ext-rpc` `sendTrackerViaBridge(…, attachments)` → content-script `rebuildProviderPayload` → bridge `validateAttachments` → worker keeps bytes in `chrome.storage.local` `tb_send_attach_<id>` (deleted by `dropPending`) → `trackers.ts` `uploadLinearFiles` (origin allowlist `LINEAR_UPLOAD_ORIGINS`, empty until confirmed) + `linearDescription` | — | `background.js` `loadAttachments` / `createViaAdapter` |
 | `tb:panel:hello/create/cancel` (in-page panel frame, nonce-bound) · `tb:panel:fallback` (content script) · port `tb-panel:<id>` | `create-issue.html` (runs `confirm-send.js` in EMBED mode), mounted by `content-script.js` `mountCreatePanel` | `background.js` `handlePanelMessage` / `panelRequestFor` / `boundPanelFor` |
 | `tb:confirm:create` (Create panel: result/error back to the window; marker + duplicate check) | `confirm-send.html` | `background.js` `createFromPanel` |
-| `tb:tracker:*` (status, containers, fields, connect, connect-poll, connect-show, disconnect, set-default); device page: `openDevicePage` (popup, tab fallback) / `pollTrackerConnect` (token = only success signal) / `onDevicePopupClosed` (flag only); GitHub App per build: `build/github-apps.json` + `build/github-app-swap.mjs` (`build-ext.mjs --store`) | `confirm-send.html`, `options.html`, `welcome.html` only | `background.js` `handleTrackerUi`; page helper `tracker-connect.js` |
+| `tb:tracker:*` (status, containers, fields, connect, connect-poll, connect-show, disconnect, set-default, set-primary); device page: `openDevicePage` (popup, tab fallback) / `pollTrackerConnect` (token = only success signal) / `onDevicePopupClosed` (flag only); GitHub App per build: `build/github-apps.json` + `build/github-app-swap.mjs` (`build-ext.mjs --store`) | `confirm-send.html`, `options.html`, `welcome.html`, `popup.html` only | `background.js` `handleTrackerUi`; page helper `tracker-connect.js` |
 
 ## Storage keys — which store, and who owns them
 
@@ -134,7 +142,7 @@ the same step.
   `_replay_theme`, `_plan`, `_user`, `_onboarding_complete`, `_milestone_ask_done`, `_dev`.
 - **`chrome.storage.local`** (`tb_*`, extension-owned): `tb_record_opts` (Record options + `videoSetBy`) ·
   `tb_integrations_v1`, `tb_ai_config_v1`, `tb_tracker_auth_v1` (OAuth tokens, ADR 010) (**the secrets**) ·
-  `tb_tracker_prefs_v1` (last repo/team + fields per tracker) · `tb_llm_sites_v1` ·
+  `tb_tracker_prefs_v1` (last repo/team + its name + fields per tracker) · `tb_tracker_default_v1` (hub default tracker) · `tb_llm_sites_v1` ·
   `tb_send_payload_*` (confirm-send, large payloads) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
   `tb_audit_gate_v1` (Site Audit gate, ADR 009: `audits`, `account`, `graceUntil`; `background.js` `auditPermit` ← `TB_AUDIT_PERMIT`
   ← content-script `tracebug-audit-permit-request` ← panel `auditPermit()`; sign-in `signin.html`/`signin.js` → `/api/ext/otp/*`; popup account menu `popup.js` `initAccount`; welcome card

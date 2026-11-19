@@ -50,7 +50,8 @@ import {
   createTrackerIssue, hasIntegration,
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
 } from "../integrations/tracker-client";
-import { isExtensionMode, getBoundShortcut } from "../ext-transport";
+import { isExtensionMode, getBoundShortcut, getIntegrationStatus } from "../ext-transport";
+import { brandLogo } from "./brand-logos";
 import { runExportPlugins } from "../plugin-system";
 import { isFailedRequest, requestStatusLabel } from "../request-status";
 import {
@@ -100,6 +101,51 @@ function _linearButtonLabel(): string {
 }
 function _slackButtonLabel(): string {
   return hasIntegration("slack") ? "Send to Slack" : "Copy Slack Message";
+}
+
+type _SendTarget = "github" | "linear" | "slack";
+
+/**
+ * The tracker the footer's main button targets: the default picked in the
+ * Integrations hub (extension mode), while it is still usable. GitHub
+ * otherwise, and always in page/SDK mode. The others go under More ▾.
+ */
+function _primaryTarget(): _SendTarget {
+  if (!isExtensionMode()) return "github";
+  const d = getIntegrationStatus().defaultTracker;
+  return d && hasIntegration(d) ? d : "github";
+}
+
+/** One send action, as the main button or as a More ▾ item. Each data-action
+ *  appears once in the footer, so the handlers below find it either way. */
+function _sendButtonHtml(target: _SendTarget, primary: boolean): string {
+  const cls = primary ? `tb-qb-btn tb-qb-btn-primary` : `tb-qb-more-item`;
+  const role = primary ? "" : ` role="menuitem"`;
+  if (target === "github") {
+    const action = _githubConfigured() ? "open-github" : "github";
+    const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
+    return `<button data-action="${action}" class="${cls}"${role} title="${title}">${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}</button>`;
+  }
+  if (target === "linear") return `<button data-action="linear" class="${cls}"${role}>${brandLogo("linear", 14)} ${_linearButtonLabel()}</button>`;
+  return `<button data-action="slack" class="${cls}"${role}>${brandLogo("slack", 14)} ${_slackButtonLabel()}</button>`;
+}
+
+/**
+ * Extension mode: the default tracker's logo, with a dot when a connection
+ * needs attention. Click → that tracker's Create panel (or settings when
+ * nothing is connected). The tooltip names the tracker only: the repo and
+ * account would be readable by the site under test, so they stay in the
+ * extension's own pages (popup header, settings).
+ */
+function _trackerStatusHtml(): string {
+  if (!isExtensionMode()) return "";
+  const s = getIntegrationStatus();
+  const d = s.defaultTracker && hasIntegration(s.defaultTracker) ? s.defaultTracker : null;
+  const tip = d
+    ? `${TRACKER_LABELS[d]} · ${s.trackerAttention ? "a connection needs attention" : "connected"}`
+    : "No tracker connected · connect one";
+  const state = s.trackerAttention ? "attention" : d ? "ok" : "none";
+  return `<button type="button" data-action="tracker-status" class="tb-qb-btn tb-qb-status" data-state="${state}" title="${escapeHtml(tip)}" aria-label="${escapeHtml("Integrations: " + tip)}">${d ? brandLogo(d, 15) : _ic("plug")}${s.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : ""}</button>`;
 }
 
 // Cloud endpoint for the Share link flow. Defaults to production; can be
@@ -749,10 +795,8 @@ function _openModal(
             ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`
             : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          ${_githubButtonLabel()}
-        </button>
+        ${_sendButtonHtml(_primaryTarget(), true)}
+        ${_trackerStatusHtml()}
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
@@ -769,8 +813,7 @@ function _openModal(
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} AI report (.html) — for chat</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
-            <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} ${_linearButtonLabel()}</button>
-            <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} ${_slackButtonLabel()}</button>
+            ${(["github", "linear", "slack"] as const).filter((t) => t !== _primaryTarget()).map((t) => _sendButtonHtml(t, false)).join("")}
             <button data-action="jira" class="tb-qb-more-item" role="menuitem" title="Copies the report as Jira markup for you to paste — TraceBug cannot file into Jira (its API is CORS-blocked for browsers)">${_ic("ticket")} Copy for Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations…</button>
             <!-- The one promotional thing in an export, and therefore the one
@@ -1850,6 +1893,15 @@ ${report.steps}` : userDesc)
       void _runAIAnalysis(root, modal, data);
     } else if (action === "integrations-configure") {
       showIntegrationsConfigModal(root, () => {});
+    } else if (action === "tracker-status") {
+      // The default tracker's send button opens its Create panel; nothing
+      // connected yet → settings.
+      const d = getIntegrationStatus().defaultTracker;
+      const target = d && hasIntegration(d)
+        ? modal.querySelector<HTMLButtonElement>(d === "github" ? '[data-action="open-github"], [data-action="github"]' : `[data-action="${d}"]`)
+        : null;
+      if (target) target.click();
+      else showIntegrationsConfigModal(root, () => {});
     }
   });
 
@@ -3854,6 +3906,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
     #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
+    #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
+    #${MODAL_ID} .tb-qb-status { position:relative; padding:8px 10px; }
+    #${MODAL_ID} .tb-qb-status:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; }
+    #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
     #${MODAL_ID} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }

@@ -298,6 +298,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   void initWhatsNew().then(initEmailAsk).catch(() => {});
+  initIntegrations();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -1552,4 +1553,76 @@ async function initAccount() {
     await render();
   });
   await render();
+}
+
+// ── Integrations (Phase 13 step 5) ──────────────────────────────────────────
+// Header icon: the default tracker's logo, a warning dot when any connection
+// needs attention, tooltip "GitHub · owner/repo · connected" (from the
+// worker's status model — this is an extension page, so names are fine
+// here). Click → the hub view (integrations-hub.js), in place of the main
+// view. Sign-in itself runs in settings: see handoff below.
+function initIntegrations() {
+  const btn = document.getElementById("intBtn");
+  const view = document.getElementById("hubView");
+  const Hub = window.TraceBugIntegrationsHub;
+  if (!btn || !view || !Hub || !window.TraceBugTrackerConnect) return;
+  const others = ["mainContent", "unavailable"].map((id) => document.getElementById(id)).filter(Boolean);
+  let hidden = [];
+  let hub = null;
+  const slot = btn.querySelector(".hd-int-logo");
+  const plug = slot.firstElementChild;
+
+  function paint(summary) {
+    const s = summary || { connections: [], defaultId: null, attention: false, tooltip: "No tracker connected · connect one" };
+    btn.title = s.tooltip;
+    btn.setAttribute("aria-label", "Integrations: " + s.tooltip);
+    btn.dataset.state = s.attention ? "attention" : s.defaultId ? "ok" : "none";
+    btn.querySelector(".hd-int-dot").hidden = !s.attention;
+    slot.replaceChildren(s.defaultId ? Hub.logo(s.defaultId, 16) : plug);
+  }
+
+  // The popup closes the moment a sign-in window or a permission prompt
+  // takes focus, so connecting continues in settings, at the same dialog.
+  function handoff(kind, tracker) {
+    const hash = "#integrations:" + (kind === "signin" ? "connect" : "token") + "=" + tracker;
+    try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html" + hash) }); } catch {}
+    window.close();
+  }
+
+  function open() {
+    hidden = others.filter((el) => el.style.display !== "none");
+    hidden.forEach((el) => { el.dataset.hubDisplay = el.style.display; el.style.display = "none"; });
+    view.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    if (!hub) hub = Hub.mount(document.getElementById("hubMount"), { mode: "popup", handoff, onSummary: paint });
+    else hub.reload();
+    document.getElementById("hubBack").focus();
+  }
+  function close() {
+    view.hidden = true;
+    hidden.forEach((el) => { el.style.display = el.dataset.hubDisplay || ""; });
+    hidden = [];
+    btn.setAttribute("aria-expanded", "false");
+    btn.focus();
+  }
+
+  btn.addEventListener("click", () => (view.hidden ? open() : close()));
+  document.getElementById("hubBack").addEventListener("click", close);
+  document.getElementById("hubSettings").addEventListener("click", () => {
+    try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#integrations") }); } catch {}
+    window.close();
+  });
+  // Esc leaves the hub (the hub's own dialog handles Esc first).
+  view.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); close(); }
+  });
+
+  TraceBugTrackerConnect.msg("tb:tracker:status").then((res) => paint(res && res.summary));
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && (changes.tb_tracker_auth_v1 || changes.tb_integrations_v1 || changes.tb_tracker_default_v1)) {
+        TraceBugTrackerConnect.msg("tb:tracker:status").then((res) => paint(res && res.summary));
+      }
+    });
+  } catch {}
 }

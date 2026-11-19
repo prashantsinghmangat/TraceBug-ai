@@ -83,6 +83,8 @@ const SHARED_FILES = [
   "options.js",
   "options.html",
   "tracker-connect.js",
+  "integrations-hub.js",
+  "integrations-hub.css",
   "welcome.js",
   "welcome.html",
   "confirm-send.js",

@@ -437,6 +437,16 @@ export async function findFiledIssueWithRetry(
 // empty and every attachment is reported as not attached; the issue is filed.
 export const LINEAR_UPLOAD_ORIGINS: readonly string[] = [];
 
+/** "Linear stores attachments on <this>": a name people recognise for the upload origin. */
+export function uploadStorageName(origin: string): string {
+  const known: Record<string, string> = {
+    "https://storage.googleapis.com": "Google Cloud Storage",
+    "https://uploads.linear.app": "Linear's own file storage",
+  };
+  if (known[origin]) return known[origin];
+  try { return new URL(origin).hostname; } catch { return origin; }
+}
+
 /** TraceBug's own caps (Linear's depend on the workspace's plan). */
 export const LINEAR_ATTACH_LIMITS = { fileBytes: 20 * 1024 * 1024, totalBytes: 30 * 1024 * 1024, files: 6 };
 

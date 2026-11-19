@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>TraceBug settings</title>
+  <link rel="stylesheet" href="integrations-hub.css" />
   <!-- Extension page: CSP is script-src 'self', so all script is external. -->
   <style>
     :root {
@@ -133,6 +134,7 @@
     .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
     .advanced { margin-top: 10px; }
     .advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+    .section-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 24px 0 10px; }
     .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; font-size: 26px; user-select: all; }
   </style>
 </head>
@@ -176,6 +178,17 @@
       </div>
       <div class="status" id="aiStatus"></div>
     </div>
+
+    <!-- Integrations hub (Phase 13 step 5): the same component as the popup's
+         Integrations view. The per-tracker cards below hold the token forms
+         its "Advanced" path points to. -->
+    <section class="card" id="integrations" aria-labelledby="integrationsTitle">
+      <h2 id="integrationsTitle">Integrations</h2>
+      <p class="hint">Where the ticket's Send button files issues. The default connection is the ticket's main button; the others are under More ▾.</p>
+      <div id="hubMount"></div>
+    </section>
+
+    <h2 class="section-title" id="trackerSettings">Tracker settings</h2>
 
     <div class="card">
       <h2>GitHub <span class="pill" id="ghPill">Not configured</span></h2>
@@ -373,6 +386,7 @@
   </div>
   <script src="diagnostics.js"></script>
   <script src="tracker-connect.js"></script>
+  <script src="integrations-hub.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

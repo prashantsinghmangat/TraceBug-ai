@@ -158,6 +158,10 @@ var TB_INT_KEY = "tb_integrations_v1";
 var TB_AI_KEY = "tb_ai_config_v1";
 // ADR 010 OAuth sign-ins. Read here only to publish "connected" booleans.
 var TB_TRACKER_AUTH_KEY = "tb_tracker_auth_v1";
+// Integrations hub: the chosen default tracker. Read only as a change signal;
+// the worker resolves it (TB_HOST_ACCESS `integrations`).
+var TB_TRACKER_DEFAULT_KEY = "tb_tracker_default_v1";
+var TB_DEFAULT_TRACKERS = ["github", "linear", "slack"];
 
 safeRun(function () {
   if (!isExtAlive() || !document.documentElement) return;
@@ -188,6 +192,13 @@ safeRun(function () {
       github: !!((i.github && i.github.token) || o.github || (workerAnswer && workerAnswer.connectable && workerAnswer.connectable.github)),
       linear: !!((i.linear && i.linear.apiKey) || o.linear || (workerAnswer && workerAnswer.connectable && workerAnswer.connectable.linear)),
       slack: !!(i.slack && i.slack.webhookUrl),
+      // Which tracker the ticket's main send button targets, and whether any
+      // connection needs attention (the status icon's warning dot). An id
+      // from a fixed list and a boolean — never a repo, team or account name.
+      defaultTracker: (workerAnswer && workerAnswer.integrations &&
+        TB_DEFAULT_TRACKERS.indexOf(workerAnswer.integrations.defaultTracker) !== -1)
+        ? workerAnswer.integrations.defaultTracker : null,
+      trackerAttention: !!(workerAnswer && workerAnswer.integrations && workerAnswer.integrations.attention),
       // Ollama is local and needs no key, so "configured" means a provider is
       // chosen and either it's ollama or a key is present.
       ai: !!(a && a.provider && (a.provider === "ollama" || a.apiKey)),
@@ -233,7 +244,7 @@ safeRun(function () {
   // SDK without a reload (tracebug-init.js observes the attribute).
   try {
     chrome.storage.onChanged.addListener(function (changes, area) {
-      if (area === "local" && (changes[TB_INT_KEY] || changes[TB_AI_KEY] || changes[TB_TRACKER_AUTH_KEY])) readAndPublish();
+      if (area === "local" && (changes[TB_INT_KEY] || changes[TB_AI_KEY] || changes[TB_TRACKER_AUTH_KEY] || changes[TB_TRACKER_DEFAULT_KEY])) readAndPublish();
     });
   } catch (e) {}
 });

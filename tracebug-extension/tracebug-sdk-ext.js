@@ -26382,7 +26382,10 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       github: !!status.github,
       linear: !!status.linear,
       slack: !!status.slack,
-      ai: !!status.ai
+      ai: !!status.ai,
+      // Only a known id survives: anything else is "no default".
+      defaultTracker: DEFAULT_TRACKERS.includes(status.defaultTracker) ? status.defaultTracker : null,
+      trackerAttention: status.trackerAttention === true
     };
   }
   function getIntegrationStatus() {
@@ -26416,12 +26419,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const parts = shortcutParts(_boundShortcut);
     return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
   }
-  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
+  var _mode2, EMPTY, DEFAULT_TRACKERS, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
   var init_ext_transport = __esm({
     "src/ext-transport.ts"() {
       "use strict";
       _mode2 = "page";
-      EMPTY = { github: false, linear: false, slack: false, ai: false };
+      EMPTY = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false };
+      DEFAULT_TRACKERS = ["github", "linear", "slack"];
       _status = { ...EMPTY };
       _hostAccess = void 0;
       _pageOnlyNoticeShown = false;
@@ -33094,6 +33098,36 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     }
   });
 
+  // src/ui/brand-logos.ts
+  function brandLogo(id, size = 15) {
+    const m = MARKS[id];
+    if (!m) return "";
+    return `<svg class="tb-brand" width="${size}" height="${size}" viewBox="0 0 24 24" role="img" aria-label="${m.name}"><title>${m.name}</title>${m.svg}</svg>`;
+  }
+  var MARKS;
+  var init_brand_logos = __esm({
+    "src/ui/brand-logos.ts"() {
+      "use strict";
+      MARKS = {
+        github: {
+          name: "GitHub",
+          color: "currentColor",
+          svg: '<path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/>'
+        },
+        linear: {
+          name: "Linear",
+          color: "#5E6AD2",
+          svg: '<path fill="#5E6AD2" d="M1.2 13.9a11 11 0 0 0 8.9 8.9L1.2 13.9Zm-.2-3 12.1 12.1c.9-.1 1.8-.3 2.6-.6L1.6 8.3c-.3.8-.5 1.7-.6 2.6Zm1.4-4.3 15 15c.7-.4 1.3-.9 1.9-1.4L3.8 4.7c-.5.6-1 1.2-1.4 1.9ZM5.3 3.4A11 11 0 1 1 20.6 18.7L5.3 3.4Z"/>'
+        },
+        slack: {
+          name: "Slack",
+          color: "#E01E5A",
+          svg: '<rect x="2" y="9.5" width="9" height="3.4" rx="1.7" fill="#36C5F0"/><rect x="9.5" y="2" width="3.4" height="9" rx="1.7" fill="#2EB67D"/><rect x="13" y="11.1" width="9" height="3.4" rx="1.7" fill="#E01E5A"/><rect x="11.1" y="13" width="3.4" height="9" rx="1.7" fill="#ECB22E"/>'
+        }
+      };
+    }
+  });
+
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
@@ -33123,6 +33157,30 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   function _slackButtonLabel() {
     return hasIntegration("slack") ? "Send to Slack" : "Copy Slack Message";
+  }
+  function _primaryTarget() {
+    if (!isExtensionMode()) return "github";
+    const d = getIntegrationStatus().defaultTracker;
+    return d && hasIntegration(d) ? d : "github";
+  }
+  function _sendButtonHtml(target, primary) {
+    const cls = primary ? `tb-qb-btn tb-qb-btn-primary` : `tb-qb-more-item`;
+    const role = primary ? "" : ` role="menuitem"`;
+    if (target === "github") {
+      const action = _githubConfigured() ? "open-github" : "github";
+      const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
+      return `<button data-action="${action}" class="${cls}"${role} title="${title}">${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}</button>`;
+    }
+    if (target === "linear") return `<button data-action="linear" class="${cls}"${role}>${brandLogo("linear", 14)} ${_linearButtonLabel()}</button>`;
+    return `<button data-action="slack" class="${cls}"${role}>${brandLogo("slack", 14)} ${_slackButtonLabel()}</button>`;
+  }
+  function _trackerStatusHtml() {
+    if (!isExtensionMode()) return "";
+    const s2 = getIntegrationStatus();
+    const d = s2.defaultTracker && hasIntegration(s2.defaultTracker) ? s2.defaultTracker : null;
+    const tip = d ? `${TRACKER_LABELS[d]} \xB7 ${s2.trackerAttention ? "a connection needs attention" : "connected"}` : "No tracker connected \xB7 connect one";
+    const state = s2.trackerAttention ? "attention" : d ? "ok" : "none";
+    return `<button type="button" data-action="tracker-status" class="tb-qb-btn tb-qb-status" data-state="${state}" title="${escapeHtml(tip)}" aria-label="${escapeHtml("Integrations: " + tip)}">${d ? brandLogo(d, 15) : _ic("plug")}${s2.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : ""}</button>`;
   }
   function setCloudEndpoint(_endpoint) {
   }
@@ -33573,10 +33631,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_s2 = data.currentSession) == null ? void 0 : _s2.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
           ${((_t = data.currentSession) == null ? void 0 : _t.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          ${_githubButtonLabel()}
-        </button>
+        ${_sendButtonHtml(_primaryTarget(), true)}
+        ${_trackerStatusHtml()}
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
@@ -33593,8 +33649,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} AI report (.html) \u2014 for chat</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
-            <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} ${_linearButtonLabel()}</button>
-            <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} ${_slackButtonLabel()}</button>
+            ${["github", "linear", "slack"].filter((t2) => t2 !== _primaryTarget()).map((t2) => _sendButtonHtml(t2, false)).join("")}
             <button data-action="jira" class="tb-qb-more-item" role="menuitem" title="Copies the report as Jira markup for you to paste \u2014 TraceBug cannot file into Jira (its API is CORS-blocked for browsers)">${_ic("ticket")} Copy for Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations\u2026</button>
             <!-- The one promotional thing in an export, and therefore the one
@@ -34468,6 +34523,12 @@ ${report.steps}` : userDesc : void 0,
         void _runAIAnalysis(root2, modal, data);
       } else if (action === "integrations-configure") {
         showIntegrationsConfigModal(root2, () => {
+        });
+      } else if (action === "tracker-status") {
+        const d = getIntegrationStatus().defaultTracker;
+        const target = d && hasIntegration(d) ? modal.querySelector(d === "github" ? '[data-action="open-github"], [data-action="github"]' : `[data-action="${d}"]`) : null;
+        if (target) target.click();
+        else showIntegrationsConfigModal(root2, () => {
         });
       }
     });
@@ -36267,6 +36328,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
     #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
+    #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
+    #${MODAL_ID} .tb-qb-status { position:relative; padding:8px 10px; }
+    #${MODAL_ID} .tb-qb-status:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; }
+    #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
     #${MODAL_ID} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
@@ -36682,6 +36747,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_slack_export();
       init_tracker_client();
       init_ext_transport();
+      init_brand_logos();
       init_plugin_system();
       init_request_status();
       init_tracker_client();

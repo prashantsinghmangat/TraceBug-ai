@@ -23,6 +23,7 @@ var TraceBugProviderAPI = (() => {
   __export(worker_exports, {
     DEFAULT_BASE_URLS: () => DEFAULT_BASE_URLS,
     GITHUB_APP_INSTALL_URL: () => GITHUB_APP_INSTALL_URL,
+    INTEGRATION_ORDER: () => INTEGRATION_ORDER,
     ISSUE_TRACKERS: () => ISSUE_TRACKERS,
     ISSUE_URL_HOSTS: () => ISSUE_URL_HOSTS,
     LINEAR_ATTACH_LIMITS: () => LINEAR_ATTACH_LIMITS,
@@ -44,6 +45,7 @@ var TraceBugProviderAPI = (() => {
     buildAuthorizeUrl: () => buildAuthorizeUrl,
     callLLM: () => callLLM,
     capProviderBody: () => capProviderBody,
+    connectionState: () => connectionState,
     createPkcePair: () => createPkcePair,
     describeAuth: () => describeAuth,
     describeOAuthError: () => describeOAuthError,
@@ -63,6 +65,7 @@ var TraceBugProviderAPI = (() => {
     linearDescription: () => linearDescription,
     mapProviderError: () => mapProviderError,
     nextLink: () => nextLink,
+    pageIntegrationHint: () => pageIntegrationHint,
     parseJsonOrThrow: () => parseJsonOrThrow,
     parseRedirect: () => parseRedirect,
     parseTokenResponse: () => parseTokenResponse,
@@ -77,8 +80,11 @@ var TraceBugProviderAPI = (() => {
     resolveAuth: () => resolveAuth,
     revokeLinearToken: () => revokeLinearToken,
     saveOAuth: () => saveOAuth,
+    statusTooltip: () => statusTooltip,
+    summarizeIntegrations: () => summarizeIntegrations,
     trackerAdapter: () => trackerAdapter,
     uploadLinearFiles: () => uploadLinearFiles,
+    uploadStorageName: () => uploadStorageName,
     withTrackerAuth: () => withTrackerAuth
   });
 
@@ -1041,6 +1047,18 @@ var TraceBugProviderAPI = (() => {
     return adapter.findFiledIssue(auth, container, sendId, since, signal);
   }
   var LINEAR_UPLOAD_ORIGINS = [];
+  function uploadStorageName(origin) {
+    const known = {
+      "https://storage.googleapis.com": "Google Cloud Storage",
+      "https://uploads.linear.app": "Linear's own file storage"
+    };
+    if (known[origin]) return known[origin];
+    try {
+      return new URL(origin).hostname;
+    } catch (e) {
+      return origin;
+    }
+  }
   var LINEAR_ATTACH_LIMITS = { fileBytes: 20 * 1024 * 1024, totalBytes: 30 * 1024 * 1024, files: 6 };
   var LINEAR_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
   var LINEAR_PRIORITIES = [
@@ -1128,6 +1146,71 @@ var TraceBugProviderAPI = (() => {
     }
     if (u.protocol !== "https:") return false;
     return (ISSUE_URL_HOSTS[tracker] || []).some((h) => u.hostname === h || u.hostname.endsWith("." + h));
+  }
+
+  // src/providers/integration-status.ts
+  var INTEGRATION_ORDER = ["github", "linear", "slack"];
+  var STATE_WORDS = {
+    connected: "connected",
+    reconnect: "needs reconnect",
+    error: "error"
+  };
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function isIntegrationId(id) {
+    return typeof id === "string" && INTEGRATION_ORDER.includes(id);
+  }
+  function connectionState(row) {
+    if (!row) return null;
+    if (row.connected) return row.hostsGranted === false ? "error" : "connected";
+    return row.needsReconnect ? "reconnect" : null;
+  }
+  function containerName(row) {
+    const label = String(row.containerLabel || "").trim();
+    if (label) return label;
+    const id = String(row.container || "").trim();
+    return id && !UUID_RE.test(id) ? id : "";
+  }
+  function detailFor(row, state) {
+    if (state === "reconnect") return "Your " + row.label + " sign-in expired. Reconnect to keep filing issues.";
+    if (state === "error") return "TraceBug lost access to " + row.label + ". Test the connection to allow it again.";
+    return "";
+  }
+  function statusTooltip(conn) {
+    if (!conn) return "No tracker connected \xB7 connect one";
+    return [conn.label, conn.container, STATE_WORDS[conn.state]].filter(Boolean).join(" \xB7 ");
+  }
+  function summarizeIntegrations(rows, storedDefault) {
+    const byId = /* @__PURE__ */ new Map();
+    for (const r of rows || []) if (r && isIntegrationId(r.id) && !byId.has(r.id)) byId.set(r.id, r);
+    const connections = [];
+    for (const id of INTEGRATION_ORDER) {
+      const row = byId.get(id);
+      if (!row) continue;
+      const state = connectionState(row);
+      if (!state) continue;
+      connections.push({
+        id,
+        label: row.label,
+        state,
+        via: row.via || null,
+        account: String(row.account || ""),
+        container: containerName(row),
+        isDefault: false,
+        detail: detailFor(row, state)
+      });
+    }
+    const stored = isIntegrationId(storedDefault) ? connections.find((c) => c.id === storedDefault) : void 0;
+    const def = stored || connections[0] || null;
+    if (def) def.isDefault = true;
+    return {
+      connections,
+      defaultId: def ? def.id : null,
+      attention: connections.some((c) => c.state !== "connected"),
+      tooltip: statusTooltip(def)
+    };
+  }
+  function pageIntegrationHint(s) {
+    return { defaultTracker: s.defaultId, attention: s.attention };
   }
   return __toCommonJS(worker_exports);
 })();

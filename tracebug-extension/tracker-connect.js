@@ -147,8 +147,10 @@
     if (last && res.items.some((it) => it.id === last)) select.value = last;
     select.onchange = async () => {
       if (!select.value) return;
-      const r = await msg("tb:tracker:set-default", { tracker: t.id, container: select.value });
-      say(r && r.ok ? "Saved. New issues start in " + select.value + "." : (r && r.error) || "Could not save.", !(r && r.ok));
+      const picked = res.items.find((it) => String(it.id) === select.value);
+      // The name, for the status tooltip ("GitHub · owner/repo · connected").
+      const r = await msg("tb:tracker:set-default", { tracker: t.id, container: select.value, label: picked ? String(picked.label || "") : "" });
+      say(r && r.ok ? "Saved. New issues start in " + ((picked && picked.label) || select.value) + "." : (r && r.error) || "Could not save.", !(r && r.ok));
     };
     if (!res.items.length) {
       say(t.id === "github"

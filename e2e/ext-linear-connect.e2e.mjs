@@ -287,6 +287,46 @@ try {
   await page.keyboard.press("Escape");
   await sleep(400);
 
+  // ══ The storage host is asked for on a send with files — and declined ════
+  const opt0 = await ctx.newPage();
+  await opt0.goto(`chrome-extension://${extId}/options.html`);
+  const status0 = await opt0.evaluate(() => new Promise((res) => chrome.runtime.sendMessage({ type: "tb:tracker:status" }, res)));
+  const ln0 = status0.trackers.find((t) => t.id === "linear");
+  check("Connect Linear doesn't ask for the storage host (only Linear's API + identity)",
+    !ln0.connectPermissions.origins.some((o) => o.startsWith(STORE)) && JSON.stringify(ln0.connectPermissions.permissions) === '["identity"]',
+    JSON.stringify(ln0.connectPermissions));
+  check("…the storage host is reported separately, with a name for the reason line",
+    JSON.stringify(ln0.uploadOrigins) === JSON.stringify([STORE + "/*"]) && ln0.uploadWhere === "Google Cloud Storage", JSON.stringify(ln0.uploadOrigins));
+  await opt0.close();
+
+  await ticket(page, "Linear ticket declined");
+  const fd = await sendToLinear(page);
+  await fd.waitForSelector('button.chip[value="l-bug"]', { timeout: 10000 }).catch(() => {});
+  // As if the storage host had never been granted, and the user says no to Chrome's prompt.
+  await fd.evaluate(() => {
+    panel.current.uploadGranted = false;
+    renderAttachNote("linear");
+    window.__asked = [];
+    chrome.permissions.request = (p, cb) => { window.__asked.push(p); if (cb) cb(false); return Promise.resolve(false); };
+  });
+  check('before Create the panel says why: "Linear stores attachments on Google Cloud Storage"',
+    /Linear stores attachments on Google Cloud Storage/.test(await fd.textContent("#attachNote")), await fd.textContent("#attachNote"));
+  const upBefore = uploads.length, putBefore = puts.length, crBefore = creates.length;
+  await armed(fd);
+  await fd.click("#send");
+  await fd.waitForSelector("#doneBox:not([hidden])", { timeout: 20000 }).catch(() => {});
+  const asked = await fd.evaluate(() => window.__asked);
+  check("the first send with files asks Chrome for exactly the storage host, from the Create click",
+    asked.length === 1 && JSON.stringify(asked[0].origins) === JSON.stringify([STORE + "/*"]), JSON.stringify(asked));
+  check("declined → the issue is still created", (await fd.textContent("#issueLink")).trim() === `ENG-${creates.length}` && creates.length === crBefore + 1);
+  check("…without asking Linear for uploads or sending any bytes", uploads.length === upBefore && puts.length === putBefore);
+  check("…and says which files weren't attached and why",
+    /Not attached: .*you didn't allow access to Google Cloud Storage/.test(await fd.textContent("#doneNote")), await fd.textContent("#doneNote"));
+  check("…with no attachment links in the issue", !/uploads\.linear\.app/.test((creates[creates.length - 1] || {}).description || ""));
+  await fd.click("#cancel");
+  await page.keyboard.press("Escape");
+  await sleep(400);
+
   // ══ Revoked at Linear → Reconnect, choices kept ══════════════════════════
   await ticket(page, "Linear ticket three");
   const f3 = await sendToLinear(page);
@@ -315,7 +355,7 @@ try {
   await armed(f3);
   await f3.click("#send");
   await f3.waitForSelector("#doneBox:not([hidden])", { timeout: 20000 }).catch(() => {});
-  check("…and Create files it", (await f3.textContent("#issueLink")).trim() === "ENG-3" && creates.length === createsBefore + 1);
+  check("…and Create files it", (await f3.textContent("#issueLink")).trim() === `ENG-${creates.length}` && creates.length === createsBefore + 1);
   await f3.click("#cancel");
 
   // ══ Settings: Connect shown, key path under "Advanced: use a key", Disconnect revokes ══

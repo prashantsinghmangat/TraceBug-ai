@@ -40,10 +40,13 @@
     "tb:tracker:set-default",
     // "Reopen GitHub": focus the sign-in popup, or open it again.
     "tb:tracker:connect-show",
+    // Integrations hub: which connection the ticket's send button targets.
+    "tb:tracker:set-primary",
   ];
 
   // The pages allowed to send them.
-  var TRACKER_UI_PAGES = ["confirm-send.html", "options.html", "welcome.html"];
+  // The popup shows the Integrations hub and the header status icon.
+  var TRACKER_UI_PAGES = ["confirm-send.html", "options.html", "welcome.html", "popup.html"];
 
   // What a Create-panel choice may carry, at most.
   var MAX_CONTAINER_CHARS = 300;

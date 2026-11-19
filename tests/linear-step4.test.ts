@@ -13,7 +13,7 @@ vi.mock('../src/providers/oauth-clients', async (orig) => {
   return { ...real, OAUTH_CLIENTS, hasOAuthClient: (t: keyof typeof OAUTH_CLIENTS) => !!OAUTH_CLIENTS[t] && OAUTH_CLIENTS[t] !== real.TODO_OWNER_CLIENT_ID };
 });
 
-import { linear, uploadLinearFiles, linearDescription, revokeLinearToken, LINEAR_UPLOAD_ORIGINS, LINEAR_ATTACH_LIMITS } from '../src/providers/trackers';
+import { linear, uploadLinearFiles, linearDescription, revokeLinearToken, uploadStorageName, LINEAR_UPLOAD_ORIGINS, LINEAR_ATTACH_LIMITS } from '../src/providers/trackers';
 import { buildAuthorizeUrl, exchangeCode, refreshTokens } from '../src/providers/oauth';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -210,6 +210,28 @@ describe('Linear attachments', () => {
     const d = linearDescription('x'.repeat(70_000), [{ name: 'a.png', type: 'image/png', url: 'https://uploads.linear.app/a.png' }]);
     expect(d.length).toBeLessThanOrEqual(65536);
     expect(d.endsWith('![a.png](https://uploads.linear.app/a.png)')).toBe(true);
+  });
+});
+
+describe('Linear upload origin, declared once', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const manifests = ['tracebug-extension/manifest.json', 'tracebug-extension/build/manifest.base.json']
+    .map((p) => JSON.parse(readFileSync(join(root, p), 'utf8')));
+  it('every allowed upload origin is an OPTIONAL host in both manifests — never a required one', () => {
+    for (const m of manifests) {
+      for (const o of LINEAR_UPLOAD_ORIGINS) {
+        expect(m.optional_host_permissions).toContain(o + '/*');
+        expect(m.host_permissions || []).not.toContain(o + '/*');
+      }
+    }
+  });
+  it('is an exact https origin (no path, no wildcard)', () => {
+    for (const o of LINEAR_UPLOAD_ORIGINS) expect(new URL(o).origin).toBe(o);
+    for (const o of LINEAR_UPLOAD_ORIGINS) expect(o.startsWith('https://')).toBe(true);
+  });
+  it('names the storage for the one-line reason', () => {
+    expect(uploadStorageName('https://storage.googleapis.com')).toBe('Google Cloud Storage');
+    expect(uploadStorageName('https://files.example.test')).toBe('files.example.test');
   });
 });
 

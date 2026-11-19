@@ -43,6 +43,11 @@ the extension is public.
        or transformed) and takes only trusted clicks;
      - a port from the frame ties the request to it, so closing the ticket or navigating away cancels it;
      - if the frame doesn't come up within 3.5 s, the extension window opens instead.
+   - **Updated 2026-11-19 (Phase 13 Step 5, Integrations hub):** `popup.html` joins the extension pages allowed to
+     send `tb:tracker:*`, plus one verb, `tb:tracker:set-primary` (the default tracker, `tb_tracker_default_v1`).
+     The page gets only `{ defaultTracker, trackerAttention }` on `data-tb-caps` (an id from a fixed list and a
+     boolean), so the ticket's status icon names the tracker but never the repository, team or account. The popup
+     doesn't run sign-in itself: it closes when a sign-in window takes focus, so it hands off to settings.
 
      Firefox keeps the window (its build doesn't expose the frame). Design: `docs/audit/github-integration-design.md`
      (local).
@@ -121,6 +126,11 @@ the extension is public.
     reads it from a real `uploadUrl` and approves it, `LINEAR_UPLOAD_ORIGINS` (`src/providers/trackers.ts`) stays
     empty and no host is declared, so issues are filed without the files and the panel says so.
   - Disconnect revokes the grant at `api.linear.app/oauth/revoke` (token only, no secret).
+  - Owner decision 2026-11-19: the upload origin (read from a real `uploadUrl`) is an OPTIONAL host, declared in
+    both manifests and `LINEAR_UPLOAD_ORIGINS`. It is requested on the first Linear send with attachments, from the
+    panel's Create click, with the reason "Linear stores attachments on <provider>". It is not requested at Connect.
+    Declined: the issue is filed without the files and the panel says so. Uploads go only to the exact `uploadUrl`
+    Linear returns, and only if its origin is on the list. A unit test keeps the list and the manifests in step.
 
 ### Azure DevOps
 - **ADO's own OAuth is out.** It is deprecated, takes no new registrations since April 2025, and needed a secret

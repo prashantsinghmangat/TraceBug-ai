@@ -1,0 +1,100 @@
+/* Integrations hub (integrations-hub.js) — shared by popup.html and options.html.
+   Colours come from the host page's own tokens: the popup's styles.css
+   (--bg-2, --text-2, --border, --success, --warning, --error; light + dark) or
+   the settings page's (--panel, --muted, --line, --ok, --warn). */
+.tbh {
+  --h-bg: var(--bg-2, var(--panel, #141823));
+  --h-bg-2: var(--bg-3, var(--bg, #0B0D14));
+  --h-text: var(--text, #EEF0F5);
+  --h-muted: var(--text-2, var(--muted, #A8AEBE));
+  --h-line: var(--border, var(--line, #252A38));
+  --h-accent: var(--accent, #FF5C6C);
+  --h-on-accent: var(--on-accent, #0B0D14);
+  --h-ok: var(--success, var(--ok, #4CC38A));
+  --h-warn: var(--warning, var(--warn, #E0A040));
+  --h-err: var(--error, #F05257);
+  position: relative;
+  color: var(--h-text);
+  font-size: 13px;
+}
+.tbh [hidden] { display: none !important; }
+.tbh :focus-visible { outline: 2px solid var(--h-accent); outline-offset: 2px; }
+.tbh-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--h-line); margin-bottom: 10px; }
+.tbh-tab {
+  background: none; border: 0; border-bottom: 2px solid transparent; color: var(--h-muted);
+  padding: 8px 10px; font: 600 12.5px inherit; font-family: inherit; cursor: pointer; border-radius: 6px 6px 0 0;
+}
+.tbh-tab[aria-selected="true"] { color: var(--h-text); border-bottom-color: var(--h-accent); }
+.tbh-btn {
+  padding: 7px 11px; border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+  background: var(--h-accent); color: var(--h-on-accent); font: 600 12px inherit; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.tbh-btn.ghost { background: transparent; color: var(--h-text); border-color: var(--h-line); }
+.tbh-btn.ghost:hover { border-color: var(--h-muted); }
+.tbh-btn.danger { background: transparent; color: var(--h-err); border-color: var(--h-line); }
+.tbh-btn[disabled] { opacity: .55; cursor: default; }
+.tbh-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tbh-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tbh-row { background: var(--h-bg); border: 1px solid var(--h-line); border-radius: 10px; padding: 10px; }
+.tbh-row[data-state="reconnect"] { border-color: var(--h-warn); }
+.tbh-row[data-state="error"] { border-color: var(--h-err); }
+.tbh-row-head { display: flex; align-items: center; gap: 10px; }
+.tbh-row-names { flex: 1 1 auto; min-width: 0; }
+.tbh-row-title { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.tbh-row-sub { color: var(--h-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbh-row-detail, .tbh-row-result { margin: 6px 0 0; font-size: 12px; color: var(--h-muted); }
+.tbh-row-result { color: var(--h-ok); }
+.tbh-row-result.err, .tbh-live.err { color: var(--h-warn); }
+.tbh-badge { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--h-accent); color: var(--h-accent); }
+.tbh-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--h-line); white-space: nowrap; }
+.tbh-pill.connected { color: var(--h-ok); border-color: var(--h-ok); }
+.tbh-pill.reconnect { color: var(--h-warn); border-color: var(--h-warn); }
+.tbh-pill.error { color: var(--h-err); border-color: var(--h-err); }
+.tbh-picker { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--h-muted); }
+.tbh-select { width: 100%; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--h-line); background: var(--h-bg-2); color: var(--h-text); font: inherit; }
+.tbh-empty { text-align: center; padding: 14px 6px; color: var(--h-muted); }
+.tbh-empty p { margin: 0 0 10px; }
+.tbh-grid { display: flex; flex-direction: column; gap: 8px; }
+.tbh-grid-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tbh-tile {
+  position: relative; width: 100%; min-height: 76px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px; padding: 10px 4px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--h-line); background: var(--h-bg); color: var(--h-text); font: 600 12px inherit; font-family: inherit;
+}
+.tbh-tile:hover { border-color: var(--h-muted); }
+.tbh-tile.soon { cursor: default; opacity: .6; }
+.tbh-tile.busy { border-color: var(--h-accent); }
+.tbh-tile-name { text-align: center; line-height: 1.2; }
+.tbh-soon { position: absolute; top: 4px; right: 5px; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--h-muted); }
+.tbh-spinner {
+  position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--h-line); border-top-color: var(--h-accent); animation: tbh-spin .8s linear infinite;
+}
+@keyframes tbh-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tbh-spinner { animation-duration: 2.4s; } }
+.tbh-help { color: var(--h-muted); font-size: 11px; margin: 8px 0 0; }
+.tbh-live { min-height: 16px; margin: 8px 0 0; font-size: 12px; color: var(--h-muted); }
+.tbh-logo { flex: none; color: var(--h-text); }
+.tbh-dialog-wrap {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 12px; background: rgba(0, 0, 0, .45); overflow-y: auto;
+}
+.tbh-dialog {
+  width: 100%; max-width: 420px; color: var(--h-text); border: 1px solid var(--h-line);
+  border-radius: 12px; padding: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+  /* The page's own background, never a translucent card colour. */
+  background: var(--bg, #0B0D14);
+}
+.tbh-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.tbh-dialog-head h3 { margin: 0; font-size: 14px; }
+.tbh-x { background: none; border: 0; color: var(--h-muted); cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+.tbh-signin { width: 100%; justify-content: center; padding: 10px 12px; font-size: 13px; }
+.tbh-signin .tbh-logo { color: var(--h-on-accent); }
+.tbh-note { color: var(--h-muted); font-size: 12px; margin: 8px 0 0; line-height: 1.45; }
+.tbh-dialog-status.err { color: var(--h-warn); }
+.tbh-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; font-size: 22px; user-select: all; }
+.tbh-advanced { margin-top: 12px; border-top: 1px solid var(--h-line); padding-top: 10px; }
+.tbh-advanced summary { cursor: pointer; color: var(--h-muted); font-size: 12px; }
+.tbh-advanced h4 { margin: 0; font-size: 12.5px; }
+.tbh-link { display: inline-block; margin-top: 8px; color: var(--h-accent); font-size: 12px; }

@@ -115,8 +115,12 @@ function renderAttachNote(trackerId) {
   if (!el) return;
   if (!REQ_ATTACH.length) { el.hidden = true; return; }
   const list = REQ_ATTACH.map((a) => a.name + " (" + fmtSize(a.size) + ")").join(", ");
+  const t = panel.current;
+  const ask = trackerId === "linear" && t && t.uploadOrigins && t.uploadOrigins.length && !t.uploadGranted
+    ? " · Linear stores attachments on " + t.uploadWhere + "; Chrome asks once when you create."
+    : "";
   el.textContent = trackerId === "linear"
-    ? "Attaches: " + list
+    ? "Attaches: " + list + ask
     : "Not attached here (GitHub can't take files): " + list;
   el.hidden = false;
 }
@@ -572,12 +576,27 @@ async function createIssue(e) {
   // In the page, only a real click (or key press) — not one a script made.
   if (EMBED && !(e && e.isTrusted)) return;
   const choice = collectChoice();
+  // Linear keeps attachments on separate storage (an optional host). Ask for
+  // it here, on the first send that has files — synchronously, inside this
+  // click, before any await, or the browser refuses without asking.
+  const t = panel.current;
+  let asking = null;
+  if (t && t.id === "linear" && REQ_ATTACH.length && t.uploadOrigins && t.uploadOrigins.length && !t.uploadGranted) {
+    panelMsg("Linear stores attachments on " + t.uploadWhere + ". Allow TraceBug to upload them there?");
+    asking = requestPermissions({ origins: t.uploadOrigins });
+  }
+  let attach = true;
+  if (asking) {
+    attach = await asking;
+    if (attach) t.uploadGranted = true;
+    panelMsg(attach ? "" : "Filing without attachments — you didn't allow access to " + t.uploadWhere + ".");
+  }
   panel.busy = true;
   $("send").disabled = true;
   $("cancel").disabled = true;
   panelMsg("");
   put("countdown", "Creating…");
-  const res = await send(EMBED ? "tb:panel:create" : "tb:confirm:create", { id: ID, nonce: NONCE, choice });
+  const res = await send(EMBED ? "tb:panel:create" : "tb:confirm:create", { id: ID, nonce: NONCE, choice, attach });
   panel.busy = false;
   $("cancel").disabled = false;
   put("countdown", "");
@@ -832,6 +851,13 @@ $("cancel").addEventListener("click", () => {
 $("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
 
 document.addEventListener("keydown", (e) => {
+  // Ctrl/Cmd+Enter creates, from any field — the same checks as the button
+  // (armed, destination picked, a real key press in the page).
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && panel.active && !decided) {
+    e.preventDefault();
+    if (!$("send").disabled) createIssue(e);
+    return;
+  }
   if (e.key !== "Escape" || panel.busy) return;
   if (EMBED) { e.stopPropagation(); cancelEmbedded(); return; }
   if (decided && panel.active) { window.close(); return; }

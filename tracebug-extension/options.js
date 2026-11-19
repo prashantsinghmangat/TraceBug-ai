@@ -571,6 +571,44 @@ try {
   });
 } catch {}
 
+// ── Integrations hub (Phase 13 step 5) ──────────────────────────────────────
+// integrations-hub.js, the same component as the popup's view. Its Advanced
+// path lands on the token forms below; the popup hands sign-in off to here
+// (#integrations:connect=<id>) because it can't survive a sign-in window.
+
+const TOKEN_FORMS = {
+  github: { details: "ghAdvanced", field: "ghToken" },
+  linear: { details: "lnAdvanced", field: "lnKey" },
+  slack: { details: null, field: "slHook" },
+};
+
+function showTokenForm(id) {
+  const f = TOKEN_FORMS[id];
+  if (!f) return;
+  if (f.details && $(f.details)) $(f.details).open = true;
+  const field = $(f.field);
+  if (!field) return;
+  const card = field.closest(".card");
+  if (card) {
+    card.scrollIntoView({ block: "center" });
+    card.classList.add("deep-link-target");
+    setTimeout(() => card.classList.remove("deep-link-target"), 2500);
+  }
+  field.focus();
+}
+
+const integrationsHub = window.TraceBugIntegrationsHub
+  ? TraceBugIntegrationsHub.mount($("hubMount"), { mode: "options", tokenPath: showTokenForm })
+  : null;
+
+(function followIntegrationsLink() {
+  const m = /^#integrations(?::(connect|token)=(github|linear|slack))?$/.exec(location.hash);
+  if (!m) return;
+  $("integrations").scrollIntoView({ block: "start" });
+  if (m[1] === "connect" && integrationsHub) integrationsHub.openConnect(m[2]);
+  else if (m[1] === "token") showTokenForm(m[2]);
+})();
+
 // ── Boot ────────────────────────────────────────────────────────────────────
 
 applyProviderUI();

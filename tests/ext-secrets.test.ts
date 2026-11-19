@@ -166,7 +166,16 @@ describe('extension mode — status snapshot answers synchronously', () => {
     expect(JSON.stringify(getIntegrationStatus())).not.toContain(GH_TOKEN);
 
     setIntegrationStatus(null);
-    expect(getIntegrationStatus()).toEqual({ github: false, linear: false, slack: false, ai: false });
+    expect(getIntegrationStatus()).toEqual({ github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false });
+
+    // The default tracker is an id from a fixed list — a repo name or token
+    // in that slot is dropped, not carried.
+    setIntegrationStatus({ defaultTracker: 'acme/secret-repo' as never, trackerAttention: 'yes' as never });
+    expect(getIntegrationStatus().defaultTracker).toBeNull();
+    expect(getIntegrationStatus().trackerAttention).toBe(false);
+    setIntegrationStatus({ defaultTracker: 'linear', trackerAttention: true });
+    expect(getIntegrationStatus().defaultTracker).toBe('linear');
+    expect(getIntegrationStatus().trackerAttention).toBe(true);
     expect(hasIntegration('github')).toBe(false);
   });
 
