@@ -528,18 +528,23 @@ function connectFromOptions(t, box) {
   // this click, copies the device code, opens GitHub's page and polls.
   const connectBtn = box.querySelector(".acct-connect");
   const reopenBtn = box.querySelector(".device-reopen");
-  box.querySelector(".device-copy").onclick = async () => {
-    const code = box.querySelector(".device-code").textContent || "";
-    if (await TraceBugTrackerConnect.copy(code)) say(status, "Code copied — press " + TraceBugTrackerConnect.pasteKeys() + " on GitHub.", "ok", " ");
-  };
-  reopenBtn.onclick = () => TraceBugTrackerConnect.reopen(t);
+  // GitHub's card has the device-code row; Linear's (a sign-in popup) doesn't.
+  const copyBtn = box.querySelector(".device-copy");
+  if (copyBtn) {
+    copyBtn.onclick = async () => {
+      const code = box.querySelector(".device-code").textContent || "";
+      if (await TraceBugTrackerConnect.copy(code)) say(status, "Code copied — press " + TraceBugTrackerConnect.pasteKeys() + " on GitHub.", "ok", " ");
+    };
+  }
+  if (reopenBtn) reopenBtn.onclick = () => TraceBugTrackerConnect.reopen(t);
   TraceBugTrackerConnect.connect(t, {
     say: (text, isErr) => say(status, text, isErr ? "err" : "ok", " "),
     code: (code) => {
-      box.querySelector(".device-code").textContent = code || "";
+      const el = box.querySelector(".device-code");
+      if (el) el.textContent = code || "";
       if (dev) dev.hidden = !code;
     },
-    reopen: (on) => { reopenBtn.hidden = !on; },
+    reopen: (on) => { if (reopenBtn) reopenBtn.hidden = !on; },
     final: (code) => { connectBtn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + t.label; },
     done: async (account) => {
       say(status, "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");

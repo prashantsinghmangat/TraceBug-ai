@@ -10,8 +10,8 @@
 // service worker. What goes back to the window is display data only.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { CreateIssueResult, IssueContent } from "./api";
-import { capProviderBody, isSendId, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue } from "./api";
+import type { CreateIssueResult, IssueAttachment, IssueContent } from "./api";
+import { capProviderBody, isSendId, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue, PROVIDER_BODY_LIMITS } from "./api";
 import type { IssueTracker, ResolvedAuth } from "./auth-store";
 import type { OAuthSpec } from "./oauth";
 import { GITHUB_APP_INSTALL_URL, OAUTH_CLIENTS, hasOAuthClient } from "./oauth-clients";
@@ -295,12 +295,12 @@ function linearAuthHeader(auth: ResolvedAuth): string {
   return auth.via === "oauth" ? `Bearer ${auth.token}` : auth.token;
 }
 
-async function linearQuery<T>(auth: ResolvedAuth, query: string, signal?: AbortSignal): Promise<T> {
+async function linearQuery<T>(auth: ResolvedAuth, query: string, signal?: AbortSignal, variables?: Record<string, unknown>): Promise<T> {
   const res = await fetch("https://api.linear.app/graphql", {
     method: "POST",
     signal,
     headers: { "content-type": "application/json", authorization: linearAuthHeader(auth) },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(variables ? { query, variables } : { query }),
   });
   const data = (await parseJsonOrThrow(res, "Linear", "tracker")) as { data?: T; errors?: Array<{ message?: string }> };
   if (Array.isArray(data.errors) && data.errors.length) {
@@ -339,16 +339,58 @@ export const linear: TrackerAdapter = {
       .filter((t) => typeof t.id === "string")
       .map((t) => ({ id: t.id!, label: t.name || t.key || t.id!, detail: t.key }));
   },
-  // Labels, assignee, priority and project arrive in Phase 3.
-  async listFields() {
-    return [];
+  async listFields(auth, container, signal) {
+    if (!LINEAR_ID_RE.test(container)) return [];
+    const d = await linearQuery<{
+      team?: {
+        members?: { nodes?: Array<{ id?: string; name?: string; displayName?: string; active?: boolean }> };
+        projects?: { nodes?: Array<{ id?: string; name?: string; completedAt?: string | null; canceledAt?: string | null; archivedAt?: string | null }> };
+      } | null;
+      issueLabels?: { nodes?: Array<{ id?: string; name?: string }> };
+    }>(auth,
+      "query($team: String!) { team(id: $team) {" +
+      " members(first: 250) { nodes { id name displayName active } }" +
+      " projects(first: 100) { nodes { id name completedAt canceledAt archivedAt } } }" +
+      " issueLabels(first: 250, filter: { or: [ { team: { id: { eq: $team } } }, { team: { null: true } } ] }) { nodes { id name } } }",
+      signal, { team: container });
+    const team = d.team || {};
+    const labels = ((d.issueLabels && d.issueLabels.nodes) || []).filter((l) => typeof l.id === "string" && l.name);
+    const people = ((team.members && team.members.nodes) || []).filter((m) => typeof m.id === "string" && m.active !== false);
+    const projects = ((team.projects && team.projects.nodes) || [])
+      .filter((x) => typeof x.id === "string" && x.name && !x.completedAt && !x.canceledAt && !x.archivedAt);
+    const fields: FieldSpec[] = [
+      { key: "labels", label: "Labels", kind: "multi", options: labels.map((l) => ({ id: l.id!, label: l.name! })) },
+      { key: "assignee", label: "Assignee", kind: "single",
+        options: people.map((m) => ({ id: m.id!, label: m.displayName || m.name || m.id! })) },
+      { key: "priority", label: "Priority", kind: "single", options: LINEAR_PRIORITIES },
+    ];
+    if (projects.length) {
+      fields.push({ key: "project", label: "Project", kind: "single", options: projects.map((x) => ({ id: x.id!, label: x.name! })) });
+    }
+    return fields;
   },
-  async createIssue(auth, container, _values, content, signal) {
-    return postLinearIssue(
-      { apiKey: auth.token, teamId: container, bearer: auth.via === "oauth" },
-      { title: content.title, body: capProviderBody("linear", content.body).text, sendId: content.sendId },
+  async createIssue(auth, container, values, content, signal) {
+    // Files first, so the issue can link them; one that fails is named in the
+    // result and the issue is filed anyway.
+    const up = await uploadLinearFiles(auth, content.attachments || [], signal);
+    const priority = Number(asList(values.priority)[0]);
+    const r = await postLinearIssue(
+      {
+        apiKey: auth.token,
+        teamId: container,
+        bearer: auth.via === "oauth",
+        labelIds: asList(values.labels).filter((x) => LINEAR_ID_RE.test(x)),
+        assigneeId: asList(values.assignee).filter((x) => LINEAR_ID_RE.test(x))[0],
+        priority: Number.isInteger(priority) ? priority : undefined,
+        projectId: asList(values.project).filter((x) => LINEAR_ID_RE.test(x))[0],
+        descriptionReady: true,
+      },
+      { title: content.title, body: linearDescription(content.body, up.links), sendId: content.sendId },
       signal,
     );
+    if (up.failed.length) r.notAttached = up.failed;
+    r.attached = up.links.length;
+    return r;
   },
   async findFiledIssue(auth, _container, sendId, _since, signal) {
     // The send id IS the issue id (postLinearIssue), so ask for it directly.
@@ -384,6 +426,94 @@ export async function findFiledIssueWithRetry(
   if (first) return first;
   await wait(2000);
   return adapter.findFiledIssue(auth, container, sendId, since, signal);
+}
+
+// ── Linear attachments ────────────────────────────────────────────────────
+// fileUpload (GraphQL) returns a signed uploadUrl + headers and an assetUrl;
+// the worker PUTs the bytes, then links assetUrl in the description. The PUT
+// is cross-origin and Linear's storage refuses browser CORS, so it needs a
+// host permission for the upload origin — an OPTIONAL one, listed here once
+// the owner has confirmed the exact origin (ADR 010). Until then this list is
+// empty and every attachment is reported as not attached; the issue is filed.
+export const LINEAR_UPLOAD_ORIGINS: readonly string[] = [];
+
+/** TraceBug's own caps (Linear's depend on the workspace's plan). */
+export const LINEAR_ATTACH_LIMITS = { fileBytes: 20 * 1024 * 1024, totalBytes: 30 * 1024 * 1024, files: 6 };
+
+const LINEAR_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+const LINEAR_PRIORITIES = [
+  { id: "1", label: "Urgent" }, { id: "2", label: "High" }, { id: "3", label: "Medium" }, { id: "4", label: "Low" },
+];
+
+export interface UploadOutcome {
+  links: Array<{ name: string; type: string; url: string }>;
+  failed: Array<{ name: string; reason: string }>;
+}
+
+/** Description = the report, then its attachments; within Linear's limit. */
+export function linearDescription(body: string, links: UploadOutcome["links"]): string {
+  const lines = links.map((l) => (l.type.startsWith("image/") ? `![${mdText(l.name)}](${l.url})` : `[${mdText(l.name)}](${l.url})`));
+  const tail = lines.length ? "\n\n**Attachments**\n\n" + lines.join("\n") : "";
+  const limit = PROVIDER_BODY_LIMITS.linear - tail.length;
+  const text = capProviderBody("linear", body).text;
+  return (text.length > limit ? text.slice(0, Math.max(0, limit)) : text) + tail;
+}
+
+function mdText(s: string): string {
+  return s.replace(/[[\]()\\]/g, "_");
+}
+
+export async function uploadLinearFiles(
+  auth: ResolvedAuth,
+  files: IssueAttachment[],
+  signal?: AbortSignal,
+  origins: readonly string[] = LINEAR_UPLOAD_ORIGINS,
+): Promise<UploadOutcome> {
+  const out: UploadOutcome = { links: [], failed: [] };
+  let total = 0;
+  for (const f of files.slice(0, LINEAR_ATTACH_LIMITS.files)) {
+    const size = f.data.byteLength;
+    if (!origins.length) { out.failed.push({ name: f.name, reason: "attachments to Linear aren't set up yet" }); continue; }
+    if (size > LINEAR_ATTACH_LIMITS.fileBytes || total + size > LINEAR_ATTACH_LIMITS.totalBytes) {
+      out.failed.push({ name: f.name, reason: `too large (${(size / 1048576).toFixed(1)} MB)` });
+      continue;
+    }
+    try {
+      const d = await linearQuery<{
+        fileUpload?: { success?: boolean; uploadFile?: { uploadUrl?: string; assetUrl?: string; headers?: Array<{ key?: string; value?: string }> } | null };
+      }>(auth,
+        "mutation($contentType: String!, $filename: String!, $size: Int!) { fileUpload(contentType: $contentType, filename: $filename, size: $size) { success uploadFile { uploadUrl assetUrl headers { key value } } } }",
+        signal, { contentType: f.type, filename: f.name, size });
+      const u = d.fileUpload && d.fileUpload.uploadFile;
+      if (!u || typeof u.uploadUrl !== "string" || typeof u.assetUrl !== "string") throw new Error("Linear didn't prepare the upload");
+      const dest = new URL(u.uploadUrl);
+      if (dest.protocol !== "https:" || !origins.includes(dest.origin)) throw new Error("unexpected upload address");
+      const asset = new URL(u.assetUrl);
+      if (asset.protocol !== "https:") throw new Error("unexpected file address");
+      const headers: Record<string, string> = { "content-type": f.type, "cache-control": "public, max-age=31536000" };
+      for (const h of u.headers || []) if (h && typeof h.key === "string" && typeof h.value === "string") headers[h.key] = h.value;
+      const put = await fetch(dest.toString(), { method: "PUT", headers, body: new Blob([f.data as BlobPart], { type: f.type }), signal });
+      if (!put.ok) throw new Error(`upload refused (HTTP ${put.status})`);
+      total += size;
+      out.links.push({ name: f.name, type: f.type, url: asset.toString() });
+    } catch (err) {
+      out.failed.push({ name: f.name, reason: (err as Error).message || "upload failed" });
+    }
+  }
+  for (const f of files.slice(LINEAR_ATTACH_LIMITS.files)) out.failed.push({ name: f.name, reason: "too many files" });
+  return out;
+}
+
+/** Disconnect: revoke a Linear OAuth grant (public client — no secret). Best effort. */
+export async function revokeLinearToken(token: string, hint: "access_token" | "refresh_token"): Promise<boolean> {
+  try {
+    const res = await fetch("https://api.linear.app/oauth/revoke", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ token, token_type_hint: hint }).toString(),
+    });
+    return res.ok;
+  } catch { return false; }
 }
 
 export const TRACKER_ADAPTERS: Record<IssueTracker, TrackerAdapter> = { github, linear };

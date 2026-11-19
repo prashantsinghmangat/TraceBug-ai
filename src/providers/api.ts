@@ -41,6 +41,14 @@ export interface LinearConfig {
   teamId: string;
   /** True for an OAuth access token, which Linear takes as `Bearer …`. */
   bearer?: boolean;
+  /** Create-panel fields (Phase 13 step 4). Ids from the team's own lists. */
+  labelIds?: string[];
+  assigneeId?: string;
+  /** 0 none, 1 urgent, 2 high, 3 medium, 4 low. */
+  priority?: number;
+  projectId?: string;
+  /** The body is already capped and carries its attachment links: send as is. */
+  descriptionReady?: boolean;
 }
 
 export interface SlackConfig {
@@ -70,6 +78,10 @@ export interface CreateIssueResult {
   shown?: boolean;
   /** Created from the in-page panel inside the ticket (Phase 13 Step 3). */
   panel?: boolean;
+  /** Attachments that could not be uploaded, with why — the issue was filed anyway. */
+  notAttached?: Array<{ name: string; reason: string }>;
+  /** How many attachments were linked into the issue. */
+  attached?: number;
   /** A retry found the issue an earlier, unclear attempt had already filed. */
   found?: boolean;
   /** Display name of the tracker it actually went to — the Create panel can switch. */
@@ -77,9 +89,18 @@ export interface CreateIssueResult {
 }
 
 /** What the page supplies for a GitHub/Linear send. Nothing else is accepted. */
+/** A file to attach (Linear; Phase 13 step 4). Bytes already decoded. */
+export interface IssueAttachment {
+  name: string;
+  type: string;
+  data: Uint8Array;
+}
+
 export interface IssueContent {
   title: string;
   body: string;
+  /** Screenshots and the .html report. Trackers that can't upload ignore it. */
+  attachments?: IssueAttachment[];
   /** A random UUID v4 made once per send and reused on every retry of it —
    *  nothing from the ticket. GitHub: written as an invisible HTML comment at
    *  the end of the body; Linear: the new issue's own id. Either way a retry
@@ -479,10 +500,14 @@ export async function postLinearIssue(
         input: {
           teamId: config.teamId,
           title: content.title,
-          description: capProviderBody("linear", content.body).text,
+          description: config.descriptionReady ? content.body : capProviderBody("linear", content.body).text,
           // Linear takes a client-made UUID v4 as the issue id, so a retry
           // can ask for it by id instead of filing it twice.
           id: isSendId(content.sendId) ? content.sendId : undefined,
+          labelIds: config.labelIds && config.labelIds.length ? config.labelIds : undefined,
+          assigneeId: config.assigneeId || undefined,
+          priority: typeof config.priority === "number" && config.priority >= 1 && config.priority <= 4 ? config.priority : undefined,
+          projectId: config.projectId || undefined,
         },
       },
     }),

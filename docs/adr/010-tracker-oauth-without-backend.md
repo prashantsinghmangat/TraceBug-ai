@@ -112,6 +112,15 @@ the extension is public.
   - Linear says a client-side PUT is blocked by its CSP, so a PUT from the worker must be tested.
   - The docs don't name the upload host. Phase 3 reads it from a real `uploadUrl` before adding it. If it turns out
     to be a shared host such as `storage.googleapis.com`, ask again: that is far broader than "Linear's host".
+- **Built 2026-11-19 (Phase 13 step 4).**
+  - Linear's schema documents `fileUpload(contentType, filename, size)` returning `uploadUrl`, `assetUrl` and
+    `headers`. The PUT must start within a minute and send exactly `size` bytes. "Workspace file-type restrictions
+    and plan upload limits apply" — Linear publishes no numbers, so TraceBug caps uploads itself: 20 MB per file,
+    30 MB per issue, 6 files.
+  - The upload origin is still **unconfirmed**. A third-party guide says it is Google Cloud Storage. Until the owner
+    reads it from a real `uploadUrl` and approves it, `LINEAR_UPLOAD_ORIGINS` (`src/providers/trackers.ts`) stays
+    empty and no host is declared, so issues are filed without the files and the panel says so.
+  - Disconnect revokes the grant at `api.linear.app/oauth/revoke` (token only, no secret).
 
 ### Azure DevOps
 - **ADO's own OAuth is out.** It is deprecated, takes no new registrations since April 2025, and needed a secret

@@ -530,9 +530,11 @@ function rebuildProviderPayload(type, provider, raw) {
   var keys = type === "tb:llm:analyze" ? ["prompt"]
     : provider === "slack" ? ["text"]
     : ["title", "body"];
+  // Phase 13 step 4: GitHub/Linear sends may carry files to attach.
+  var optional = type === "tb:provider:send" && (provider === "github" || provider === "linear") ? ["attachments"] : [];
   var given = Object.keys(raw);
   for (var i = 0; i < given.length; i++) {
-    if (keys.indexOf(given[i]) === -1) {
+    if (keys.indexOf(given[i]) === -1 && optional.indexOf(given[i]) === -1) {
       return { error: 'Unexpected field "' + given[i] + '" in payload.' };
     }
   }
@@ -540,6 +542,16 @@ function rebuildProviderPayload(type, provider, raw) {
   for (var j = 0; j < keys.length; j++) {
     var v = raw[keys[j]];
     out[keys[j]] = typeof v === "string" ? v : "";
+  }
+  if (raw.attachments !== undefined) {
+    if (!Array.isArray(raw.attachments) || raw.attachments.length > 6) return { error: "Malformed attachments." };
+    out.attachments = raw.attachments.map(function (a) {
+      return {
+        name: a && typeof a.name === "string" ? a.name : "",
+        type: a && typeof a.type === "string" ? a.type : "",
+        data: a && typeof a.data === "string" ? a.data : "",
+      };
+    });
   }
   return { payload: out };
 }

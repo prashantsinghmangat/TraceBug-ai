@@ -316,18 +316,35 @@ async function initAccountCard() {
   } catch {}
 }
 
-// Step 5: Connect GitHub, then pick the default repository (ADR 010). Shown
-// only where the worker says this build can sign in — Firefox keeps its
-// token path in settings, so the card stays hidden there.
+// Step 5: Connect GitHub and/or Linear, then pick where issues go (ADR 010).
+// Each tracker's block shows only where the worker says this build can sign
+// in — Firefox keeps its token paths in settings, so the card stays hidden.
 async function initTrackerStep() {
   const card = document.getElementById("trackerStep");
   const C = typeof TraceBugTrackerConnect !== "undefined" ? TraceBugTrackerConnect : null;
   if (!card || !C) return;
-  const status = document.getElementById("trStatus");
-  const btn = document.getElementById("trConnect");
-  const codeLine = document.getElementById("trCodeLine");
-  const pickWrap = document.getElementById("trPickWrap");
-  const pick = document.getElementById("trPick");
+  const blocks = [
+    initTrackerBlock(C, "github", {
+      block: "ghBlock", btn: "trConnect", status: "trStatus", pickWrap: "trPickWrap", pick: "trPick",
+      codeLine: "trCodeLine", code: "trCode", copy: "trCopy", reopen: "trReopen",
+    }),
+    initTrackerBlock(C, "linear", { block: "lnBlock", btn: "lnConnect", status: "lnStatus", pickWrap: "lnPickWrap", pick: "lnPick" }),
+  ];
+  const shown = await Promise.all(blocks);
+  card.hidden = !shown.some(Boolean);
+}
+
+/** One tracker's Connect + default picker. Resolves true if it is offered. */
+async function initTrackerBlock(C, id, ids) {
+  const $id = (k) => (ids[k] ? document.getElementById(ids[k]) : null);
+  const block = $id("block");
+  const status = $id("status");
+  const btn = $id("btn");
+  const pickWrap = $id("pickWrap");
+  const pick = $id("pick");
+  const codeLine = $id("codeLine");
+  const reopenBtn = $id("reopen");
+  if (!block || !btn) return false;
   const say = (text, isErr) => {
     status.textContent = text || "";
     status.className = "tr-status" + (isErr ? " err" : "");
@@ -335,9 +352,9 @@ async function initTrackerStep() {
 
   async function render() {
     const res = await C.msg("tb:tracker:status");
-    const t = res && Array.isArray(res.trackers) ? res.trackers.find((r) => r.id === "github") : null;
-    if (!t || !t.canConnect) { card.hidden = true; return null; }
-    card.hidden = false;
+    const t = res && Array.isArray(res.trackers) ? res.trackers.find((r) => r.id === id) : null;
+    if (!t || !t.canConnect) { block.hidden = true; return null; }
+    block.hidden = false;
     const signedIn = t.via === "oauth";
     btn.hidden = signedIn;
     btn.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
@@ -350,20 +367,22 @@ async function initTrackerStep() {
   }
 
   let row = await render();
-  const reopenBtn = document.getElementById("trReopen");
-  document.getElementById("trCopy").addEventListener("click", async () => {
-    if (await C.copy(document.getElementById("trCode").textContent || "")) say("Code copied — press " + C.pasteKeys() + " on GitHub.");
-  });
-  reopenBtn.addEventListener("click", () => { if (row) C.reopen(row); });
+  if ($id("copy")) {
+    $id("copy").addEventListener("click", async () => {
+      if (await C.copy($id("code").textContent || "")) say("Code copied — press " + C.pasteKeys() + " on GitHub.");
+    });
+  }
+  if (reopenBtn) reopenBtn.addEventListener("click", () => { if (row) C.reopen(row); });
   btn.addEventListener("click", () => {
     if (!row) return;
     C.connect(row, {
       say,
       code: (code) => {
-        document.getElementById("trCode").textContent = code || "";
+        if (!codeLine) return;
+        $id("code").textContent = code || "";
         codeLine.hidden = !code;
       },
-      reopen: (on) => { reopenBtn.hidden = !on; },
+      reopen: (on) => { if (reopenBtn) reopenBtn.hidden = !on; },
       final: (code) => { btn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + row.label; },
       done: async () => {
         row = await render();
@@ -372,4 +391,5 @@ async function initTrackerStep() {
       },
     });
   });
+  return !!row;
 }

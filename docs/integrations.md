@@ -27,14 +27,31 @@ lives in TraceBug settings (GitHub card); to revoke the app entirely, use GitHub
 Why a code instead of a redirect: GitHub only allows the redirect sign-in for apps that keep a secret on a server,
 and TraceBug has no server (ADR 010). The code flow needs no secret.
 
-### With a token (all trackers; Firefox; Linear until its Connect arrives)
+### Linear: Connect with one click (Chrome)
+
+1. In TraceBug settings (Linear card), on the welcome page (step 5), or from the ticket (**More ▾ → Send to Linear**),
+   click **Connect Linear**. Linear's sign-in opens in a popup; approve it and you're back, connected. No key to copy.
+   Chrome asks once for the `identity` permission (used only for that popup) and access to Linear.
+2. Pick the **Team** (settings and the welcome page ask for a default right after you connect), then **Labels**,
+   **Assignee**, **Priority** and **Project** in the panel. They're remembered for next time.
+3. **Send to Linear** also sends the ticket's screenshots and the replay `.html` report. TraceBug uploads them to
+   Linear and links them in the issue (screenshots show inline). Each file is capped at 20 MB (30 MB per issue). If
+   a file can't be uploaded, the issue is still created and the panel names what wasn't attached and why.
+   - *Not yet active:* attachments wait on one confirmation (which storage address Linear uploads to); until then
+     the panel shows "attachments to Linear aren't set up yet" and the issue is filed without them.
+4. TraceBug gives each issue an id before sending it, so a retry after a dropped connection finds the issue instead
+   of creating a second one.
+5. **Disconnect** (settings) signs TraceBug out and revokes its access at Linear. The sign-in renews itself daily;
+   if it's revoked, the panel shows **Reconnect Linear** and keeps your choices.
+
+### With a token (all trackers; Firefox)
 
 In TraceBug settings (right-click the toolbar icon → Options), open **Advanced: use a token** on the tracker's card:
 
 | Tracker | What to paste | Where to get it |
 |---|---|---|
 | **GitHub** | Personal access token: fine-grained with **Issues: Read and write** on the repos you want, or classic with `repo`. Default repository is optional. | github.com → Settings → Developer settings → Personal access tokens |
-| **Linear** | Personal API key. Default team is optional. | Linear → Settings → API → Personal API keys |
+| **Linear** | Personal API key (under **Advanced: use a key**). Default team is optional. | Linear → Settings → API → Personal API keys |
 | **Slack** | Incoming webhook URL | Slack → your app → Incoming Webhooks |
 
 Saving asks the browser for access to that one tracker's API host. Then **Send to GitHub** (or Linear) opens the
@@ -75,7 +92,7 @@ The window:
 - GitHub's API can't attach files, so the recording and screenshots download when the issue is created; drag them
   into the issue (the body says which files).
 
-**Coming next (Chrome first):** Connect for Linear, Azure DevOps and GitLab (a sign-in popup, no code), and Jira
+**Coming next (Chrome first):** Connect for Azure DevOps and GitLab (a sign-in popup, no code), and Jira
 Cloud with an API token. Firefox keeps the token path until the Firefox step.
 
 **Slack** stays a webhook: the message is posted as it is, with no picker.

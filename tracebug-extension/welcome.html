@@ -329,6 +329,7 @@
     .ai-copy.copied, .ai-copy.copied:hover { color: var(--ok-icon); }
     /* Step 5: connect a tracker (ADR 010). Same dark box as step 4. */
     #trackerStep[hidden], #trackerStep [hidden] { display: none !important; }
+    .tr-block + .tr-block { margin-top: 18px; }
     .tr-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .tr-row .btn { margin-top: 0; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; }
     .tr-status { font-size: 12.5px; color: var(--ai-text); }
@@ -537,8 +538,9 @@
          Optional; shown only where this build offers sign-in (welcome.js asks
          the worker). The worker does the sign-in — this page never sees a token. -->
     <section class="ai ai-step" id="trackerStep" aria-labelledby="trTitle" hidden>
-      <div class="ai-t" id="trTitle">5 · File bugs straight into GitHub</div>
-      <p class="ai-l">Optional. Connect once and pick a repository; every bug ticket then gets a Create GitHub issue button. Issues go from your browser to GitHub directly.</p>
+      <div class="ai-t" id="trTitle">5 · File bugs straight into GitHub or Linear</div>
+      <p class="ai-l">Optional. Connect once and pick where issues go; every bug ticket then gets a Create issue panel. Issues go from your browser to the tracker directly.</p>
+      <div class="tr-block" id="ghBlock" hidden>
       <div class="tr-row">
         <button class="btn" id="trConnect" type="button">Connect GitHub</button>
         <span class="tr-status" id="trStatus" role="status" aria-live="polite"></span>
@@ -551,6 +553,17 @@
       <label class="tr-pick" id="trPickWrap" hidden>Default repository
         <select id="trPick"></select>
       </label>
+      </div>
+      <!-- Linear: a sign-in popup (PKCE), no code to copy. -->
+      <div class="tr-block" id="lnBlock" hidden>
+        <div class="tr-row">
+          <button class="btn" id="lnConnect" type="button">Connect Linear</button>
+          <span class="tr-status" id="lnStatus" role="status" aria-live="polite"></span>
+        </div>
+        <label class="tr-pick" id="lnPickWrap" hidden>Default team
+          <select id="lnPick"></select>
+        </label>
+      </div>
     </section>
 
     <!-- ── Privacy ─────────────────────────────────────────── -->

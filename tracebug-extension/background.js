@@ -1686,6 +1686,7 @@ const LLM_SITES_KEY = "tb_llm_sites_v1";
 const INT_KEY = "tb_integrations_v1";
 const AI_CFG_KEY = "tb_ai_config_v1";
 const PAYLOAD_PREFIX = "tb_send_payload_";
+const ATTACH_PREFIX = "tb_send_attach_";
 const CONFIRM_ALARM = "tb:confirm:expire:";
 
 const TB_PROVIDER_LABELS = { github: "GitHub", linear: "Linear", slack: "Slack" };
@@ -1767,7 +1768,21 @@ async function dropPending(id) {
   const req = all[id] || null;
   delete all[id];
   await sessionSet({ [PENDING_KEY]: all });
+  if (req && req.attachments && req.attachments.length) await localRemove([ATTACH_PREFIX + id]);
   return req;
+}
+
+/** The request's files, decoded for the tracker. [] when there are none. */
+async function loadAttachments(id) {
+  const got = await localGet([ATTACH_PREFIX + id], {});
+  const files = got[ATTACH_PREFIX + id];
+  if (!Array.isArray(files)) return [];
+  return files.map((f) => {
+    const bin = atob(f.data);
+    const data = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
+    return { name: f.name, type: f.type, data };
+  });
 }
 
 // ── Outcome delivery ───────────────────────────────────────────────────────
@@ -1819,6 +1834,15 @@ async function handleProviderRequest(message, sender) {
     } finally {
       await localRemove([key]);
     }
+  }
+  // Files to attach (Phase 13 step 4) are kept out of session storage (10 MB
+  // quota) and out of the request record: they wait in local storage under
+  // the request id, and dropPending deletes them however the request ends.
+  let attachFiles = [];
+  if (payload && Array.isArray(payload.attachments)) {
+    if (v.kind === "tracker") attachFiles = payload.attachments;
+    payload = Object.assign({}, payload);
+    delete payload.attachments;
   }
 
   const cfgAll = await localGet([INT_KEY, AI_CFG_KEY, LLM_SITES_KEY, TRACKER_AUTH_KEY], {});
@@ -1876,6 +1900,7 @@ async function handleProviderRequest(message, sender) {
     cutWarning: cap.warning,
     // Our content script (top frame) can show the in-page Create panel.
     panel: message.panel === true && sender.frameId === 0 && b.isIssueTracker(v.target),
+    files: attachFiles,
   });
 }
 
@@ -1984,9 +2009,12 @@ async function queueConfirmation(req) {
     mode: req.panel && issueSend ? "panel" : "window",
     nonce: req.panel && issueSend ? randomNonce() : undefined,
     panelFrameId: null,
+    // Names, types and sizes only; the bytes wait under ATTACH_PREFIX + id.
+    attachments: (req.files || []).map((f) => ({ name: f.name, type: f.type, size: Math.floor(f.data.length * 3 / 4) })),
   };
   all[req.id] = record;
   await sessionSet({ [PENDING_KEY]: all });
+  if (req.files && req.files.length) await localSet({ [ATTACH_PREFIX + req.id]: req.files });
 
   // The timeout runs on chrome.alarms, not setTimeout: a terminated worker
   // takes its timers with it, and a confirmation that silently never expires
@@ -2045,6 +2073,7 @@ function confirmViewOf(req) {
     warnings: req.warnings || [],
     shortened: !!req.shortened,
     expiresAt: req.expiresAt,
+    attachments: (req.attachments || []).map((a) => ({ name: a.name, type: a.type, size: a.size })),
   };
 }
 
@@ -2155,7 +2184,11 @@ async function runPanelCreate(api, id, req, choice) {
     if (was) tellTab(was.tabId, { type: "tb:provider:result", id, ok: true, result });
     return {
       ok: true,
-      result: { url: result.url || "", ref: result.ref || "", label: result.label || run.providerLabel, found: !!result.found },
+      result: {
+        url: result.url || "", ref: result.ref || "", label: result.label || run.providerLabel, found: !!result.found,
+        attached: typeof result.attached === "number" ? result.attached : 0,
+        notAttached: Array.isArray(result.notAttached) ? result.notAttached.slice(0, 10) : [],
+      },
     };
   } catch (err) {
     const unclear = api.isUnclearFailure(err);
@@ -2486,8 +2519,11 @@ async function createViaAdapter(api, adapter, req, integrations) {
         req.firstAttemptAt || Date.now(), AbortSignal.timeout(CREATE_TIMEOUT_MS));
       if (found) { found.found = true; return found; }
     }
+    const attachments = req.attachments && req.attachments.length ? await loadAttachments(req.id) : [];
     return adapter.createIssue(auth, container, fields,
-      { title: req.payload.title, body: req.payload.body, sendId }, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+      { title: req.payload.title, body: req.payload.body, sendId, attachments },
+      // Uploads ride on the same request: allow them their own time.
+      AbortSignal.timeout(CREATE_TIMEOUT_MS + (attachments.length ? 90 * 1000 : 0)));
   });
   if (choice) await rememberChoice(adapter.id, container, fields);
   result.label = adapter.label;
@@ -2520,7 +2556,11 @@ async function trackerStatusList(api) {
       // What Connect must request. The window calls permissions.request with
       // this from the click handler itself — an await first would lose the
       // user gesture the browser requires.
-      connectPermissions: c ? { permissions: c.flow === "pkce" ? ["identity"] : [], origins: c.hosts } : null,
+      connectPermissions: c ? {
+        permissions: c.flow === "pkce" ? ["identity"] : [],
+        // Linear: its upload host too, so attachments work from the first issue.
+        origins: c.hosts.concat(id === "linear" ? (api.LINEAR_UPLOAD_ORIGINS || []).map((o) => o + "/*") : []),
+      } : null,
       apiHosts: a.apiHosts,
       // "Add repositories" link — only meaningful once signed in through the app.
       manageUrl: map[id] && !map[id].needsReconnect ? (a.manageUrl || null) : null,
@@ -2726,7 +2766,12 @@ if (chrome.windows && chrome.windows.onRemoved) {
 }
 
 async function disconnectTracker(api, adapter) {
-  await api.forgetOAuth(trackerAuthStore, adapter.id);
+  const gone = await api.forgetOAuth(trackerAuthStore, adapter.id);
+  // Linear lets a public (PKCE) client revoke its own grant; GitHub doesn't.
+  if (adapter.id === "linear" && gone && gone.tokens) {
+    if (gone.tokens.refreshToken) await api.revokeLinearToken(gone.tokens.refreshToken, "refresh_token");
+    await api.revokeLinearToken(gone.tokens.accessToken, "access_token");
+  }
   const got = await localGet([TRACKER_PREFS_KEY], {});
   const prefs = got[TRACKER_PREFS_KEY] || {};
   delete prefs[adapter.id];

@@ -25,6 +25,8 @@ var TraceBugProviderAPI = (() => {
     GITHUB_APP_INSTALL_URL: () => GITHUB_APP_INSTALL_URL,
     ISSUE_TRACKERS: () => ISSUE_TRACKERS,
     ISSUE_URL_HOSTS: () => ISSUE_URL_HOSTS,
+    LINEAR_ATTACH_LIMITS: () => LINEAR_ATTACH_LIMITS,
+    LINEAR_UPLOAD_ORIGINS: () => LINEAR_UPLOAD_ORIGINS,
     MAX_CONTAINERS: () => MAX_CONTAINERS,
     NotConnectedError: () => NotConnectedError,
     OAUTH_CLIENTS: () => OAUTH_CLIENTS,
@@ -58,6 +60,7 @@ var TraceBugProviderAPI = (() => {
     legacyContainer: () => legacyContainer,
     legacyToken: () => legacyToken,
     linear: () => linear,
+    linearDescription: () => linearDescription,
     mapProviderError: () => mapProviderError,
     nextLink: () => nextLink,
     parseJsonOrThrow: () => parseJsonOrThrow,
@@ -72,8 +75,10 @@ var TraceBugProviderAPI = (() => {
     refreshTokens: () => refreshTokens,
     requestDeviceCode: () => requestDeviceCode,
     resolveAuth: () => resolveAuth,
+    revokeLinearToken: () => revokeLinearToken,
     saveOAuth: () => saveOAuth,
     trackerAdapter: () => trackerAdapter,
+    uploadLinearFiles: () => uploadLinearFiles,
     withTrackerAuth: () => withTrackerAuth
   });
 
@@ -261,10 +266,14 @@ var TraceBugProviderAPI = (() => {
           input: {
             teamId: config.teamId,
             title: content.title,
-            description: capProviderBody("linear", content.body).text,
+            description: config.descriptionReady ? content.body : capProviderBody("linear", content.body).text,
             // Linear takes a client-made UUID v4 as the issue id, so a retry
             // can ask for it by id instead of filing it twice.
-            id: isSendId(content.sendId) ? content.sendId : void 0
+            id: isSendId(content.sendId) ? content.sendId : void 0,
+            labelIds: config.labelIds && config.labelIds.length ? config.labelIds : void 0,
+            assigneeId: config.assigneeId || void 0,
+            priority: typeof config.priority === "number" && config.priority >= 1 && config.priority <= 4 ? config.priority : void 0,
+            projectId: config.projectId || void 0
           }
         }
       })
@@ -915,13 +924,13 @@ var TraceBugProviderAPI = (() => {
   function linearAuthHeader(auth) {
     return auth.via === "oauth" ? `Bearer ${auth.token}` : auth.token;
   }
-  async function linearQuery(auth, query, signal) {
+  async function linearQuery(auth, query, signal, variables) {
     var _a;
     const res = await fetch("https://api.linear.app/graphql", {
       method: "POST",
       signal,
       headers: { "content-type": "application/json", authorization: linearAuthHeader(auth) },
-      body: JSON.stringify({ query })
+      body: JSON.stringify(variables ? { query, variables } : { query })
     });
     const data = await parseJsonOrThrow(res, "Linear", "tracker");
     if (Array.isArray(data.errors) && data.errors.length) {
@@ -960,16 +969,53 @@ var TraceBugProviderAPI = (() => {
       );
       return (d.teams && d.teams.nodes || []).filter((t) => typeof t.id === "string").map((t) => ({ id: t.id, label: t.name || t.key || t.id, detail: t.key }));
     },
-    // Labels, assignee, priority and project arrive in Phase 3.
-    async listFields() {
-      return [];
+    async listFields(auth, container, signal) {
+      if (!LINEAR_ID_RE.test(container)) return [];
+      const d = await linearQuery(
+        auth,
+        "query($team: String!) { team(id: $team) { members(first: 250) { nodes { id name displayName active } } projects(first: 100) { nodes { id name completedAt canceledAt archivedAt } } } issueLabels(first: 250, filter: { or: [ { team: { id: { eq: $team } } }, { team: { null: true } } ] }) { nodes { id name } } }",
+        signal,
+        { team: container }
+      );
+      const team = d.team || {};
+      const labels = (d.issueLabels && d.issueLabels.nodes || []).filter((l) => typeof l.id === "string" && l.name);
+      const people = (team.members && team.members.nodes || []).filter((m) => typeof m.id === "string" && m.active !== false);
+      const projects = (team.projects && team.projects.nodes || []).filter((x) => typeof x.id === "string" && x.name && !x.completedAt && !x.canceledAt && !x.archivedAt);
+      const fields = [
+        { key: "labels", label: "Labels", kind: "multi", options: labels.map((l) => ({ id: l.id, label: l.name })) },
+        {
+          key: "assignee",
+          label: "Assignee",
+          kind: "single",
+          options: people.map((m) => ({ id: m.id, label: m.displayName || m.name || m.id }))
+        },
+        { key: "priority", label: "Priority", kind: "single", options: LINEAR_PRIORITIES }
+      ];
+      if (projects.length) {
+        fields.push({ key: "project", label: "Project", kind: "single", options: projects.map((x) => ({ id: x.id, label: x.name })) });
+      }
+      return fields;
     },
-    async createIssue(auth, container, _values, content, signal) {
-      return postLinearIssue(
-        { apiKey: auth.token, teamId: container, bearer: auth.via === "oauth" },
-        { title: content.title, body: capProviderBody("linear", content.body).text, sendId: content.sendId },
+    async createIssue(auth, container, values, content, signal) {
+      const up = await uploadLinearFiles(auth, content.attachments || [], signal);
+      const priority = Number(asList(values.priority)[0]);
+      const r = await postLinearIssue(
+        {
+          apiKey: auth.token,
+          teamId: container,
+          bearer: auth.via === "oauth",
+          labelIds: asList(values.labels).filter((x) => LINEAR_ID_RE.test(x)),
+          assigneeId: asList(values.assignee).filter((x) => LINEAR_ID_RE.test(x))[0],
+          priority: Number.isInteger(priority) ? priority : void 0,
+          projectId: asList(values.project).filter((x) => LINEAR_ID_RE.test(x))[0],
+          descriptionReady: true
+        },
+        { title: content.title, body: linearDescription(content.body, up.links), sendId: content.sendId },
         signal
       );
+      if (up.failed.length) r.notAttached = up.failed;
+      r.attached = up.links.length;
+      return r;
     },
     async findFiledIssue(auth, _container, sendId, _since, signal) {
       if (!isSendId(sendId)) return null;
@@ -993,6 +1039,76 @@ var TraceBugProviderAPI = (() => {
     if (first) return first;
     await wait(2e3);
     return adapter.findFiledIssue(auth, container, sendId, since, signal);
+  }
+  var LINEAR_UPLOAD_ORIGINS = [];
+  var LINEAR_ATTACH_LIMITS = { fileBytes: 20 * 1024 * 1024, totalBytes: 30 * 1024 * 1024, files: 6 };
+  var LINEAR_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+  var LINEAR_PRIORITIES = [
+    { id: "1", label: "Urgent" },
+    { id: "2", label: "High" },
+    { id: "3", label: "Medium" },
+    { id: "4", label: "Low" }
+  ];
+  function linearDescription(body, links) {
+    const lines = links.map((l) => l.type.startsWith("image/") ? `![${mdText(l.name)}](${l.url})` : `[${mdText(l.name)}](${l.url})`);
+    const tail = lines.length ? "\n\n**Attachments**\n\n" + lines.join("\n") : "";
+    const limit = PROVIDER_BODY_LIMITS.linear - tail.length;
+    const text = capProviderBody("linear", body).text;
+    return (text.length > limit ? text.slice(0, Math.max(0, limit)) : text) + tail;
+  }
+  function mdText(s) {
+    return s.replace(/[[\]()\\]/g, "_");
+  }
+  async function uploadLinearFiles(auth, files, signal, origins = LINEAR_UPLOAD_ORIGINS) {
+    const out = { links: [], failed: [] };
+    let total = 0;
+    for (const f of files.slice(0, LINEAR_ATTACH_LIMITS.files)) {
+      const size = f.data.byteLength;
+      if (!origins.length) {
+        out.failed.push({ name: f.name, reason: "attachments to Linear aren't set up yet" });
+        continue;
+      }
+      if (size > LINEAR_ATTACH_LIMITS.fileBytes || total + size > LINEAR_ATTACH_LIMITS.totalBytes) {
+        out.failed.push({ name: f.name, reason: `too large (${(size / 1048576).toFixed(1)} MB)` });
+        continue;
+      }
+      try {
+        const d = await linearQuery(
+          auth,
+          "mutation($contentType: String!, $filename: String!, $size: Int!) { fileUpload(contentType: $contentType, filename: $filename, size: $size) { success uploadFile { uploadUrl assetUrl headers { key value } } } }",
+          signal,
+          { contentType: f.type, filename: f.name, size }
+        );
+        const u = d.fileUpload && d.fileUpload.uploadFile;
+        if (!u || typeof u.uploadUrl !== "string" || typeof u.assetUrl !== "string") throw new Error("Linear didn't prepare the upload");
+        const dest = new URL(u.uploadUrl);
+        if (dest.protocol !== "https:" || !origins.includes(dest.origin)) throw new Error("unexpected upload address");
+        const asset = new URL(u.assetUrl);
+        if (asset.protocol !== "https:") throw new Error("unexpected file address");
+        const headers = { "content-type": f.type, "cache-control": "public, max-age=31536000" };
+        for (const h of u.headers || []) if (h && typeof h.key === "string" && typeof h.value === "string") headers[h.key] = h.value;
+        const put = await fetch(dest.toString(), { method: "PUT", headers, body: new Blob([f.data], { type: f.type }), signal });
+        if (!put.ok) throw new Error(`upload refused (HTTP ${put.status})`);
+        total += size;
+        out.links.push({ name: f.name, type: f.type, url: asset.toString() });
+      } catch (err) {
+        out.failed.push({ name: f.name, reason: err.message || "upload failed" });
+      }
+    }
+    for (const f of files.slice(LINEAR_ATTACH_LIMITS.files)) out.failed.push({ name: f.name, reason: "too many files" });
+    return out;
+  }
+  async function revokeLinearToken(token, hint) {
+    try {
+      const res = await fetch("https://api.linear.app/oauth/revoke", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token, token_type_hint: hint }).toString()
+      });
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
   }
   var TRACKER_ADAPTERS = { github, linear };
   function trackerAdapter(id) {

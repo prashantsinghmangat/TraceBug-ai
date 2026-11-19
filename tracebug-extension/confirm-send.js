@@ -102,6 +102,25 @@ function renderWarnings(list) {
 
 const ISSUE_TRACKERS = ["github", "linear"];
 
+// The files this send carries (names, types, sizes — the bytes stay in the
+// worker). Linear uploads them; GitHub can't.
+let REQ_ATTACH = [];
+
+function fmtSize(n) {
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+}
+
+function renderAttachNote(trackerId) {
+  const el = $("attachNote");
+  if (!el) return;
+  if (!REQ_ATTACH.length) { el.hidden = true; return; }
+  const list = REQ_ATTACH.map((a) => a.name + " (" + fmtSize(a.size) + ")").join(", ");
+  el.textContent = trackerId === "linear"
+    ? "Attaches: " + list
+    : "Not attached here (GitHub can't take files): " + list;
+  el.hidden = false;
+}
+
 const panel = {
   active: false,
   trackers: [],          // tb:tracker:status rows
@@ -190,6 +209,7 @@ async function selectTracker(id) {
   show("accessBox", false);
   if (!t) return;
   setTitle(t);
+  renderAttachNote(t.id);
 
   put("account", t.connected
     ? (t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token")
@@ -586,9 +606,14 @@ function showDone(tracker, r) {
   link.textContent = r.ref || "the issue";
   link.dataset.url = r.url || "";
   link.dataset.tracker = tracker;
-  put("doneNote", r.found
+  const missing = Array.isArray(r.notAttached) && r.notAttached.length
+    ? " Not attached: " + r.notAttached.map((m) => m.name + " — " + m.reason).join("; ") + "."
+    : "";
+  const attached = r.attached ? " " + r.attached + (r.attached === 1 ? " file" : " files") + " attached." : "";
+  put("doneNote", (r.found
     ? "It had already been created — TraceBug found it rather than filing it twice."
-    : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.");
+    : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.") + attached + missing);
+  show("attachNote", false);
   show("doneBox", true);
   $("send").hidden = true;
   $("cancel").textContent = "Close";
@@ -693,6 +718,7 @@ function loadEmbedded() {
     embedStarting = false;
     if (!res || !res.ok || !res.request) return;
     window.removeEventListener("message", onInit);
+    REQ_ATTACH = Array.isArray(res.request.attachments) ? res.request.attachments : [];
     ID = d.id;
     NONCE = d.nonce;
     PARENT_ORIGIN = e.origin;
@@ -718,6 +744,7 @@ async function load() {
   }
 
   const r = res.request;
+  REQ_ATTACH = Array.isArray(r.attachments) ? r.attachments : [];
   put("origin", r.origin || "an unknown page");
   put("provider", r.providerLabel || r.target || "");
 

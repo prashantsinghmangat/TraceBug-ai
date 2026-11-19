@@ -150,13 +150,22 @@ function callProvider<T>(verb: string, detail: Record<string, unknown>, timeoutM
  * File a tracker issue / post to Slack from the service worker.
  * `content` is the ONLY thing that crosses: no destination, no credential.
  */
+/** A file for the tracker to attach, as the page hands it over (base64). */
+export interface PageAttachment {
+  name: string;
+  type: string;
+  data: string;
+}
+
 export function sendTrackerViaBridge(
   provider: TrackerProvider,
   content: IssueContent | SlackContent,
+  attachments?: PageAttachment[],
 ): Promise<CreateIssueResult> {
+  const payload = attachments && attachments.length ? Object.assign({}, content, { attachments }) : content;
   return callProvider<CreateIssueResult>(
     "tb:provider:send",
-    { provider, payload: content },
+    { provider, payload },
     provider === "slack" ? PROVIDER_TIMEOUT_MS : TRACKER_TIMEOUT_MS,
   );
 }

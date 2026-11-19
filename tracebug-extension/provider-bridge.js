@@ -70,6 +70,16 @@
   // above 2x the field cap could never trigger. Both are far above anything a
   // provider accepts anyway (a GitHub issue body maxes out at 64 KB), so these
   // are a denial-of-service guard on our own messaging, not a product limit.
+  // Optional fields, per target. Phase 13 step 4: files for the tracker to
+  // attach (Linear uploads them; GitHub can't and ignores them).
+  var OPTIONAL = { github: ["attachments"], linear: ["attachments"] };
+  var ATTACH_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "text/html": "html" };
+  var ATTACH_MAX_FILES = 6;
+  var ATTACH_MAX_FILE_BYTES = 20 * 1024 * 1024;
+  var ATTACH_MAX_TOTAL_BYTES = 30 * 1024 * 1024;
+  var ATTACH_NAME_RE = /^[A-Za-z0-9 _.()-]{1,100}\.(png|jpe?g|webp|html)$/;
+  var BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
   var MAX_FIELD_BYTES = 2 * 1024 * 1024;      // 2 MB per field
   var MAX_TOTAL_BYTES = 3 * 1024 * 1024;      // 3 MB per send
   var VIA_STORAGE_BYTES = 512 * 1024;         // 512 KB → go via storage
@@ -234,8 +244,9 @@
     }
 
     var keys = Object.keys(payload);
+    var optional = OPTIONAL[target] || [];
     for (var i = 0; i < keys.length; i++) {
-      if (shape.indexOf(keys[i]) === -1) {
+      if (shape.indexOf(keys[i]) === -1 && optional.indexOf(keys[i]) === -1) {
         // Name the field. This is the error a page probing the bridge gets,
         // and the error a developer gets after a refactor — both want it.
         return { ok: false, error: 'Unexpected field "' + keys[i] + '" in payload.' };
@@ -259,8 +270,47 @@
     if (total > MAX_TOTAL_BYTES) {
       return { ok: false, error: "This report is too large to file — export the .html instead." };
     }
+    if (payload.attachments !== undefined) {
+      var at = validateAttachments(payload.attachments);
+      if (!at.ok) return at;
+      out.attachments = at.attachments;
+    }
 
     return { ok: true, payload: out, bytes: total, viaStorage: total > VIA_STORAGE_BYTES };
+  }
+
+  /**
+   * Files the page offers to attach: rebuilt key by key, typed by an
+   * allowlist, base64 only, capped in count and size. Returns
+   * { ok, attachments: [{name, type, data}] } or an error.
+   */
+  function validateAttachments(list) {
+    if (!Array.isArray(list)) return { ok: false, error: "Malformed attachments." };
+    if (list.length > ATTACH_MAX_FILES) return { ok: false, error: "Too many attachments." };
+    var out = [];
+    var total = 0;
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      if (!a || typeof a !== "object" || Array.isArray(a)) return { ok: false, error: "Malformed attachment." };
+      var ks = Object.keys(a);
+      for (var j = 0; j < ks.length; j++) {
+        if (["name", "type", "data"].indexOf(ks[j]) === -1) return { ok: false, error: 'Unexpected field "' + ks[j] + '" in attachment.' };
+      }
+      if (typeof a.name !== "string" || !ATTACH_NAME_RE.test(a.name)) return { ok: false, error: "Bad attachment name." };
+      if (typeof a.type !== "string" || !ATTACH_TYPES[a.type]) return { ok: false, error: "Unsupported attachment type." };
+      var ext = a.name.slice(a.name.lastIndexOf(".") + 1).toLowerCase();
+      if (ext === "jpeg") ext = "jpg";
+      if (ext !== ATTACH_TYPES[a.type]) return { ok: false, error: "Attachment name and type don't match." };
+      if (typeof a.data !== "string" || !a.data || a.data.length % 4 !== 0 || !BASE64_RE.test(a.data)) {
+        return { ok: false, error: "Attachment data must be base64." };
+      }
+      var bytes = a.data.length / 4 * 3 - (a.data.slice(-2) === "==" ? 2 : a.data.slice(-1) === "=" ? 1 : 0);
+      if (bytes > ATTACH_MAX_FILE_BYTES) return { ok: false, error: "An attachment is too large." };
+      total += bytes;
+      if (total > ATTACH_MAX_TOTAL_BYTES) return { ok: false, error: "The attachments are too large together." };
+      out.push({ name: a.name, type: a.type, data: a.data });
+    }
+    return { ok: true, attachments: out, bytes: total };
   }
 
   /** Normalize a request into { target, payload } or an error. */
@@ -419,6 +469,9 @@
     isDeviceVerificationUrl: isDeviceVerificationUrl,
     validateChoice: validateChoice,
     validatePayload: validatePayload,
+    validateAttachments: validateAttachments,
+    ATTACH_MAX_FILES: ATTACH_MAX_FILES,
+    ATTACH_MAX_FILE_BYTES: ATTACH_MAX_FILE_BYTES,
     validateRequest: validateRequest,
     rateLimit: rateLimit,
     canQueue: canQueue,

@@ -27,7 +27,8 @@ import { showToast, showActionToast } from "./toast";
 import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
-import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
+import { buildReplayBlob, exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
+import type { PageAttachment } from "../ext-rpc";
 import { exportSessionAsZip } from "../exporters/zip-export";
 import { generatePlaywrightTest, playwrightTestFilename } from "../exporters/playwright-test";
 import { exportSessionAsHar } from "../exporters/har-export";
@@ -2336,6 +2337,50 @@ function _reportFromDraft(title: string, description: string): BugReport | null 
   return report;
 }
 
+// Linear (Phase 13 step 4): the screenshots and the replay .html go with the
+// report, for the extension to upload and link in the issue. Kept inside the
+// worker's caps (provider-bridge.js validateAttachments) so a big report
+// drops a file rather than failing the send; the panel says what wasn't sent.
+const ATTACH_FILE_CAP = 20 * 1024 * 1024;
+const ATTACH_TOTAL_CAP = 28 * 1024 * 1024;
+
+function _attachName(base: string, ext: string): string {
+  const stem = base.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9 _.()-]+/g, "-").slice(0, 80) || "file";
+  return `${stem}.${ext}`;
+}
+
+function _blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+async function _trackerAttachments(report: BugReport, screenshots: ScreenshotData[]): Promise<PageAttachment[]> {
+  const out: PageAttachment[] = [];
+  let total = 0;
+  for (const s of screenshots.slice(0, 5)) {
+    const m = /^data:(image\/(png|jpeg|webp));base64,([A-Za-z0-9+/]+=*)$/.exec(s.dataUrl || "");
+    if (!m) continue;
+    const bytes = Math.floor(m[3].length * 3 / 4);
+    if (bytes > ATTACH_FILE_CAP || total + bytes > ATTACH_TOTAL_CAP) continue;
+    total += bytes;
+    out.push({ name: _attachName(s.filename || "screenshot", m[2] === "jpeg" ? "jpg" : m[2]), type: m[1], data: m[3] });
+  }
+  try {
+    const session = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (session) {
+      const blob = await buildReplayBlob(session, report, { showFooter: showExportFooter() });
+      if (blob.size <= ATTACH_FILE_CAP && total + blob.size <= ATTACH_TOTAL_CAP) {
+        out.push({ name: _attachName(`tracebug-report-${session.sessionId.slice(0, 8)}`, "html"), type: "text/html", data: await _blobToBase64(blob) });
+      }
+    }
+  } catch { /* the issue is still filed without the report */ }
+  return out;
+}
+
 // File the report via a configured real integration (GitHub/Linear/Slack API).
 // Returns true if it ran the full success flow; false on error so the caller
 // can fall back to the URL-prefill / copy path.
@@ -2348,7 +2393,8 @@ async function _fileViaTracker(
 ): Promise<boolean> {
   showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
   try {
-    const result = await createTrackerIssue(provider, report);
+    const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots) : undefined;
+    const result = await createTrackerIssue(provider, report, undefined, attachments);
     const ref = result.ref ? ` ${result.ref}` : "";
     // The Create panel can file somewhere other than the button's tracker.
     const where = result.label || TRACKER_LABELS[provider];

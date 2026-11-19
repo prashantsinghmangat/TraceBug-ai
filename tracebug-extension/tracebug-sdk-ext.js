@@ -21548,10 +21548,11 @@ var TraceBugExtensionModule = (() => {
       }));
     });
   }
-  function sendTrackerViaBridge(provider, content) {
+  function sendTrackerViaBridge(provider, content, attachments) {
+    const payload = attachments && attachments.length ? Object.assign({}, content, { attachments }) : content;
     return callProvider(
       "tb:provider:send",
-      { provider, payload: content },
+      { provider, payload },
       provider === "slack" ? PROVIDER_TIMEOUT_MS : TRACKER_TIMEOUT_MS
     );
   }
@@ -32340,10 +32341,14 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
           input: {
             teamId: config.teamId,
             title: content.title,
-            description: capProviderBody("linear", content.body).text,
+            description: config.descriptionReady ? content.body : capProviderBody("linear", content.body).text,
             // Linear takes a client-made UUID v4 as the issue id, so a retry
             // can ask for it by id instead of filing it twice.
-            id: isSendId(content.sendId) ? content.sendId : void 0
+            id: isSendId(content.sendId) ? content.sendId : void 0,
+            labelIds: config.labelIds && config.labelIds.length ? config.labelIds : void 0,
+            assigneeId: config.assigneeId || void 0,
+            priority: typeof config.priority === "number" && config.priority >= 1 && config.priority <= 4 ? config.priority : void 0,
+            projectId: config.projectId || void 0
           }
         }
       })
@@ -33045,14 +33050,14 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   async function sendSlackMessage(report, config, signal) {
     return postSlackMessage(config, { text: slackText(report) }, signal);
   }
-  async function createTrackerIssue(provider, report, signal) {
+  async function createTrackerIssue(provider, report, signal, attachments) {
     var _a2, _b, _c, _d, _e;
     if (isExtensionMode()) {
       if (!hasIntegration(provider)) {
         throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured \u2014 open TraceBug settings.`);
       }
       const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report), body: issueBody(report) };
-      return sendTrackerViaBridge(provider, content);
+      return sendTrackerViaBridge(provider, content, provider === "slack" ? void 0 : attachments);
     }
     const c2 = getIntegrationsConfig();
     switch (provider) {
@@ -34927,10 +34932,46 @@ ${report.steps}` : userDesc : void 0,
 ${report.steps}`;
     return report;
   }
+  function _attachName(base, ext) {
+    const stem = base.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9 _.()-]+/g, "-").slice(0, 80) || "file";
+    return `${stem}.${ext}`;
+  }
+  function _blobToBase64(blob2) {
+    return new Promise((resolve, reject) => {
+      const r2 = new FileReader();
+      r2.onload = () => resolve(String(r2.result).replace(/^data:[^,]*,/, ""));
+      r2.onerror = () => reject(r2.error);
+      r2.readAsDataURL(blob2);
+    });
+  }
+  async function _trackerAttachments(report, screenshots2) {
+    const out = [];
+    let total = 0;
+    for (const s2 of screenshots2.slice(0, 5)) {
+      const m = /^data:(image\/(png|jpeg|webp));base64,([A-Za-z0-9+/]+=*)$/.exec(s2.dataUrl || "");
+      if (!m) continue;
+      const bytes = Math.floor(m[3].length * 3 / 4);
+      if (bytes > ATTACH_FILE_CAP || total + bytes > ATTACH_TOTAL_CAP) continue;
+      total += bytes;
+      out.push({ name: _attachName(s2.filename || "screenshot", m[2] === "jpeg" ? "jpg" : m[2]), type: m[1], data: m[3] });
+    }
+    try {
+      const session = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt)[0];
+      if (session) {
+        const blob2 = await buildReplayBlob(session, report, { showFooter: showExportFooter() });
+        if (blob2.size <= ATTACH_FILE_CAP && total + blob2.size <= ATTACH_TOTAL_CAP) {
+          out.push({ name: _attachName(`tracebug-report-${session.sessionId.slice(0, 8)}`, "html"), type: "text/html", data: await _blobToBase64(blob2) });
+        }
+      }
+    } catch (e2) {
+    }
+    return out;
+  }
   async function _fileViaTracker(provider, report, root2, screenshots2, close) {
     showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root2);
     try {
-      const result2 = await createTrackerIssue(provider, report);
+      const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots2) : void 0;
+      const result2 = await createTrackerIssue(provider, report, void 0, attachments);
       const ref = result2.ref ? ` ${result2.ref}` : "";
       const where = result2.label || TRACKER_LABELS[provider];
       if (result2.url) {
@@ -36601,7 +36642,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey3);
   }
-  var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, EXPORT_WARN_BYTES, GITHUB_ATTACHMENT_CAP, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, EXPORT_WARN_BYTES, GITHUB_ATTACHMENT_CAP, ATTACH_FILE_CAP, ATTACH_TOTAL_CAP, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -36652,6 +36693,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _isOpen = false;
       EXPORT_WARN_BYTES = 20 * 1024 * 1024;
       GITHUB_ATTACHMENT_CAP = "25 MB";
+      ATTACH_FILE_CAP = 20 * 1024 * 1024;
+      ATTACH_TOTAL_CAP = 28 * 1024 * 1024;
       _draftCleared = false;
       _LU = {
         link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',

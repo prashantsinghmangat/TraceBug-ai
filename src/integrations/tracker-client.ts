@@ -25,6 +25,7 @@ import { signIssueBody, signSlackPost } from "./issue-signature";
 import { severityTitlePrefix } from "../report-builder";
 import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
 import { sendTrackerViaBridge } from "../ext-rpc";
+import type { PageAttachment } from "../ext-rpc";
 import { postGitHubIssue, postLinearIssue, postSlackMessage } from "../providers/api";
 import type {
   TrackerProvider, GitHubConfig, LinearConfig, SlackConfig,
@@ -177,6 +178,7 @@ export async function createTrackerIssue(
   provider: TrackerProvider,
   report: BugReport,
   signal?: AbortSignal,
+  attachments?: PageAttachment[],
 ): Promise<CreateIssueResult> {
   // Extension mode: tokens are deliberately unreachable from the page world,
   // so the call is made by the background service worker. We hand it CONTENT
@@ -190,7 +192,7 @@ export async function createTrackerIssue(
     const content = provider === "slack"
       ? { text: slackText(report) }
       : { title: issueTitle(report), body: issueBody(report) };
-    return sendTrackerViaBridge(provider, content);
+    return sendTrackerViaBridge(provider, content, provider === "slack" ? undefined : attachments);
   }
   const c = getIntegrationsConfig();
   switch (provider) {
