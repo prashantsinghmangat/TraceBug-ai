@@ -46,10 +46,12 @@ var TraceBugProviderAPI = (() => {
     describeAuth: () => describeAuth,
     describeOAuthError: () => describeOAuthError,
     exchangeCode: () => exchangeCode,
+    findFiledIssueWithRetry: () => findFiledIssueWithRetry,
     forgetOAuth: () => forgetOAuth,
     friendlyStatus: () => friendlyStatus,
     github: () => github,
     hasOAuthClient: () => hasOAuthClient,
+    isSendId: () => isSendId,
     isTrustedIssueUrl: () => isTrustedIssueUrl,
     isUnclearFailure: () => isUnclearFailure,
     issueMarkerComment: () => issueMarkerComment,
@@ -76,14 +78,17 @@ var TraceBugProviderAPI = (() => {
   });
 
   // src/providers/api.ts
-  var MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
-  function issueMarkerComment(marker) {
-    return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+  var SEND_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  function isSendId(id) {
+    return typeof id === "string" && SEND_ID_RE.test(id);
   }
-  function bodyWithMarker(provider, body, marker) {
+  function issueMarkerComment(sendId) {
+    return isSendId(sendId) ? `<!-- tracebug:${sendId} -->` : "";
+  }
+  function bodyWithMarker(provider, body, sendId) {
     var _a;
     const text = capProviderBody(provider, body).text;
-    const mark = issueMarkerComment(marker);
+    const mark = issueMarkerComment(sendId);
     if (!mark) return text;
     const limit = (_a = PROVIDER_BODY_LIMITS[provider]) != null ? _a : PROVIDER_BODY_LIMITS.github;
     const room = limit - mark.length - 2;
@@ -229,7 +234,7 @@ var TraceBugProviderAPI = (() => {
         title: content.title,
         // Backstop: the extension already capped this before the confirmation
         // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-        body: bodyWithMarker("github", content.body, content.marker),
+        body: bodyWithMarker("github", content.body, content.sendId),
         labels: config.labels && config.labels.length ? config.labels : void 0,
         assignees: config.assignees && config.assignees.length ? config.assignees : void 0,
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
@@ -256,7 +261,10 @@ var TraceBugProviderAPI = (() => {
           input: {
             teamId: config.teamId,
             title: content.title,
-            description: capProviderBody("linear", content.body).text
+            description: capProviderBody("linear", content.body).text,
+            // Linear takes a client-made UUID v4 as the issue id, so a retry
+            // can ask for it by id instead of filing it twice.
+            id: isSendId(content.sendId) ? content.sendId : void 0
           }
         }
       })
@@ -887,11 +895,14 @@ var TraceBugProviderAPI = (() => {
         milestone: Number.isInteger(milestone) && milestone > 0 ? milestone : void 0
       }, content, signal);
     },
-    async findIssueByMarker(auth, container, marker, signal) {
-      const mark = issueMarkerComment(marker);
+    async findFiledIssue(auth, container, sendId, since, signal) {
+      const mark = issueMarkerComment(sendId);
       if (!mark || !/^[\w.-]+\/[\w.-]+$/.test(container)) return null;
+      const login = await github.whoAmI(auth, signal);
+      if (!login) return null;
+      const after = new Date(Math.max(0, since - 6e4)).toISOString();
       const res = await fetch(
-        `${GH_API}/repos/${container}/issues?state=all&sort=created&direction=desc&per_page=30`,
+        `${GH_API}/repos/${container}/issues?creator=${encodeURIComponent(login)}&since=${encodeURIComponent(after)}&state=all&sort=created&direction=desc&per_page=100`,
         { headers: ghHeaders(auth), signal }
       );
       const list = await parseJsonOrThrow(res, "GitHub", "tracker");
@@ -956,11 +967,33 @@ var TraceBugProviderAPI = (() => {
     async createIssue(auth, container, _values, content, signal) {
       return postLinearIssue(
         { apiKey: auth.token, teamId: container, bearer: auth.via === "oauth" },
-        { title: content.title, body: capProviderBody("linear", content.body).text },
+        { title: content.title, body: capProviderBody("linear", content.body).text, sendId: content.sendId },
         signal
       );
+    },
+    async findFiledIssue(auth, _container, sendId, _since, signal) {
+      if (!isSendId(sendId)) return null;
+      try {
+        const d = await linearQuery(
+          auth,
+          `{ issue(id: "${sendId}") { identifier url } }`,
+          signal
+        );
+        const i = d.issue;
+        return i && typeof i.url === "string" ? { provider: "linear", ok: true, url: i.url, ref: i.identifier } : null;
+      } catch (err) {
+        if (!err.status && /not found/i.test(err.message || "")) return null;
+        throw err;
+      }
     }
   };
+  async function findFiledIssueWithRetry(adapter, auth, container, sendId, since, signal, wait = (ms) => new Promise((r) => setTimeout(r, ms))) {
+    if (!adapter.findFiledIssue) return null;
+    const first = await adapter.findFiledIssue(auth, container, sendId, since, signal);
+    if (first) return first;
+    await wait(2e3);
+    return adapter.findFiledIssue(auth, container, sendId, since, signal);
+  }
   var TRACKER_ADAPTERS = { github, linear };
   function trackerAdapter(id) {
     return Object.prototype.hasOwnProperty.call(TRACKER_ADAPTERS, id) ? TRACKER_ADAPTERS[id] : null;

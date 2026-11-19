@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CreateIssueResult, IssueContent } from "./api";
-import { capProviderBody, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue } from "./api";
+import { capProviderBody, isSendId, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue } from "./api";
 import type { IssueTracker, ResolvedAuth } from "./auth-store";
 import type { OAuthSpec } from "./oauth";
 import { GITHUB_APP_INSTALL_URL, OAUTH_CLIENTS, hasOAuthClient } from "./oauth-clients";
@@ -69,13 +69,14 @@ export interface TrackerAdapter {
     content: IssueContent,
     signal?: AbortSignal,
   ): Promise<CreateIssueResult>;
-  /** The issue carrying this marker, among the container's newest — how a
-   *  retry after an unclear failure avoids filing a duplicate. Absent for a
-   *  tracker that can't search for it. */
-  findIssueByMarker?(
+  /** The issue an earlier attempt of this send filed, if any — how a retry
+   *  after an unclear failure avoids filing a duplicate. `since` is when the
+   *  first attempt started (ms). Absent for a tracker that can't look it up. */
+  findFiledIssue?(
     auth: ResolvedAuth,
     container: string,
-    marker: string,
+    sendId: string,
+    since: number,
     signal?: AbortSignal,
   ): Promise<CreateIssueResult | null>;
 }
@@ -266,11 +267,17 @@ export const github: TrackerAdapter = {
       milestone: Number.isInteger(milestone) && milestone > 0 ? milestone : undefined,
     }, content, signal);
   },
-  async findIssueByMarker(auth, container, marker, signal) {
-    const mark = issueMarkerComment(marker);
+  async findFiledIssue(auth, container, sendId, since, signal) {
+    const mark = issueMarkerComment(sendId);
     if (!mark || !/^[\w.-]+\/[\w.-]+$/.test(container)) return null;
+    // Only issues this user opened since just before the first attempt —
+    // not the search API, whose index lags behind a fresh issue.
+    const login = await github.whoAmI(auth, signal);
+    if (!login) return null;
+    const after = new Date(Math.max(0, since - 60_000)).toISOString();
     const res = await fetch(
-      `${GH_API}/repos/${container}/issues?state=all&sort=created&direction=desc&per_page=30`,
+      `${GH_API}/repos/${container}/issues?creator=${encodeURIComponent(login)}&since=${encodeURIComponent(after)}` +
+      `&state=all&sort=created&direction=desc&per_page=100`,
       { headers: ghHeaders(auth), signal });
     const list = (await parseJsonOrThrow(res, "GitHub", "tracker")) as unknown;
     if (!Array.isArray(list)) return null;
@@ -339,11 +346,45 @@ export const linear: TrackerAdapter = {
   async createIssue(auth, container, _values, content, signal) {
     return postLinearIssue(
       { apiKey: auth.token, teamId: container, bearer: auth.via === "oauth" },
-      { title: content.title, body: capProviderBody("linear", content.body).text },
+      { title: content.title, body: capProviderBody("linear", content.body).text, sendId: content.sendId },
       signal,
     );
   },
+  async findFiledIssue(auth, _container, sendId, _since, signal) {
+    // The send id IS the issue id (postLinearIssue), so ask for it directly.
+    if (!isSendId(sendId)) return null;
+    try {
+      const d = await linearQuery<{ issue?: { identifier?: string; url?: string } | null }>(
+        auth, `{ issue(id: "${sendId}") { identifier url } }`, signal);
+      const i = d.issue;
+      return i && typeof i.url === "string" ? { provider: "linear", ok: true, url: i.url, ref: i.identifier } : null;
+    } catch (err) {
+      // "Entity not found" — it was never created. Anything else is a real failure.
+      if (!(err as { status?: number }).status && /not found/i.test((err as Error).message || "")) return null;
+      throw err;
+    }
+  },
 };
+
+/**
+ * Look for the issue an earlier, unclear attempt may have filed: once, then
+ * once more after a short wait in case the tracker's listing lags.
+ */
+export async function findFiledIssueWithRetry(
+  adapter: TrackerAdapter,
+  auth: ResolvedAuth,
+  container: string,
+  sendId: string,
+  since: number,
+  signal?: AbortSignal,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<CreateIssueResult | null> {
+  if (!adapter.findFiledIssue) return null;
+  const first = await adapter.findFiledIssue(auth, container, sendId, since, signal);
+  if (first) return first;
+  await wait(2000);
+  return adapter.findFiledIssue(auth, container, sendId, since, signal);
+}
 
 export const TRACKER_ADAPTERS: Record<IssueTracker, TrackerAdapter> = { github, linear };
 

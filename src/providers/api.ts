@@ -78,23 +78,30 @@ export interface CreateIssueResult {
 export interface IssueContent {
   title: string;
   body: string;
-  /** "tracebug:<id>", written as an invisible HTML comment at the end of the
-   *  body so a retry after an unclear failure can find the issue it may have
-   *  already created (GitHub has no idempotency key). */
-  marker?: string;
+  /** A random UUID v4 made once per send and reused on every retry of it —
+   *  nothing from the ticket. GitHub: written as an invisible HTML comment at
+   *  the end of the body; Linear: the new issue's own id. Either way a retry
+   *  after an unclear failure can find the issue it may already have created
+   *  (GitHub has no idempotency key). */
+  sendId?: string;
 }
 
-const MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
+const SEND_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** The comment a marker is written as, or "" for a malformed marker. */
-export function issueMarkerComment(marker: string | undefined): string {
-  return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+/** A well-formed send id (lower-case UUID v4)? */
+export function isSendId(id: unknown): id is string {
+  return typeof id === "string" && SEND_ID_RE.test(id);
+}
+
+/** The comment a send id is written as in a GitHub body, or "" for a malformed id. */
+export function issueMarkerComment(sendId: string | undefined): string {
+  return isSendId(sendId) ? `<!-- tracebug:${sendId} -->` : "";
 }
 
 /** Body + marker, still within the provider's limit. */
-export function bodyWithMarker(provider: TrackerProvider, body: string, marker?: string): string {
+export function bodyWithMarker(provider: TrackerProvider, body: string, sendId?: string): string {
   const text = capProviderBody(provider, body).text;
-  const mark = issueMarkerComment(marker);
+  const mark = issueMarkerComment(sendId);
   if (!mark) return text;
   const limit = PROVIDER_BODY_LIMITS[provider] ?? PROVIDER_BODY_LIMITS.github;
   const room = limit - mark.length - 2;
@@ -435,7 +442,7 @@ export async function postGitHubIssue(
       title: content.title,
       // Backstop: the extension already capped this before the confirmation
       // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-      body: bodyWithMarker("github", content.body, content.marker),
+      body: bodyWithMarker("github", content.body, content.sendId),
       labels: config.labels && config.labels.length ? config.labels : undefined,
       assignees: config.assignees && config.assignees.length ? config.assignees : undefined,
       milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : undefined,
@@ -471,6 +478,9 @@ export async function postLinearIssue(
           teamId: config.teamId,
           title: content.title,
           description: capProviderBody("linear", content.body).text,
+          // Linear takes a client-made UUID v4 as the issue id, so a retry
+          // can ask for it by id instead of filing it twice.
+          id: isSendId(content.sendId) ? content.sendId : undefined,
         },
       },
     }),

@@ -176,11 +176,9 @@ try {
     const confirmAlarm = armed.find((a) => a.name.startsWith("tb:confirm:expire:"));
     // The timeout must be on chrome.alarms, not setTimeout: a terminated
     // worker takes its timers with it.
-    check("the timeout is armed as a chrome.alarms alarm", !!confirmAlarm, JSON.stringify(armed));
-    // ADR 010: a tracker send's window includes signing in and picking a
-    // repo, so it gets 10 minutes; an AI analysis keeps 2 (provider-bridge.test.ts).
-    check("the timeout is ~10 minutes out", !!confirmAlarm && confirmAlarm.inMs > 580000 && confirmAlarm.inMs <= 601000,
-      confirmAlarm ? Math.round(confirmAlarm.inMs / 1000) + "s" : "none");
+    // ADR 010: a GitHub/Linear send has no deadline — the window keeps the
+    // user's choices until Create or close (an AI analysis keeps its 2 minutes).
+    check("a tracker send arms no timeout that would close the window", !confirmAlarm, JSON.stringify(armed));
   }
 
   // ── a second send from the same tab is refused while one is pending ───────

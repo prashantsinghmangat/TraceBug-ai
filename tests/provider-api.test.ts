@@ -428,9 +428,10 @@ describe('isUnclearFailure (duplicate guard)', () => {
     expect(isUnclearFailure(new Error('Pick a repository'))).toBe(false);
     expect(isUnclearFailure(null)).toBe(false);
   });
-  it('writes only a well-formed marker', () => {
-    expect(issueMarkerComment('tracebug:abc_1-2')).toBe('<!-- tracebug:abc_1-2 -->');
+  it('writes only a well-formed marker (a UUID v4 send id)', () => {
+    expect(issueMarkerComment('6f1c2a4e-9b3d-4c8e-a1f2-0d9e8c7b6a51')).toBe('<!-- tracebug:6f1c2a4e-9b3d-4c8e-a1f2-0d9e8c7b6a51 -->');
     expect(issueMarkerComment('tracebug:a -->x')).toBe('');
+    expect(issueMarkerComment('6f1c2a4e-9b3d-4c8e-a1f2-0d9e8c7b6a51 --><b>')).toBe('');
     expect(issueMarkerComment(undefined)).toBe('');
   });
   it('maps a timeout to a sentence', () => {

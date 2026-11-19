@@ -79,9 +79,8 @@
   // Pending confirmations.
   var MAX_PENDING_TOTAL = 3;                  // across all tabs
   var CONFIRM_TIMEOUT_MS = 120 * 1000;
-  // A tracker send can include signing in and picking a repo, which takes
-  // longer than reading a prompt. Still bounded, so nothing waits forever.
-  var TRACKER_CONFIRM_TIMEOUT_MS = 10 * 60 * 1000;
+  // A GitHub/Linear send has NO deadline (background.js queueConfirmation):
+  // the window holds the user's choices until they Create or close it.
 
   function isVerb(verb) {
     return VERBS.indexOf(verb) !== -1;
@@ -388,7 +387,6 @@
     ISSUE_TRACKERS: ISSUE_TRACKERS,
     TRACKER_UI_VERBS: TRACKER_UI_VERBS,
     TRACKER_UI_PAGES: TRACKER_UI_PAGES,
-    TRACKER_CONFIRM_TIMEOUT_MS: TRACKER_CONFIRM_TIMEOUT_MS,
     SHAPES: SHAPES,
     MAX_FIELD_BYTES: MAX_FIELD_BYTES,
     MAX_TOTAL_BYTES: MAX_TOTAL_BYTES,

@@ -1,7 +1,7 @@
 // ADR 010: the common tracker interface (src/providers/trackers.ts) — what the
 // Create panel lists and how an issue is filed, with fetch mocked.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { github, linear, nextLink, isTrustedIssueUrl, trackerAdapter, MAX_CONTAINERS } from '../src/providers/trackers';
+import { github, linear, nextLink, isTrustedIssueUrl, trackerAdapter, MAX_CONTAINERS, findFiledIssueWithRetry } from '../src/providers/trackers';
 import { PROVIDER_BODY_LIMITS } from '../src/providers/api';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -94,24 +94,54 @@ describe('GitHub', () => {
     expect(fields.some((f) => f.note)).toBe(false);
   });
 
-  it('finds an issue it already filed by its hidden marker', async () => {
+  const SEND = '6f1c2a4e-9b3d-4c8e-a1f2-0d9e8c7b6a51';
+  const OTHER = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+  it('finds an issue it already filed: this user\'s issues since the first attempt, matched by marker', async () => {
     const spy = byUrl({
+      '/user': () => json({ login: 'octo' }),
       '/issues?': () => json([
         { number: 7, html_url: 'https://github.com/acme/web/issues/7', body: 'other' },
-        { number: 6, html_url: 'https://github.com/acme/web/issues/6', body: 'x\n\n<!-- tracebug:req_1 -->' },
+        { number: 6, html_url: 'https://github.com/acme/web/issues/6', body: `x\n\n<!-- tracebug:${SEND} -->` },
       ]),
     });
-    const hit = await github.findIssueByMarker!(OAUTH, 'acme/web', 'tracebug:req_1');
+    const t0 = Date.parse('2026-11-18T10:00:00Z');
+    const hit = await github.findFiledIssue!(OAUTH, 'acme/web', SEND, t0);
     expect(hit).toMatchObject({ url: 'https://github.com/acme/web/issues/6', ref: '#6' });
-    expect(String(spy.mock.calls[0][0])).toContain('/repos/acme/web/issues?state=all&sort=created&direction=desc');
-    expect(await github.findIssueByMarker!(OAUTH, 'acme/web', 'tracebug:nope')).toBeNull();
+    const listUrl = spy.mock.calls.map((c) => String(c[0])).find((u) => u.includes('/issues?'))!;
+    expect(listUrl).toContain('/repos/acme/web/issues?creator=octo&since=2026-11-18T09%3A59%3A00.000Z');
+    expect(listUrl).toContain('state=all');
+    expect(listUrl).toContain('per_page=100');
+    expect(listUrl).not.toContain('/search/');
+    expect(await github.findFiledIssue!(OAUTH, 'acme/web', OTHER, t0)).toBeNull();
   });
 
-  it('refuses a malformed marker or repo without a request', async () => {
+  it('refuses a malformed send id or repo without a request', async () => {
     const spy = vi.spyOn(globalThis, 'fetch');
-    expect(await github.findIssueByMarker!(OAUTH, 'acme/web', 'tracebug:<x>')).toBeNull();
-    expect(await github.findIssueByMarker!(OAUTH, '../../x', 'tracebug:ok')).toBeNull();
+    expect(await github.findFiledIssue!(OAUTH, 'acme/web', 'req_1', 0)).toBeNull();
+    expect(await github.findFiledIssue!(OAUTH, 'acme/web', 'x -->', 0)).toBeNull();
+    expect(await github.findFiledIssue!(OAUTH, '../../x', SEND, 0)).toBeNull();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('looks once more after a short wait when the listing lags', async () => {
+    let lists = 0;
+    byUrl({
+      '/user': () => json({ login: 'octo' }),
+      '/issues?': () => json(++lists === 1 ? [] : [{ number: 9, html_url: 'https://github.com/acme/web/issues/9', body: `<!-- tracebug:${SEND} -->` }]),
+    });
+    const waits: number[] = [];
+    const hit = await findFiledIssueWithRetry(github, OAUTH, 'acme/web', SEND, 0, undefined, async (ms) => { waits.push(ms); });
+    expect(hit).toMatchObject({ ref: '#9' });
+    expect(waits).toEqual([2000]);
+    expect(lists).toBe(2);
+  });
+
+  it('gives up after the second look (then the caller files it)', async () => {
+    let lists = 0;
+    byUrl({ '/user': () => json({ login: 'octo' }), '/issues?': () => { lists++; return json([]); } });
+    expect(await findFiledIssueWithRetry(github, OAUTH, 'acme/web', SEND, 0, undefined, async () => {})).toBeNull();
+    expect(lists).toBe(2);
   });
 
   it('leaves out assignees/milestones the user may not list (403), keeps labels', async () => {
@@ -181,17 +211,22 @@ describe('GitHub', () => {
     expect(sent.body.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.github);
   });
 
-  it('ends the body with the hidden marker, still within the limit', async () => {
+  it('ends the body with the hidden marker — only the random send id — still within the limit', async () => {
+    const id1 = '11111111-2222-4333-8444-555555555555';
+    const id2 = '66666666-7777-4888-9999-aaaaaaaaaaaa';
     const spy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json({ html_url: 'https://github.com/acme/web/issues/8', number: 8 }))
       .mockResolvedValueOnce(json({ html_url: 'https://github.com/acme/web/issues/9', number: 9 }));
-    await github.createIssue(OAUTH, 'acme/web', {}, { title: 'T', body: 'hello', marker: 'tracebug:req_1' });
-    expect(JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body)).body).toBe('hello\n\n<!-- tracebug:req_1 -->');
+    await github.createIssue(OAUTH, 'acme/web', {}, { title: 'Secret title', body: 'hello', sendId: id1 });
+    const body1 = JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body)).body as string;
+    expect(body1).toBe(`hello\n\n<!-- tracebug:${id1} -->`);
+    // The comment carries nothing from the ticket: no title, no URL.
+    expect(body1.slice(body1.indexOf('<!--'))).not.toMatch(/Secret|http/);
     await github.createIssue(OAUTH, 'acme/web', {},
-      { title: 'T', body: 'x'.repeat(PROVIDER_BODY_LIMITS.github + 50), marker: 'tracebug:req_2' });
+      { title: 'T', body: 'x'.repeat(PROVIDER_BODY_LIMITS.github + 50), sendId: id2 });
     const long = JSON.parse(String((spy.mock.calls[1][1] as RequestInit).body)).body as string;
     expect(long.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.github);
-    expect(long.endsWith('<!-- tracebug:req_2 -->')).toBe(true);
+    expect(long.endsWith(`<!-- tracebug:${id2} -->`)).toBe(true);
   });
 
   it('carries the HTTP status on failure, so the store can tell a 401', async () => {
@@ -247,7 +282,42 @@ describe('Linear', () => {
     expect(r).toMatchObject({ url: 'https://linear.app/acme/issue/ENG-1', ref: 'ENG-1' });
     const sent = JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body));
     expect(sent.variables.input).toMatchObject({ teamId: 't1', title: 'T', description: 'B' });
+    expect(sent.variables.input.id).toBeUndefined();
     expect((spy.mock.calls[0][1] as RequestInit).headers).toMatchObject({ authorization: 'Bearer tok_OAUTH' });
+  });
+
+  const LSEND = '6f1c2a4e-9b3d-4c8e-a1f2-0d9e8c7b6a51';
+
+  it('gives the new issue the send id as its own id, so a retry can ask for it', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({
+      data: { issueCreate: { success: true, issue: { url: 'https://linear.app/acme/issue/ENG-2', identifier: 'ENG-2' } } },
+    }));
+    await linear.createIssue(OAUTH, 't1', {}, { title: 'T', body: 'B', sendId: LSEND });
+    const sent = JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body));
+    expect(sent.variables.input.id).toBe(LSEND);
+    expect(sent.variables.input.description).toBe('B');
+  });
+
+  it('finds an issue an unclear attempt created, by that id', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({
+      data: { issue: { url: 'https://linear.app/acme/issue/ENG-2', identifier: 'ENG-2' } },
+    }));
+    expect(await linear.findFiledIssue!(OAUTH, 't1', LSEND, 0)).toMatchObject({ ref: 'ENG-2' });
+    expect(String((spy.mock.calls[0][1] as RequestInit).body)).toContain(`issue(id: \\"${LSEND}\\")`);
+  });
+
+  it('treats "not found" as never created, and other errors as failures', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json({ errors: [{ message: 'Entity not found: Issue' }] }))
+      .mockResolvedValueOnce(json({ errors: [{ message: 'Authentication required' }] }));
+    expect(await linear.findFiledIssue!(OAUTH, 't1', LSEND, 0)).toBeNull();
+    await expect(linear.findFiledIssue!(OAUTH, 't1', LSEND, 0)).rejects.toThrow('Authentication required');
+  });
+
+  it('never puts a malformed id into the query', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch');
+    expect(await linear.findFiledIssue!(OAUTH, 't1', '") { x }', 0)).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

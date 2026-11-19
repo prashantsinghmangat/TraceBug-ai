@@ -55,6 +55,7 @@
     "e2e:shot-editor": "node e2e/screenshot-editor.e2e.mjs",
     "e2e:tracker": "node e2e/ext-tracker-create.e2e.mjs",
     "e2e:github-connect": "node e2e/ext-github-connect.e2e.mjs",
+    "e2e:firefox-token": "node e2e/ext-firefox-token-path.e2e.mjs",
     "zip:ext": "npm run check:versions && npm run build:ext && node tracebug-extension/build/zip-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",

@@ -444,7 +444,6 @@ describe('happy path', () => {
 const B10 = sandbox.TraceBugProviderBridge as {
   TRACKER_UI_VERBS: string[];
   VERBS: string[];
-  TRACKER_CONFIRM_TIMEOUT_MS: number;
   validateExtensionPageSender: (s: unknown, id: string, base: string, pages?: string[]) => boolean;
   validateChoice: (c: unknown) => { ok: boolean; error?: string; choice?: { tracker: string; container: string; fields: Record<string, unknown> } };
   isIssueTracker: (t: unknown) => boolean;
@@ -504,8 +503,8 @@ describe('validateChoice', () => {
     expect(B10.validateChoice({ tracker: 'github', container: 'a/b', fields: { '__proto__x': 'y' } }).ok).toBe(false);
   });
 
-  it('gives a tracker send (sign-in included) ten minutes', () => {
-    expect(B10.TRACKER_CONFIRM_TIMEOUT_MS).toBe(600_000);
+  it('gives a tracker send no deadline (the window keeps the choices until Create or close)', () => {
+    expect((B10 as unknown as Record<string, unknown>).TRACKER_CONFIRM_TIMEOUT_MS).toBeUndefined();
   });
 
   it('labels an unpicked destination as a choice to make, not an error', () => {

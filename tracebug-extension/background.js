@@ -1927,9 +1927,21 @@ async function queueConfirmation(req) {
     return ackError(room.error);
   }
 
-  const expiresAt = now + (req.kind === "tracker" && b.isIssueTracker(req.target)
-    ? b.TRACKER_CONFIRM_TIMEOUT_MS
-    : b.CONFIRM_TIMEOUT_MS);
+  // A request whose window is gone (closed while this worker slept through
+  // onRemoved) must not block the next send from that tab.
+  for (const stale of Object.keys(all)) {
+    const r = all[stale];
+    if (!r || r.windowId == null || r.expiresAt != null) continue;
+    const alive = await chrome.windows.get(r.windowId).then(() => true, () => false);
+    if (alive || isInFlight(r)) continue;
+    delete all[stale];
+    tellTab(r.tabId, { type: "tb:provider:result", id: stale, cancelled: true, error: "Send cancelled." });
+  }
+  // A tracker send has no deadline: the window holds the user's choices and
+  // stays until they Create or close it (closing cancels; so does closing the
+  // tab). An AI analysis keeps its short timeout.
+  const issueSend = req.kind === "tracker" && b.isIssueTracker(req.target);
+  const expiresAt = issueSend ? null : now + b.CONFIRM_TIMEOUT_MS;
   const record = {
     id: req.id,
     tabId: req.tabId,
@@ -1945,6 +1957,8 @@ async function queueConfirmation(req) {
     shortened: !!req.cutWarning,
     expiresAt,
     windowId: null,
+    // Random, made here, reused on every retry: nothing from the ticket.
+    sendId: issueSend ? crypto.randomUUID() : undefined,
   };
   all[req.id] = record;
   await sessionSet({ [PENDING_KEY]: all });
@@ -1952,7 +1966,7 @@ async function queueConfirmation(req) {
   // The timeout runs on chrome.alarms, not setTimeout: a terminated worker
   // takes its timers with it, and a confirmation that silently never expires
   // would leave the page's promise hanging forever.
-  try { chrome.alarms.create(CONFIRM_ALARM + req.id, { when: expiresAt }); } catch {}
+  if (expiresAt != null) { try { chrome.alarms.create(CONFIRM_ALARM + req.id, { when: expiresAt }); } catch {} }
 
   try {
     const win = await chrome.windows.create({
@@ -2030,6 +2044,19 @@ function isInFlight(req) {
   return !!(req && req.inFlightAt && Date.now() - req.inFlightAt < IN_FLIGHT_STALE_MS);
 }
 
+// Creates running in this worker, keyed by request id and by ticket. Checked
+// and set synchronously, before any await: two messages arriving together
+// would otherwise both read "not in flight" from storage and both file.
+const creating = new Set();
+
+/** One ticket = one tab's report with this title and body. */
+function ticketKey(req) {
+  const text = String(req.tabId) + "\n" + ((req.payload && req.payload.title) || "") + "\n" + ((req.payload && req.payload.body) || "");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return "ticket:" + (h >>> 0).toString(16);
+}
+
 /**
  * Create from the panel. The request stays pending until it succeeds, so a
  * failure leaves everything as it was: the page's ticket untouched, the window
@@ -2040,17 +2067,37 @@ function isInFlight(req) {
 async function createFromPanel(id, choice) {
   const api = providerApi();
   if (!api) return { ok: false, error: "TraceBug could not load its provider code. Reload the extension." };
-  const all = await sessionGet(PENDING_KEY, {});
-  const req = all[id];
-  if (!req || req.kind !== "tracker") {
-    return { ok: false, error: "This request is no longer waiting. Send it again from the ticket." };
+  const busy = { ok: false, error: "Already creating this issue…", busy: true };
+  if (creating.has(id)) return busy;
+  creating.add(id);
+  let key = "";
+  try {
+    const all = await sessionGet(PENDING_KEY, {});
+    const req = all[id];
+    if (!req || req.kind !== "tracker") {
+      return { ok: false, error: "This request is no longer waiting. Send it again from the ticket." };
+    }
+    key = ticketKey(req);
+    if (creating.has(key)) { key = ""; return busy; }
+    creating.add(key);
+    // A create that died with an earlier worker: treat it as unclear.
+    if (isInFlight(req)) return busy;
+    if (req.inFlightAt) req.unclear = true;
+    req.inFlightAt = Date.now();
+    // What the first attempt aimed at, for the retry's look-up.
+    if (!req.firstAttemptAt) {
+      req.firstAttemptAt = req.inFlightAt;
+      req.firstTarget = { tracker: choice.tracker, container: choice.container };
+    }
+    await sessionSet({ [PENDING_KEY]: all });
+    return await runPanelCreate(api, id, req, choice);
+  } finally {
+    creating.delete(id);
+    if (key) creating.delete(key);
   }
-  // One create at a time: a double click or a second message must not file twice.
-  if (isInFlight(req)) return { ok: false, error: "Already creating this issue…" };
-  if (req.inFlightAt) req.unclear = true;
-  req.inFlightAt = Date.now();
-  await sessionSet({ [PENDING_KEY]: all });
+}
 
+async function runPanelCreate(api, id, req, choice) {
   const run = Object.assign({}, req, {
     choice,
     target: choice.tracker,
@@ -2271,15 +2318,20 @@ async function createViaAdapter(api, adapter, req, integrations) {
   const container = (choice && choice.container) || api.legacyContainer(adapter.id, integrations);
   if (!container) throw new Error("Pick a " + adapter.containerNoun.toLowerCase() + " to file the issue in.");
   const fields = choice ? choice.fields : legacyFields(adapter.id, integrations);
-  // Invisible in the rendered issue; lets a retry find this one (createFromPanel).
-  const marker = "tracebug:" + String(req.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  // Random per send (queueConfirmation), reused on every retry. GitHub: an
+  // invisible comment in the body; Linear: the issue id.
+  const sendId = req.sendId;
   const result = await api.withTrackerAuth(authContext(adapter, integrations), async (auth) => {
-    if (req.unclear && typeof adapter.findIssueByMarker === "function") {
-      const found = await adapter.findIssueByMarker(auth, container, marker, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+    // After an unclear failure, look where the FIRST attempt went before
+    // filing again — the user may have changed the repo since.
+    const first = req.firstTarget && req.firstTarget.tracker === adapter.id ? req.firstTarget.container : container;
+    if (req.unclear && sendId) {
+      const found = await api.findFiledIssueWithRetry(adapter, auth, first, sendId,
+        req.firstAttemptAt || Date.now(), AbortSignal.timeout(CREATE_TIMEOUT_MS));
       if (found) { found.found = true; return found; }
     }
     return adapter.createIssue(auth, container, fields,
-      { title: req.payload.title, body: req.payload.body, marker }, AbortSignal.timeout(CREATE_TIMEOUT_MS));
+      { title: req.payload.title, body: req.payload.body, sendId }, AbortSignal.timeout(CREATE_TIMEOUT_MS));
   });
   if (choice) await rememberChoice(adapter.id, container, fields);
   result.label = adapter.label;

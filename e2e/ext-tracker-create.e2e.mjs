@@ -58,6 +58,9 @@ let issuePosts = 0;
 // The first POST "lands" at GitHub but the answer never arrives (connection
 // dropped) — the unclear failure the duplicate guard exists for.
 let dropFirstAnswer = true;
+// Later creates answer after this long, so two can overlap.
+let postDelayMs = 0;
+let lastIssuesQuery = "";
 await ctx.route("https://api.github.com/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
@@ -72,7 +75,9 @@ await ctx.route("https://api.github.com/**", async (route) => {
   if (req.method() === "GET" && url.pathname === "/repos/acme/widgets/labels") return ok([{ name: "triage" }]);
   if (req.method() === "GET" && url.pathname === "/repos/acme/api") return ok({ permissions: { push: true } });
   if (req.method() === "GET" && url.pathname === "/repos/acme/widgets") return ok({ permissions: { push: false } });
+  if (req.method() === "GET" && url.pathname === "/user") return ok({ login: "tester" });
   if (req.method() === "GET" && url.pathname === "/repos/acme/api/issues") {
+    lastIssuesQuery = url.search;
     // The retry's look-up: the issue the dropped POST created is there.
     return ok(issuePost ? [{ number: 42, html_url: ISSUE_URL, body: issuePost.body }] : []);
   }
@@ -84,6 +89,7 @@ await ctx.route("https://api.github.com/**", async (route) => {
       await new Promise((r) => setTimeout(r, 700));
       return route.abort("connectionreset");
     }
+    if (postDelayMs) await new Promise((r) => setTimeout(r, postDelayMs));
     return ok({ html_url: ISSUE_URL, number: 42 });
   }
   return route.fulfill({ status: 404, contentType: "application/json", body: '{"message":"Not Found"}' });
@@ -180,6 +186,11 @@ try {
   check("Create waits for a repository", await win.isDisabled("#send"));
   check("no Connect box while a saved token works", !(await win.isVisible("#connect")));
   check("no countdown", (await win.textContent("#countdown")).trim() === "");
+  const armed = await sw.evaluate(() => chrome.alarms.getAll().then((a) => a.map((x) => x.name)));
+  check("no deadline: nothing will close the window by itself", !armed.some((n) => n.startsWith("tb:confirm:expire:")), JSON.stringify(armed));
+  const pend = await sw.evaluate(async () => Object.values((await chrome.storage.session.get("tb_pending_sends_v1")).tb_pending_sends_v1 || {})[0]);
+  const SEND_ID = (pend && pend.sendId) || "";
+  check("the send has a random UUID v4 id", /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(SEND_ID), SEND_ID);
   check("no duplicate Destination/Via rows", !(await win.isVisible("#meta")));
 
   await win.waitForFunction(() => document.querySelectorAll("#containerList option").length > 0, null, { timeout: 8000 });
@@ -218,7 +229,8 @@ try {
     (await win.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true");
   check("the ticket in the page is still open and untouched",
     await page.locator("#tracebug-quick-bug-modal").isVisible() && (await page.evaluate(() => window.__tbResults.length)) === 0);
-  check("the hidden marker went with the first try", /<!-- tracebug:[\w-]+ -->$/.test((issuePost && issuePost.body) || ""));
+  check("the hidden marker went with the first try — only the random id",
+    ((issuePost && issuePost.body) || "").endsWith(`\n\n<!-- tracebug:${SEND_ID} -->`), ((issuePost && issuePost.body) || "").slice(-60));
 
   const tabsBefore = ctx.pages().length;
   await win.click("#send");
@@ -226,6 +238,8 @@ try {
   check('the retry found the first issue: "Created #42"',
     (await win.textContent("#doneBox")).includes("Created #42"), (await win.textContent("#doneBox")).trim());
   check("…and says it was already there", /already been created/.test(await win.textContent("#doneNote")));
+  check("the look-up asked for this user's issues since the first try",
+    /creator=tester/.test(lastIssuesQuery) && /since=/.test(lastIssuesQuery) && /state=all/.test(lastIssuesQuery), lastIssuesQuery);
   check("GitHub got exactly one issue (no duplicate)", issuePosts === 1, String(issuePosts));
   check("…with the picked label", JSON.stringify(issuePost && issuePost.labels) === '["bug"]', JSON.stringify(issuePost && issuePost.labels));
   check("…and a title from the ticket", !!(issuePost && issuePost.title));
@@ -250,6 +264,41 @@ try {
   check("the repo and labels are remembered for next time",
     prefs && prefs.github && prefs.github.container === "acme/api" && JSON.stringify(prefs.github.fields.labels) === '["bug"]',
     JSON.stringify(prefs));
+
+  // ── A new ticket: closing the window keeps it; two Creates at once file one issue ──
+  await page.keyboard.press("Control+Shift+KeyB");
+  await page.waitForSelector("#tracebug-quick-bug-modal", { timeout: 8000 });
+  await sleep(800);
+  await page.fill("#tb-qb-title", "Concurrent create");
+  const send2 = page.locator('#tracebug-quick-bug-modal [data-action="open-github"]').first();
+  let w2P = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 10000 });
+  await send2.click();
+  let w2 = await w2P.catch(() => null);
+  if (w2) { await w2.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {}); await w2.close(); }
+  await sleep(900);
+  check("closing the window leaves the ticket open, as it was",
+    await page.locator("#tracebug-quick-bug-modal").isVisible() && (await page.inputValue("#tb-qb-title")) === "Concurrent create");
+
+  w2P = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 10000 });
+  await send2.click();
+  w2 = await w2P.catch(() => null);
+  if (w2) {
+    await w2.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+    postDelayMs = 800;
+    const postsBefore = issuePosts;
+    // Two creates for the same ticket, sent together (a double click that got
+    // past the button, or a second message) — straight to the worker.
+    const answers = await w2.evaluate(() => {
+      const one = () => new Promise((r) => chrome.runtime.sendMessage({ type: "tb:confirm:create", id: ID, choice: collectChoice() }, r));
+      return Promise.all([one(), one()]);
+    });
+    check("two Creates at once: one files, the other is refused as already running",
+      answers.filter((a) => a && a.ok).length === 1 && answers.filter((a) => a && a.busy).length === 1, JSON.stringify(answers));
+    check("…and GitHub got exactly one issue", issuePosts === postsBefore + 1, `${postsBefore} → ${issuePosts}`);
+    await w2.close().catch(() => {});
+  } else {
+    check("second window opened", false);
+  }
 
   // ── The options page sees accounts, never tokens ──
   const opt = await ctx.newPage();

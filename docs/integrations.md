@@ -40,10 +40,18 @@ GitHub labels, assignee and milestone, and **Create issue**.
 ### The Create window
 
 - It shows the title and body exactly as they will be sent, with warnings (remote images, @mentions, a shortened body).
-- Nothing is sent until you click **Create issue**; closing the window cancels.
+- Nothing is sent until you click **Create issue**; closing the window cancels. The window has no time limit:
+  it stays open, with your choices, until you create or close it. Closing it leaves the ticket open in the page
+  as it was (it is in the ticket list only if you saved it).
 - If creating fails, the window keeps your choices, shows the error and offers **Retry**; your ticket in TraceBug
-  is untouched. If the connection dropped (so GitHub may have created it), Retry first looks for that issue —
-  each issue carries an invisible marker — so it is never filed twice.
+  is untouched. If the connection dropped, the tracker may have created the issue anyway, so Retry looks for it
+  first and shows it instead of filing it twice:
+  - **GitHub** has no way to make a create safe to repeat, so each issue ends with an invisible HTML comment
+    holding a random id (nothing from your report). Retry lists the issues you opened in that repository since
+    just before the first attempt, looks for that id, and checks again two seconds later before filing.
+  - **Linear** lets TraceBug choose the new issue's id. TraceBug makes one random id per send, and Retry first
+    asks Linear for an issue with that id.
+- Only one Create per ticket runs at a time: a second click, or a second message, is refused while the first runs.
 - If your sign-in expired or was revoked, the window shows **Reconnect GitHub** and keeps your choices.
 - **Why a separate window:** the ticket runs inside the page you are testing, so anything shown there — your
   private repository names, teams, people — could be read by that site. The Create window belongs to the

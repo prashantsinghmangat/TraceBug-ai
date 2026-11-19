@@ -32207,13 +32207,16 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   });
 
   // src/providers/api.ts
-  function issueMarkerComment(marker) {
-    return marker && MARKER_RE.test(marker) ? `<!-- ${marker} -->` : "";
+  function isSendId(id) {
+    return typeof id === "string" && SEND_ID_RE.test(id);
   }
-  function bodyWithMarker(provider, body, marker) {
+  function issueMarkerComment(sendId) {
+    return isSendId(sendId) ? `<!-- tracebug:${sendId} -->` : "";
+  }
+  function bodyWithMarker(provider, body, sendId) {
     var _a2;
     const text = capProviderBody(provider, body).text;
-    const mark2 = issueMarkerComment(marker);
+    const mark2 = issueMarkerComment(sendId);
     if (!mark2) return text;
     const limit = (_a2 = PROVIDER_BODY_LIMITS[provider]) != null ? _a2 : PROVIDER_BODY_LIMITS.github;
     const room = limit - mark2.length - 2;
@@ -32310,7 +32313,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         title: content.title,
         // Backstop: the extension already capped this before the confirmation
         // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
-        body: bodyWithMarker("github", content.body, content.marker),
+        body: bodyWithMarker("github", content.body, content.sendId),
         labels: config.labels && config.labels.length ? config.labels : void 0,
         assignees: config.assignees && config.assignees.length ? config.assignees : void 0,
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
@@ -32337,7 +32340,10 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
           input: {
             teamId: config.teamId,
             title: content.title,
-            description: capProviderBody("linear", content.body).text
+            description: capProviderBody("linear", content.body).text,
+            // Linear takes a client-made UUID v4 as the issue id, so a retry
+            // can ask for it by id instead of filing it twice.
+            id: isSendId(content.sendId) ? content.sendId : void 0
           }
         }
       })
@@ -32482,11 +32488,11 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  var MARKER_RE, DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
+  var SEND_ID_RE, DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
   var init_api = __esm({
     "src/providers/api.ts"() {
       "use strict";
-      MARKER_RE = /^tracebug:[A-Za-z0-9_-]{1,80}$/;
+      SEND_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
       DEFAULT_BASE_URLS = {
         anthropic: "https://api.anthropic.com",
         openai: "https://api.openai.com",
