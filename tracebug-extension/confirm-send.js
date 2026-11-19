@@ -752,8 +752,8 @@ function watchVisibility() {
 // page-wide dark-mode filter included — so Create would stay paused forever.
 // Our content script checks what is really drawn over the Create row (via the
 // worker; the page can't answer for it). Two clean checks ARM_MS apart arm
-// Create; it keeps checking while armed this way, and once more on the click.
-// Both say no → say why and offer the window.
+// Create and stop the loop; the click checks once more. While it says no, the
+// panel says why, offers the window, and keeps checking every ARM_MS.
 
 const PROBE_WHY = {
   covered: "Something on this page is drawn over this panel",
@@ -790,7 +790,8 @@ function startProbing() {
     if (res.ok) {
       clean++;
       show("toWindowBox", false);
-      if (clean >= 2 && !panel.armed) { panel.armed = true; panel.armedBy = "probe"; syncCreateButton(); }
+      // Armed: stop here. The click checks once more.
+      if (clean >= 2) { panel.armed = true; panel.armedBy = "probe"; syncCreateButton(); return; }
     } else {
       clean = 0;
       if (panel.armed) { panel.armed = false; panel.armedBy = ""; syncCreateButton(); }

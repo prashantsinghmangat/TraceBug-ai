@@ -430,6 +430,41 @@ try {
   await page.waitForFunction(() => !document.getElementById("tracebug-quick-bug-modal"), null, { timeout: 5000 }).catch(() => {});
   await openTicket(page, "#orderBtn", "After filter");
 
+  // ══ 7f. A big page (~30k elements away from the Create row) ══════════════
+  // The second check only styles and counts elements whose box meets the row,
+  // so clutter elsewhere neither slows it down nor trips the size cap.
+  await page.evaluate(() => {
+    const box = document.createElement("div");
+    box.id = "__clutter";
+    box.style.cssText = "position:absolute;left:0;top:6000px;width:300px;";
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < 30000; i++) {
+      const d = document.createElement("span");
+      d.textContent = "x";
+      d.style.cssText = i % 7 ? "" : "pointer-events:none";
+      frag.appendChild(d);
+    }
+    box.appendChild(frag);
+    document.body.appendChild(box);
+    const st = document.createElement("style");
+    st.id = "__filter";
+    st.textContent = "html { filter: invert(1) !important; }";
+    document.head.appendChild(st);
+  });
+  const nodes7f = await page.evaluate(() => document.querySelectorAll("*").length);
+  const r7g = await sendToGitHub(page);
+  await r7g.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
+  const t7f = Date.now();
+  const armed7f = await r7g.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 5000 }).then(() => true, () => false);
+  const ms7f = Date.now() - t7f;
+  check("7f. a ~30k-element page arms in about a second", armed7f && ms7f < 1500, `${nodes7f} elements, ${ms7f} ms`);
+  check("…with no paused note (no size refusal)", !(await r7g.frame.isVisible("#toWindowBox")),
+    (await r7g.frame.isVisible("#toWindowBox")) ? (await r7g.frame.textContent("#toWindowWhy")).trim() : "");
+  await r7g.frame.click("#cancel");
+  await sleep(400);
+  await page.evaluate(() => { document.getElementById("__filter").remove(); document.getElementById("__clutter").remove(); });
+
   // ══ 8. Theme ═════════════════════════════════════════════════════════════
   const panelBg = async (theme) => {
     await page.evaluate((t) => { const r = document.getElementById("tracebug-root"); if (r) r.setAttribute("data-tb-theme", t); }, theme);

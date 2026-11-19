@@ -747,7 +747,7 @@ function mountCreatePanel(id, nonce) {
 // and no ancestor fades, clips, blends, skews or blurs it. Colour filters a
 // dark-mode tool uses are fine. Any doubt → fail, and the panel offers the window.
 
-var PROBE_MAX_NODES = 20000;
+var PROBE_MAX_NODES = 20000; // elements whose box meets the Create row
 var SAFE_FILTERS = /^(invert|hue-rotate|sepia|grayscale|brightness|contrast|saturate)$/;
 
 function parentAcrossShadow(el) {
@@ -845,22 +845,26 @@ function probePanel(rowRect) {
   // Click-through layers: hit tests skip them, so find each one that meets
   // the row, make it hittable for a moment, and hit-test again. Below our
   // frame (page content under the ticket) it changes nothing; over it, it fails.
-  var seen = 0;
+  // Only elements whose box meets the row are styled or probed (a rect read is
+  // cheap; getComputedStyle isn't), and only those count toward the cap.
+  var near = 0;
   var roots = [document];
   while (roots.length) {
     var all = roots.pop().querySelectorAll("*");
-    seen += all.length;
-    if (seen > PROBE_MAX_NODES) return { ok: false, reason: "large" };
     for (var j = 0; j < all.length; j++) {
       var n = all[j];
       var sh = shadowOf(n);
       if (sh) roots.push(sh);
-      if (n === frame || chain.indexOf(n) !== -1) continue;
+      if (n === frame) continue;
       var r = n.getBoundingClientRect();
-      var ncs = getComputedStyle(n);
-      if (ncs.pointerEvents === "none" && ncs.visibility === "visible" && parseFloat(ncs.opacity) > 0 &&
-          r.width > 0 && r.height > 0 && rectsMeet(r, row) && !clearWhenHittable(frame, row, r, n, null)) {
-        return { ok: false, reason: "overlay" };
+      if (!(r.width > 0 && r.height > 0 && rectsMeet(r, row))) continue;
+      if (++near > PROBE_MAX_NODES) return { ok: false, reason: "large" };
+      if (chain.indexOf(n) === -1) {
+        var ncs = getComputedStyle(n);
+        if (ncs.pointerEvents === "none" && ncs.visibility === "visible" && parseFloat(ncs.opacity) > 0 &&
+            !clearWhenHittable(frame, row, r, n, null)) {
+          return { ok: false, reason: "overlay" };
+        }
       }
       for (var k = 0; k < 2; k++) {
         var which = k ? "::after" : "::before";

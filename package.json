@@ -57,6 +57,7 @@
     "e2e:github-connect": "node e2e/ext-github-connect.e2e.mjs",
     "e2e:firefox-token": "node e2e/ext-firefox-token-path.e2e.mjs",
     "e2e:inpage-panel": "node e2e/ext-inpage-panel.e2e.mjs",
+    "e2e:panel-connect": "node e2e/ext-panel-connect.e2e.mjs",
     "e2e:linear": "node e2e/ext-linear-connect.e2e.mjs",
     "e2e:hub": "node e2e/ext-integrations-hub.e2e.mjs",
     "zip:ext": "npm run check:versions && npm run build:ext -- --store && node tracebug-extension/build/zip-ext.mjs",
