@@ -311,6 +311,59 @@ try {
     /"cancelled":true/.test(res7) && posts.length === 3 && await page.locator("#tracebug-quick-bug-modal").isVisible(), res7);
   check("…and the request is gone", (await pending()).length === 0, JSON.stringify(await pending()));
 
+  // ══ 7b. A page whose CSS caps iframes (seen on a real site) ══════════════
+  // (The "Escape ticket" from leg 7 is still open; send it again.)
+  await page.evaluate(() => {
+    const st = document.createElement("style");
+    st.id = "__cap";
+    st.textContent = "iframe { height: 90px !important; max-height: 90px !important; }";
+    document.head.appendChild(st);
+  });
+  const r7c = await sendToGitHub(page);
+  await r7c.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  await sleep(600);
+  const capH = await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").getBoundingClientRect().height);
+  check("7b. a page rule capping iframes doesn't squeeze the panel", capH > 200, `${capH}px`);
+  await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
+  check("…and Create arms", await r7c.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
+  await r7c.frame.click("#cancel");
+  await sleep(400);
+  await page.evaluate(() => document.getElementById("__cap").remove());
+
+  // ══ 7c. A page that filters everything (e.g. a dark-mode extension) ══════
+  await page.evaluate(() => {
+    const st = document.createElement("style");
+    st.id = "__filter";
+    st.textContent = "html { filter: invert(1) hue-rotate(180deg) !important; }";
+    document.head.appendChild(st);
+  });
+  const r7d = await sendToGitHub(page);
+  await r7d.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
+  await r7d.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
+  check("7c. under a page-wide filter Create stays paused", !(await armed(r7d.frame)));
+  check("…and the panel explains it and offers Open in a window", await r7d.frame.isVisible("#toWindow"),
+    (await r7d.frame.textContent("#toWindowBox")).trim().slice(0, 80));
+  const winP7d = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 8000 }).catch(() => null);
+  await r7d.frame.click("#toWindow");
+  const win7d = await winP7d;
+  check("…which opens the extension window", !!win7d);
+  await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+  check("…and removes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
+  if (win7d) {
+    await win7d.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {});
+    await win7d.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).catch(() => {});
+    const before = posts.length;
+    await win7d.click("#send");
+    await win7d.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+    check("…where the same request creates the issue", posts.length === before + 1 && /Created/.test(await win7d.textContent("#doneBox")));
+    await win7d.close().catch(() => {});
+  }
+  await page.evaluate(() => document.getElementById("__filter").remove());
+  // Filing from the window closes the ticket (as before step 3): open another.
+  await page.waitForFunction(() => !document.getElementById("tracebug-quick-bug-modal"), null, { timeout: 5000 }).catch(() => {});
+  await openTicket(page, "#orderBtn", "After filter");
+
   // ══ 8. Theme ═════════════════════════════════════════════════════════════
   const panelBg = async (theme) => {
     await page.evaluate((t) => { const r = document.getElementById("tracebug-root"); if (r) r.setAttribute("data-tb-theme", t); }, theme);

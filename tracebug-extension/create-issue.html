@@ -135,6 +135,13 @@
 
     <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
 
+    <!-- Shown when Chrome says this panel is drawn covered, faded or filtered
+         (a decoy — or just a page/extension that filters everything). -->
+    <div class="pblock" id="toWindowBox" hidden>
+      <p class="muted">This page changes how the panel is drawn, so Create is paused here for your safety.</p>
+      <button type="button" class="small" id="toWindow">Open in a window</button>
+    </div>
+
     <div class="actions">
       <span class="countdown" id="countdown"></span>
       <span class="grow"></span>

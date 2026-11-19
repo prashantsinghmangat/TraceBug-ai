@@ -701,21 +701,45 @@ function watchSize() {
  *  faded or transformed by the page; elsewhere it means fully on screen. */
 function watchVisibility() {
   let timer = 0;
-  const set = (visible) => {
+  let stuck = 0;
+  const set = (visible, onScreenButHidden) => {
     clearTimeout(timer);
-    if (!visible) { panel.armed = false; syncCreateButton(); return; }
+    clearTimeout(stuck);
+    show("toWindowBox", false);
+    if (!visible) {
+      panel.armed = false;
+      syncCreateButton();
+      // On screen, yet Chrome says it's covered, faded or filtered — maybe a
+      // decoy, maybe just a page (or a dark-mode extension) that filters
+      // everything. Don't arm; offer the window, which no page can touch.
+      if (onScreenButHidden) stuck = setTimeout(() => show("toWindowBox", true), 1500);
+      return;
+    }
     if (panel.armed) return;
     timer = setTimeout(() => { panel.armed = true; syncCreateButton(); }, ARM_MS);
   };
   const onEntries = (entries) => {
     const en = entries[entries.length - 1];
     const full = en.isIntersecting && en.intersectionRatio >= 0.99;
-    set(full && (en.isVisible === undefined || en.isVisible === true));
+    const seen = en.isVisible === undefined || en.isVisible === true;
+    set(full && seen, full && !seen);
   };
+  // What must be fully visible is where the click lands: the row holding
+  // Create. (The whole panel was too strict: a page that caps the frame's
+  // height made it scroll, and Create never armed. Not the button itself: a
+  // disabled button is drawn at half opacity, which v2 counts as hidden.)
   let io;
   try { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1], trackVisibility: true, delay: 100 }); }
   catch { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1] }); }
-  io.observe(document.body);
+  io.observe($("send").parentElement);
+}
+
+/** "Open in a window": hand this request to the extension window. */
+async function moveToWindow() {
+  if (panel.busy || decided) return;
+  const res = await send("tb:panel:to-window", { id: ID, nonce: NONCE });
+  if (res && res.ok) { decided = true; closeEmbedded(); return; }
+  panelMsg((res && res.error) || "Could not open the window.", true);
 }
 
 const NONCE_RE = /^[0-9a-f]{48}$/;
@@ -849,6 +873,7 @@ $("cancel").addEventListener("click", () => {
   decide(false);
 });
 $("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
+if ($("toWindow")) $("toWindow").addEventListener("click", moveToWindow);
 
 document.addEventListener("keydown", (e) => {
   // Ctrl/Cmd+Enter creates, from any field — the same checks as the button

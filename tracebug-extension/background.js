@@ -2288,6 +2288,14 @@ async function handlePanelMessage(message, sender) {
       await resolvePending(got.id, false, null);
       return { ok: true };
     }
+    case "tb:panel:to-window": {
+      // From the bound panel frame itself: "Open in a window".
+      const got = await panelRequestFor(message, sender, false);
+      if (got.error) return { ok: false, error: got.error };
+      if (isInFlight(got.req)) return { ok: false, error: "Already creating this issue…" };
+      const res = await openConfirmWindow(got.req);
+      return res && res.pending ? { ok: true } : { ok: false, error: (res && res.error) || "Could not open the window." };
+    }
     case "tb:panel:fallback": {
       // From OUR content script (top frame of the request's tab, page URL):
       // the frame didn't come up — use the extension window instead.

@@ -691,7 +691,12 @@ function mountCreatePanel(id, nonce) {
   frame.title = "Create an issue";
   // The device code's Copy button needs the clipboard inside the frame.
   frame.setAttribute("allow", "clipboard-write");
-  frame.style.cssText = "display:block;width:100%;height:150px;border:0;border-radius:10px;background:transparent;color-scheme:normal;";
+  // !important on every box property: a page's own `iframe { … !important }`
+  // rules (height caps are common) would otherwise squeeze the panel into a
+  // scroll box, and its Create button might never be fully on screen.
+  frame.style.cssText = "display:block !important;width:100% !important;max-width:none !important;" +
+    "height:150px !important;min-height:0 !important;max-height:none !important;border:0 !important;" +
+    "border-radius:10px;background:transparent;color-scheme:normal;";
   slot.appendChild(frame);
   anchor.parentNode.insertBefore(slot, anchor);
 
@@ -706,7 +711,7 @@ function mountCreatePanel(id, nonce) {
       clearTimeout(p.timer);
     } else if (d.type === "tb-panel-size" && Object.keys(d).length === 2 &&
       typeof d.height === "number" && isFinite(d.height) && d.height >= 40 && d.height <= 1400) {
-      frame.style.height = Math.ceil(d.height) + "px";
+      frame.style.setProperty("height", Math.ceil(d.height) + "px", "important");
     } else if (d.type === "tb-panel-close" && Object.keys(d).length === 1) {
       unmountCreatePanel();
     }
