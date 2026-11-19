@@ -2288,6 +2288,26 @@ async function handlePanelMessage(message, sender) {
       await resolvePending(got.id, false, null);
       return { ok: true };
     }
+    case "tb:panel:probe": {
+      // From the bound frame when IntersectionObserver v2 says "hidden": ask
+      // our content script (top frame of the same tab) for a second opinion.
+      const got = await panelRequestFor(message, sender, false);
+      if (got.error) return { ok: false, reason: "gone" };
+      const r = message.rect;
+      if (!r || typeof r !== "object" || !["left", "top", "width", "height"].every((k) => typeof r[k] === "number" && isFinite(r[k]))) {
+        return { ok: false, reason: "gone" };
+      }
+      const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+      const res = await new Promise((resolve) => {
+        try {
+          chrome.tabs.sendMessage(sender.tab.id, { type: "tb:panel:probe", id: got.id, rect }, { frameId: 0 }, (out) => {
+            void chrome.runtime.lastError;
+            resolve(out);
+          });
+        } catch { resolve(null); }
+      });
+      return res && res.ok === true ? { ok: true } : { ok: false, reason: (res && typeof res.reason === "string") ? res.reason : "gone" };
+    }
     case "tb:panel:to-window": {
       // From the bound panel frame itself: "Open in a window".
       const got = await panelRequestFor(message, sender, false);

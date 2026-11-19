@@ -737,6 +737,211 @@ function mountCreatePanel(id, nonce) {
   activePanel = p;
 }
 
+// ── Is the panel really what the user sees? (second opinion) ──────────────
+// IntersectionObserver v2 says "hidden" for ANY filter, opacity < 1 or
+// transform on the frame or an ancestor, so a page-wide dark-mode filter on
+// <html> pauses Create forever. When it does, the frame asks (via the worker,
+// never postMessage — the page shares this window) for this check. It passes
+// only if the Create row is our frame at its centre and corners, nothing
+// click-through (pointer-events:none, also ::before/::after) is drawn over it,
+// and no ancestor fades, clips, blends, skews or blurs it. Colour filters a
+// dark-mode tool uses are fine. Any doubt → fail, and the panel offers the window.
+
+var PROBE_MAX_NODES = 20000;
+var SAFE_FILTERS = /^(invert|hue-rotate|sepia|grayscale|brightness|contrast|saturate)$/;
+
+function parentAcrossShadow(el) {
+  if (el.parentElement) return el.parentElement;
+  var root = el.parentNode;
+  return root && root.host ? root.host : null;
+}
+
+function shadowOf(el) {
+  // Chrome: chrome.dom (looked up by name — Firefox has no such namespace and
+  // offers element.openOrClosedShadowRoot instead).
+  try {
+    var dom = chrome["dom"];
+    if (dom && typeof dom.openOrClosedShadowRoot === "function") return dom.openOrClosedShadowRoot(el) || null;
+  } catch (e) {}
+  return el.openOrClosedShadowRoot || el.shadowRoot || null;
+}
+
+/** null when the filter only shifts colours; else a short reason. */
+function unsafeFilter(value) {
+  if (!value || value === "none") return null;
+  var re = /([a-z-]+)\(([^)]*)\)/g, m, n = 0;
+  while ((m = re.exec(value))) {
+    n++;
+    if (!SAFE_FILTERS.test(m[1])) return m[1];
+    if (m[1] === "brightness" || m[1] === "contrast" || m[1] === "saturate") {
+      var v = parseFloat(m[2]);
+      if (/%$/.test(m[2].trim())) v = v / 100;
+      if (!(v >= 0.5 && v <= 2)) return m[1];
+    }
+  }
+  return n ? null : "filter";
+}
+
+/** Only translate and plain (positive) scale. */
+function unsafeTransform(value) {
+  if (!value || value === "none") return false;
+  var m = /^matrix\(([^)]*)\)$/.exec(value);
+  if (!m) return true;
+  var v = m[1].split(",").map(parseFloat);
+  return !(v[0] > 0.5 && v[3] > 0.5 && Math.abs(v[1]) < 1e-6 && Math.abs(v[2]) < 1e-6);
+}
+
+function rectsMeet(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/** The pseudo-element's box, or null when it can't be placed (→ treat as over). */
+function pseudoBox(el, cs) {
+  if (cs.position === "fixed") return null;
+  if (cs.position !== "absolute") return el.getBoundingClientRect();
+  var cb = el;
+  while (cb && getComputedStyle(cb).position === "static") cb = parentAcrossShadow(cb);
+  var base = cb ? cb.getBoundingClientRect() : { left: 0, top: 0 };
+  var l = parseFloat(cs.left), t = parseFloat(cs.top), w = parseFloat(cs.width), h = parseFloat(cs.height);
+  if (![l, t, w, h].every(isFinite)) return null;
+  return { left: base.left + l, top: base.top + t, right: base.left + l + w, bottom: base.top + t + h };
+}
+
+function probePanel(rowRect) {
+  var p = activePanel;
+  if (!p || !p.frame.isConnected) return { ok: false, reason: "gone" };
+  var frame = p.frame;
+  var fr = frame.getBoundingClientRect();
+  // Scaled or turned frames: the box on screen must match its layout size.
+  if (!frame.offsetWidth || Math.abs(fr.width / frame.offsetWidth - 1) > 0.05 ||
+      Math.abs(fr.height / frame.offsetHeight - 1) > 0.05) return { ok: false, reason: "transform" };
+  // The row the click lands on, in page coordinates.
+  var row = {
+    left: fr.left + rowRect.left, top: fr.top + rowRect.top,
+    right: fr.left + rowRect.left + rowRect.width, bottom: fr.top + rowRect.top + rowRect.height,
+  };
+  if (row.left < 0 || row.top < 0 || row.right > window.innerWidth || row.bottom > window.innerHeight) return { ok: false, reason: "offscreen" };
+
+  // The frame and every ancestor up to <html>.
+  var chain = [];
+  var opacity = 1;
+  for (var el = frame; el; el = parentAcrossShadow(el)) {
+    chain.push(el);
+    var cs = getComputedStyle(el);
+    opacity *= parseFloat(cs.opacity);
+    if (el === frame && cs.visibility !== "visible") return { ok: false, reason: "hidden" };
+    var f = unsafeFilter(cs.filter);
+    if (f) return { ok: false, reason: "filter" };
+    if (unsafeTransform(cs.transform)) return { ok: false, reason: "transform" };
+    if (cs.mixBlendMode && cs.mixBlendMode !== "normal") return { ok: false, reason: "blend" };
+    if (cs.clipPath && cs.clipPath !== "none") return { ok: false, reason: "clip" };
+    if ((cs.maskImage && cs.maskImage !== "none") || (cs.webkitMaskImage && cs.webkitMaskImage !== "none")) return { ok: false, reason: "mask" };
+  }
+  if (opacity < 0.99) return { ok: false, reason: "faded" };
+
+  // Hit test: our frame must be on top at the centre and four inset corners.
+  if (!frameOnTop(frame, row)) return { ok: false, reason: "covered" };
+
+  // Click-through layers: hit tests skip them, so find each one that meets
+  // the row, make it hittable for a moment, and hit-test again. Below our
+  // frame (page content under the ticket) it changes nothing; over it, it fails.
+  var seen = 0;
+  var roots = [document];
+  while (roots.length) {
+    var all = roots.pop().querySelectorAll("*");
+    seen += all.length;
+    if (seen > PROBE_MAX_NODES) return { ok: false, reason: "large" };
+    for (var j = 0; j < all.length; j++) {
+      var n = all[j];
+      var sh = shadowOf(n);
+      if (sh) roots.push(sh);
+      if (n === frame || chain.indexOf(n) !== -1) continue;
+      var r = n.getBoundingClientRect();
+      var ncs = getComputedStyle(n);
+      if (ncs.pointerEvents === "none" && ncs.visibility === "visible" && parseFloat(ncs.opacity) > 0 &&
+          r.width > 0 && r.height > 0 && rectsMeet(r, row) && !clearWhenHittable(frame, row, r, n, null)) {
+        return { ok: false, reason: "overlay" };
+      }
+      for (var k = 0; k < 2; k++) {
+        var which = k ? "::after" : "::before";
+        var ps = getComputedStyle(n, which);
+        if (!ps.content || ps.content === "none" || ps.content === "normal") continue;
+        if (ps.pointerEvents !== "none" || ps.visibility !== "visible" || parseFloat(ps.opacity) === 0 || ps.display === "none") continue;
+        var pb = unsafeTransform(ps.transform) ? null : pseudoBox(n, ps);
+        if (pb && !rectsMeet(pb, row)) continue;
+        if (!clearWhenHittable(frame, row, pb || row, n, which)) return { ok: false, reason: "overlay" };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/** The top element at (x, y), through open and closed shadow roots. */
+function topAt(x, y) {
+  var hit = document.elementFromPoint(x, y);
+  for (var guard = 0; hit && guard < 20; guard++) {
+    var sr = shadowOf(hit);
+    var inner = sr && sr.elementFromPoint ? sr.elementFromPoint(x, y) : null;
+    if (!inner || inner === hit) break;
+    hit = inner;
+  }
+  return hit;
+}
+
+/** Centre and four inset corners of `box` (clipped to `row`) all hit our frame. */
+function frameOnTop(frame, row, box) {
+  var b = box ? {
+    left: Math.max(box.left, row.left), top: Math.max(box.top, row.top),
+    right: Math.min(box.right, row.right), bottom: Math.min(box.bottom, row.bottom),
+  } : row;
+  var inset = Math.min(3, (b.right - b.left) / 2, (b.bottom - b.top) / 2);
+  var pts = [[(b.left + b.right) / 2, (b.top + b.bottom) / 2],
+    [b.left + inset, b.top + inset], [b.right - inset, b.top + inset],
+    [b.left + inset, b.bottom - inset], [b.right - inset, b.bottom - inset]];
+  for (var i = 0; i < pts.length; i++) if (topAt(pts[i][0], pts[i][1]) !== frame) return false;
+  return true;
+}
+
+/** Make `n` (or its ::before/::after) hittable, hit-test where it meets the
+ *  row, then put it back exactly. Synchronous: no page script runs between. */
+function clearWhenHittable(frame, row, box, n, pseudo) {
+  if (!pseudo) {
+    var had = n.getAttribute("style");
+    n.style.setProperty("pointer-events", "auto", "important");
+    // Didn't take (a stronger page rule)? Then we can't tell: not clear.
+    try { return getComputedStyle(n).pointerEvents === "auto" && frameOnTop(frame, row, box); }
+    finally { if (had === null) n.removeAttribute("style"); else n.setAttribute("style", had); }
+  }
+  var root = n.getRootNode();
+  var host = root === document ? (document.head || document.documentElement) : root;
+  var st = document.createElement("style");
+  st.textContent = "[data-tb-probe]" + pseudo + "{pointer-events:auto !important}";
+  n.setAttribute("data-tb-probe", "");
+  host.appendChild(st);
+  // A strict style-src CSP can block this rule; then we can't tell: not clear.
+  try { return getComputedStyle(n, pseudo).pointerEvents === "auto" && frameOnTop(frame, row, box); }
+  finally { st.remove(); n.removeAttribute("data-tb-probe"); }
+}
+
+if (isExtAlive()) {
+  try {
+    chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+      if (!message || message.type !== "tb:panel:probe") return false;
+      // From the worker only (no tab), for the panel this page shows.
+      if (!sender || sender.id !== chrome.runtime.id || sender.tab) return false;
+      var r = message.rect;
+      var ok = activePanel && activePanel.id === message.id && r && typeof r === "object" &&
+        ["left", "top", "width", "height"].every(function (k) { return typeof r[k] === "number" && isFinite(r[k]); });
+      try {
+        sendResponse(ok ? probePanel(r) : { ok: false, reason: "gone" });
+      } catch (e) {
+        sendResponse({ ok: false, reason: "error" });
+      }
+      return false;
+    });
+  } catch (e) { /* extension reloaded */ }
+}
+
 // ── Provider outcome fan-out ───────────────────────────────────────────────
 // The worker sends the result to THIS tab's top frame only, after the user has
 // approved it. Forward it to the page so the SDK's promise settles.

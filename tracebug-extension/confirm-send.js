@@ -137,6 +137,7 @@ const panel = {
   keep: null,            // choices held across a reconnect: {tracker, container, fields}
   busy: false,           // a create is in flight
   armed: !EMBED,         // EMBED: fully visible for ARM_MS
+  armedBy: "",           // "io" (v2 said visible) | "probe" (content script's check)
 };
 
 function show(id, on) {
@@ -585,6 +586,17 @@ async function createIssue(e) {
     panelMsg("Linear stores attachments on " + t.uploadWhere + ". Allow TraceBug to upload them there?");
     asking = requestPermissions({ origins: t.uploadOrigins });
   }
+  // Armed on the content script's word, not v2's: check again at the click.
+  if (EMBED && panel.armedBy === "probe") {
+    panel.busy = true;
+    const again = await probeOnce();
+    panel.busy = false;
+    if (!again.ok || !panel.armed) {
+      panel.armed = false;
+      syncCreateButton();
+      return;
+    }
+  }
   let attach = true;
   if (asking) {
     attach = await asking;
@@ -701,22 +713,23 @@ function watchSize() {
  *  faded or transformed by the page; elsewhere it means fully on screen. */
 function watchVisibility() {
   let timer = 0;
-  let stuck = 0;
   const set = (visible, onScreenButHidden) => {
     clearTimeout(timer);
-    clearTimeout(stuck);
-    show("toWindowBox", false);
+    stopProbing();
     if (!visible) {
       panel.armed = false;
+      panel.armedBy = "";
       syncCreateButton();
-      // On screen, yet Chrome says it's covered, faded or filtered — maybe a
-      // decoy, maybe just a page (or a dark-mode extension) that filters
-      // everything. Don't arm; offer the window, which no page can touch.
-      if (onScreenButHidden) stuck = setTimeout(() => show("toWindowBox", true), 1500);
+      // On screen, yet v2 says covered, faded or filtered — maybe a decoy,
+      // maybe just a page (or a dark-mode extension) that filters everything.
+      // Ask our content script for a second opinion.
+      if (onScreenButHidden) startProbing();
+      else show("toWindowBox", false);
       return;
     }
+    show("toWindowBox", false);
     if (panel.armed) return;
-    timer = setTimeout(() => { panel.armed = true; syncCreateButton(); }, ARM_MS);
+    timer = setTimeout(() => { panel.armed = true; panel.armedBy = "io"; syncCreateButton(); }, ARM_MS);
   };
   const onEntries = (entries) => {
     const en = entries[entries.length - 1];
@@ -732,6 +745,62 @@ function watchVisibility() {
   try { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1], trackVisibility: true, delay: 100 }); }
   catch { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1] }); }
   io.observe($("send").parentElement);
+}
+
+// ── Second opinion (IntersectionObserver v2 said "hidden") ──────────────────
+// v2 says hidden for ANY filter, opacity or transform up the tree — a
+// page-wide dark-mode filter included — so Create would stay paused forever.
+// Our content script checks what is really drawn over the Create row (via the
+// worker; the page can't answer for it). Two clean checks ARM_MS apart arm
+// Create; it keeps checking while armed this way, and once more on the click.
+// Both say no → say why and offer the window.
+
+const PROBE_WHY = {
+  covered: "Something on this page is drawn over this panel",
+  overlay: "Something on this page is drawn over this panel",
+  faded: "This page fades or hides this panel",
+  hidden: "This page fades or hides this panel",
+};
+
+let probeTimer = 0;
+let probeRun = 0;
+
+function rowRect() {
+  const r = $("send").parentElement.getBoundingClientRect();
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+}
+
+async function probeOnce() {
+  const res = await send("tb:panel:probe", { id: ID, nonce: NONCE, rect: rowRect() });
+  return res && res.ok === true ? { ok: true } : { ok: false, reason: (res && res.reason) || "gone" };
+}
+
+function stopProbing() {
+  clearTimeout(probeTimer);
+  probeRun++;
+}
+
+function startProbing() {
+  const run = ++probeRun;
+  let clean = 0;
+  const tick = async () => {
+    if (decided || panel.busy) { if (!decided) probeTimer = setTimeout(tick, ARM_MS); return; }
+    const res = await probeOnce();
+    if (run !== probeRun || decided) return;
+    if (res.ok) {
+      clean++;
+      show("toWindowBox", false);
+      if (clean >= 2 && !panel.armed) { panel.armed = true; panel.armedBy = "probe"; syncCreateButton(); }
+    } else {
+      clean = 0;
+      if (panel.armed) { panel.armed = false; panel.armedBy = ""; syncCreateButton(); }
+      $("toWindowWhy").textContent = (PROBE_WHY[res.reason] || "This page changes how this panel is drawn") +
+        ", so Create is paused here for your safety.";
+      show("toWindowBox", true);
+    }
+    probeTimer = setTimeout(tick, ARM_MS);
+  };
+  tick();
 }
 
 /** "Open in a window": hand this request to the extension window. */

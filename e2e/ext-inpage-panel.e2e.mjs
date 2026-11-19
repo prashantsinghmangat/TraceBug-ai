@@ -331,6 +331,9 @@ try {
   await page.evaluate(() => document.getElementById("__cap").remove());
 
   // ══ 7c. A page that filters everything (e.g. a dark-mode extension) ══════
+  // v2 says "hidden" for any filter on <html>; the content script's second
+  // opinion must still arm Create. A click-through element BEHIND the ticket,
+  // right under the panel, must not count as a cover.
   await page.evaluate(() => {
     const st = document.createElement("style");
     st.id = "__filter";
@@ -339,13 +342,76 @@ try {
   });
   const r7d = await sendToGitHub(page);
   await r7d.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
-  await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
-  await r7d.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
-  check("7c. under a page-wide filter Create stays paused", !(await armed(r7d.frame)));
-  check("…and the panel explains it and offers Open in a window", await r7d.frame.isVisible("#toWindow"),
-    (await r7d.frame.textContent("#toWindowBox")).trim().slice(0, 80));
+  await page.evaluate(() => {
+    const f = document.querySelector("[data-tb-create-panel] iframe");
+    f.scrollIntoView({ block: "center" });
+    const r = f.getBoundingClientRect();
+    const under = document.createElement("div");
+    under.id = "__under";
+    under.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;z-index:1;pointer-events:none;background:#0f0;`;
+    document.body.insertBefore(under, document.body.firstChild);
+  });
+  const armed7c = await r7d.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false);
+  check("7c. under a page-wide filter Create still arms (second check)", armed7c,
+    (await r7d.frame.isVisible("#toWindowBox")) ? (await r7d.frame.textContent("#toWindowWhy")).trim() : "");
+  check("…and no paused note", !(await r7d.frame.isVisible("#toWindowBox")));
+  const before7c = posts.length;
+  if (armed7c) await r7d.frame.click("#send");
+  await r7d.frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+  check("…and a real click creates the issue in the panel", posts.length === before7c + 1 &&
+    /Created/.test(await r7d.frame.textContent("#doneBox")));
+  await r7d.frame.click("#cancel"); // "Close"
+  await page.evaluate(() => { document.getElementById("__filter").remove(); document.getElementById("__under").remove(); });
+  await page.keyboard.press("Escape");
+  await sleep(400);
+  await openTicket(page, "#orderBtn", "Faded ticket");
+
+  // ══ 7d. A page that fades the panel's container almost to nothing ════════
+  // (an invisible panel over a fake button is the classic clickjack)
+  const r7e = await sendToGitHub(page);
+  await r7e.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => {
+    const slot = document.querySelector("[data-tb-create-panel]");
+    slot.scrollIntoView({ block: "center" });
+    slot.style.opacity = "0.05";
+  });
+  await r7e.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
+  check("7d. a near-invisible panel stays paused", !(await armed(r7e.frame)));
+  check("…and says why", /fades or hides/.test(await r7e.frame.textContent("#toWindowWhy")),
+    (await r7e.frame.textContent("#toWindowWhy")).trim());
+  await page.evaluate(() => { document.querySelector("[data-tb-create-panel]").style.opacity = ""; });
+  check("…and arms once the page stops fading it",
+    await r7e.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
+  await r7e.frame.click("#cancel");
+  await sleep(400);
+
+  // ══ 7e. A real cover: a decoy drawn over the panel that clicks pass through
+  await page.evaluate(() => {
+    const st = document.createElement("style");
+    st.id = "__filter";
+    st.textContent = "html { filter: invert(1) !important; }";
+    document.head.appendChild(st);
+  });
+  const r7f = await sendToGitHub(page);
+  await r7f.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => {
+    const f = document.querySelector("[data-tb-create-panel] iframe");
+    f.scrollIntoView({ block: "center" });
+    const r = f.getBoundingClientRect();
+    const c = document.createElement("div");
+    c.id = "__decoy";
+    c.textContent = "Claim your prize";
+    c.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;z-index:2147483647;pointer-events:none;background:rgba(255,255,255,0.92);`;
+    document.getElementById("tracebug-quick-bug-modal").appendChild(c);
+  });
+  await r7f.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
+  await sleep(1200);
+  check("7e. a click-through decoy over the panel keeps Create paused", !(await armed(r7f.frame)));
+  check("…the panel says something is drawn over it, and offers Open in a window",
+    /drawn over/.test(await r7f.frame.textContent("#toWindowWhy")) && await r7f.frame.isVisible("#toWindow"),
+    (await r7f.frame.textContent("#toWindowWhy")).trim());
   const winP7d = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 8000 }).catch(() => null);
-  await r7d.frame.click("#toWindow");
+  await r7f.frame.click("#toWindow", { force: true });
   const win7d = await winP7d;
   check("…which opens the extension window", !!win7d);
   await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
@@ -359,7 +425,7 @@ try {
     check("…where the same request creates the issue", posts.length === before + 1 && /Created/.test(await win7d.textContent("#doneBox")));
     await win7d.close().catch(() => {});
   }
-  await page.evaluate(() => document.getElementById("__filter").remove());
+  await page.evaluate(() => { document.getElementById("__filter").remove(); document.getElementById("__decoy").remove(); });
   // Filing from the window closes the ticket (as before step 3): open another.
   await page.waitForFunction(() => !document.getElementById("tracebug-quick-bug-modal"), null, { timeout: 5000 }).catch(() => {});
   await openTicket(page, "#orderBtn", "After filter");
