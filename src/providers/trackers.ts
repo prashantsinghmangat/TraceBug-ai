@@ -526,6 +526,74 @@ export async function revokeLinearToken(token: string, hint: "access_token" | "r
   } catch { return false; }
 }
 
+// ── "Use a token instead" (the Create panel) ───────────────────────────────
+// The panel sends a pasted token or API key to the worker, which checks it
+// against the API here BEFORE saving it. The answer never repeats the secret.
+
+export type SecretCheck =
+  | { ok: true; account: string }
+  | { ok: false; code: "invalid" | "bad_token" | "missing_scope" | "no_access" | "network" | "error"; error: string };
+
+/** Plausible shape only (the API decides): one line, no spaces, sane length. */
+export function plausibleSecret(secret: unknown): secret is string {
+  return typeof secret === "string" && /^[A-Za-z0-9_\-.:]{16,400}$/.test(secret);
+}
+
+const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+
+export async function checkTrackerSecret(
+  tracker: IssueTracker,
+  secret: string,
+  container?: string,
+  signal?: AbortSignal,
+): Promise<SecretCheck> {
+  const label = tracker === "github" ? "GitHub" : "Linear";
+  const noun = tracker === "github" ? "token" : "API key";
+  if (!plausibleSecret(secret)) {
+    return { ok: false, code: "invalid", error: `That doesn't look like a ${label} ${noun}. Paste the whole ${noun}, with nothing around it.` };
+  }
+  const auth: ResolvedAuth = { via: "token", token: secret };
+  try {
+    if (tracker === "github") {
+      const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+      if (res.status === 401) {
+        return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
+      }
+      const me = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { login?: string };
+      // Classic tokens list their scopes; fine-grained tokens send no header
+      // (their repository permissions show up on the repository check below).
+      const scopes = res.headers.get("x-oauth-scopes");
+      if (scopes !== null) {
+        const list = scopes.split(",").map((x) => x.trim());
+        if (!list.includes("repo") && !list.includes("public_repo")) {
+          return { ok: false, code: "missing_scope", error: "This token can't create issues: it needs the \"repo\" scope (or \"public_repo\" for public repositories only)." };
+        }
+      }
+      const repo = typeof container === "string" ? container.trim() : "";
+      if (repo && REPO_RE.test(repo)) {
+        const r = await fetch(`${GH_API}/repos/${repo}`, { headers: ghHeaders(auth), signal });
+        if (r.status === 404 || r.status === 403) {
+          return { ok: false, code: "no_access", error: `This token can't see ${repo}. Give it access to that repository (a fine-grained token needs it under "Repository access", with Issues: Read and write).` };
+        }
+      }
+      return { ok: true, account: me.login || "" };
+    }
+    const d = await linearQuery<{ viewer?: { email?: string; name?: string } }>(auth, "query { viewer { name email } }", signal);
+    return { ok: true, account: (d.viewer && (d.viewer.email || d.viewer.name)) || "" };
+  } catch (err) {
+    const e = err as { name?: string; status?: number; message?: string };
+    if (e && e.status === 401) return { ok: false, code: "bad_token", error: `${label} didn't accept this ${noun}. Check it was copied whole and hasn't been revoked.` };
+    if (e && /permission|scope|forbidden/i.test(e.message || "")) {
+      return { ok: false, code: "missing_scope", error: `This ${label} ${noun} doesn't have the permissions TraceBug needs (read, and create issues).` };
+    }
+    if (e && (e.name === "TypeError" || /failed to fetch|networkerror/i.test(e.message || ""))) {
+      return { ok: false, code: "network", error: `Could not reach ${label} to check the ${noun}. Check your connection and try again.` };
+    }
+    const msg = String((e && e.message) || `${label} request failed.`).split(secret).join("…");
+    return { ok: false, code: "error", error: msg };
+  }
+}
+
 export const TRACKER_ADAPTERS: Record<IssueTracker, TrackerAdapter> = { github, linear };
 
 export function trackerAdapter(id: string): TrackerAdapter | null {

@@ -28,7 +28,7 @@ One place to see and manage connections: the plug/logo icon in the popup's heade
   with **Create issue** focused (it takes a click or Enter there: the site you're testing can never file an issue on
   its own). **▾** (or Alt+↓) opens the same panel on the tracker picker. The panel drops down from the button — up
   when there's no room below — and **Manage integrations** in it opens Settings → Integrations. Esc, or Tab past the
-  last control, closes it and puts focus back on the button. Nothing connected yet: the button reads **Send to app**
+  last control, closes it and puts focus back on the button. Nothing connected yet: the button reads **Connect a tracker**
   and the panel offers Connect. The ▾ tooltip names only the tracker ("GitHub · connected", with a dot when a
   connection needs attention), because the site can read the ticket. Firefox: the same button, with the Create window
   instead of the panel.
@@ -80,7 +80,20 @@ and TraceBug has no server (ADR 010). The code flow needs no secret.
 
 ### With a token (all trackers; Firefox)
 
-In TraceBug settings (right-click the toolbar icon → Options), open **Advanced: use a token** on the tracker's card:
+**In the Create panel (Chrome):** open **Use a token instead** (Linear: **Use an API key instead**), paste it and
+press **Check and save**. TraceBug checks it with GitHub or Linear first and says plainly when it's rejected, lacks
+the `repo` scope, or can't see the repository you picked; only a working token is saved. It's typed into the
+extension's own panel and kept in the extension's storage — the site you're testing never sees it. The panel then
+shows it masked ("with a token ghp_…abcd") with **Disconnect**, which removes it. In a build without TraceBug's
+GitHub App (store builds until it's registered) this is the way in: Connect is hidden and the box starts open.
+
+**GitHub App on no repositories yet?** After **Connect GitHub**, if the app isn't installed anywhere the panel shows
+**Install TraceBug on GitHub**. It opens GitHub's install page in a small window; when you close it (or come back),
+the repository list refreshes by itself, and **Refresh** does it by hand. A repository you type that the app isn't
+on gets a **Configure repository access on GitHub** link.
+
+**In settings** (right-click the toolbar icon → Options; the only place on Firefox), open **Advanced: use a token**
+on the tracker's card:
 
 | Tracker | What to paste | Where to get it |
 |---|---|---|

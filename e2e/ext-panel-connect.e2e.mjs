@@ -12,6 +12,15 @@
 //      called during a user gesture" or similar). Playwright can't click the
 //      native dialog, so "pending, no error" is the signal; the owner confirms
 //      the dialog by eye (manual sheet).
+// Step 3 (in A and C):
+//   A. Signed in, but the GitHub App is on no repository: "Install TraceBug on
+//      GitHub" opens GitHub's install page (from the worker); when that window
+//      closes the repository list refreshes by itself. A repository the app
+//      isn't on gets a "configure access" note.
+//   C. "Use a token instead" in a build with no GitHub App (Connect hidden,
+//      the token box open): a rejected token, one without the repo scope, and
+//      a working one, checked against the API before saving; the token never
+//      reaches the page (messages, DOM); Disconnect removes it.
 //
 // GitHub (device flow + API) is stubbed with context.route.
 import { chromium } from "playwright";
@@ -40,6 +49,9 @@ const GLOB = `http://localhost:${PORT}/*`;
 const ACCESS = "ghu_FAKEe2ePanelConnect0123456789abcdef";
 const REFRESH = "ghr_FAKEe2ePanelConnectRefresh0123456789abcdefghijklmnopqrstuvwxyz012345";
 const REPO = "octo/app";
+const PAT = "ghp_PANELgoodToken0123456789abcdefABCD";
+const PAT_NOSCOPE = "ghp_PANELnoScopeToken0123456789abcdefAB";
+const PAT_BAD = "ghp_PANELrevokedToken0123456789abcdefAB";
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 const server = createServer((req, res) => {
@@ -64,7 +76,7 @@ async function launch(ext, label) {
     mkdtempSync(join(tmpdir(), `tb-panel-connect-${label}-`)),
     extensionLaunchOptions([`--disable-extensions-except=${ext}`, `--load-extension=${ext}`]),
   );
-  const state = { approve: false, posts: 0 };
+  const state = { approve: false, posts: 0, installed: true };
   await ctx.route("https://github.com/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -80,9 +92,15 @@ async function launch(ext, label) {
   await ctx.route("https://api.github.com/**", async (route) => {
     const req = route.request();
     const p = new URL(req.url()).pathname;
-    if ((req.headers()["authorization"] || "") !== `Bearer ${ACCESS}`) return json(route, { message: "Bad credentials" }, 401);
+    const auth = req.headers()["authorization"] || "";
+    // Pasted tokens (leg C): a good one, one without the repo scope, anything else is rejected.
+    if (auth === `Bearer ${PAT_NOSCOPE}`) return p === "/user" ? route.fulfill({ status: 200, contentType: "application/json", headers: { "x-oauth-scopes": "read:user, gist" }, body: '{"login":"octo"}' }) : json(route, { message: "Forbidden" }, 403);
+    if (auth === `Bearer ${PAT}`) {
+      if (p === "/user") return route.fulfill({ status: 200, contentType: "application/json", headers: { "x-oauth-scopes": "repo" }, body: '{"login":"octo-pat"}' });
+      if (p === "/user/repos") return json(route, [{ full_name: REPO, private: true }]);
+    } else if (auth !== `Bearer ${ACCESS}`) return json(route, { message: "Bad credentials" }, 401);
     if (p === "/user") return json(route, { login: "octo" });
-    if (p === "/user/installations") return json(route, { total_count: 1, installations: [{ id: 9 }] });
+    if (p === "/user/installations") return json(route, state.installed ? { total_count: 1, installations: [{ id: 9 }] } : { total_count: 0, installations: [] });
     if (p === "/user/installations/9/repositories") return json(route, { total_count: 1, repositories: [{ full_name: REPO, private: true }] });
     if (p === `/repos/${REPO}/labels`) return json(route, [{ name: "bug" }]);
     if (p === `/repos/${REPO}/assignees`) return json(route, [{ login: "octo" }]);
@@ -99,12 +117,13 @@ async function launch(ext, label) {
   // GitHub's device page: record what the worker opens, load about:blank.
   await sw.evaluate(() => {
     self.__popups = [];
+    self.__popupIds = [];
     const gh = (u) => /^https:\/\/github\.com\//.test(String(u));
     const realWin = chrome.windows.create.bind(chrome.windows);
     chrome.windows.create = (opts) => {
       if (!(opts && gh(opts.url))) return realWin(opts);
       self.__popups.push({ url: opts.url, type: opts.type });
-      return realWin(Object.assign({}, opts, { url: "about:blank" }));
+      return realWin(Object.assign({}, opts, { url: "about:blank" })).then((w) => { self.__popupIds.push(w.id); return w; });
     };
   });
   return { ctx, sw, state };
@@ -171,8 +190,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("A1. not connected: Send to GitHub opens the in-page panel (no window)", !!frame && !(await Promise.race([winP, sleep(500).then(() => null)])));
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
-    check('…from a "Send to app" button (nothing connected yet)',
-      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "?")).trim().endsWith("Send to app"),
+    check('…from a "Connect a tracker" button (nothing connected yet)',
+      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "?")).trim().endsWith("Connect a tracker"),
       (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "none")).trim());
     check('…offering "Connect GitHub" in the panel, with focus on it', (await frame.textContent("#connect")).trim() === "Connect GitHub" &&
       await frame.evaluate(() => document.activeElement && document.activeElement.id === "connect"));
@@ -192,7 +211,31 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
       pops[0].url === "https://github.com/login/device", JSON.stringify(pops));
     check("…no extension window or tab opens", !opened.some((u) => u.includes("confirm-send.html") || u.includes("options.html")), JSON.stringify(opened));
     check("…the code shows in the panel", (await frame.textContent("#userCode")).trim() === "WXYZ-6789");
+    state.installed = false;
     state.approve = true;
+    await frame.waitForSelector("#installBox:not([hidden])", { timeout: 12000 }).catch(() => {});
+    check("A3b. signed in, app on no repository: the panel offers \"Install TraceBug on GitHub\" + Refresh",
+      await frame.isVisible("#installApp") && await frame.isVisible("#refreshRepos") &&
+      (await frame.textContent("#installApp")).trim() === "Install TraceBug on GitHub");
+    await frame.click("#installApp");
+    await sleep(800);
+    const pops2 = await sw.evaluate(() => self.__popups);
+    check("…which the worker opens in a GitHub window", pops2.length === 2 &&
+      pops2[1].url === "https://github.com/apps/tracebug-dev/installations/new" && pops2[1].type === "popup", JSON.stringify(pops2));
+    // The user installs it on a repository and closes the window.
+    state.installed = true;
+    await sw.evaluate(() => chrome.windows.remove(self.__popupIds[self.__popupIds.length - 1]));
+    await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 8000 }).catch(() => {});
+    check("…and when it closes the repository list refreshes by itself",
+      await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO) &&
+      !(await frame.isVisible("#installBox")));
+    await frame.fill("#container", "octo/not-installed");
+    await frame.dispatchEvent("#container", "input");
+    check("…a repository the app isn't on gets a configure-access link",
+      await frame.isVisible("#repoNote") && /octo\/not-installed/.test(await frame.textContent("#repoNote")) && await frame.isVisible("#configureRepo"));
+    await frame.fill("#container", REPO);
+    await frame.dispatchEvent("#container", "input");
+    await frame.dispatchEvent("#container", "change");
     await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r) ||
       document.getElementById("container").value === r, REPO, { timeout: 12000 }).catch(() => {});
     check("A4. after GitHub approves, the same panel is connected and lists the repo",
@@ -229,6 +272,61 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("B2. Chrome's prompt is up: the request is pending, not refused", perm.length === 1 && !perm[0].done,
       perm[0] && perm[0].done ? `answered: granted=${perm[0].granted} error=${perm[0].error}` : "pending after 2.5 s");
     check("…and nothing has been opened or fetched yet", (await sw.evaluate(() => self.__popups.length)) === 0);
+  } finally {
+    await ctx.close();
+  }
+}
+
+// ═══ C. "Use a token instead", in a build without the GitHub App ══════════
+{
+  const { ctx, sw, state } = await launch(withGrantedHostAccess(EXT_SRC, "panel-token"), "c");
+  try {
+    // A store build before its production App exists: no client id → no Connect.
+    const off = await sw.evaluate(() => {
+      const c = self.TraceBugProviderAPI && self.TraceBugProviderAPI.OAUTH_CLIENTS;
+      try { c.github = "TODO_OWNER_CLIENT_ID"; c.linear = "TODO_OWNER_CLIENT_ID"; } catch (e) { return "frozen"; }
+      return c.github;
+    });
+    const { page, frame } = await panelOnPage(ctx, sw);
+    if (!frame) throw new Error("no panel frame");
+    await frame.waitForSelector("#tokenBox", { timeout: 8000 });
+    await page.evaluate(() => { window.__pageMsgs = []; window.addEventListener("message", (e) => { try { window.__pageMsgs.push(JSON.stringify(e.data)); } catch (x) {} }); });
+    check("C1. no sign-in in this build: Connect is hidden and the token box starts open",
+      off === "TODO_OWNER_CLIENT_ID" && !(await frame.isVisible("#connect")) && await frame.evaluate(() => document.getElementById("tokenBox").open), off);
+    check("…a password field with autocomplete off",
+      (await frame.getAttribute("#tokenInput", "type")) === "password" && (await frame.getAttribute("#tokenInput", "autocomplete")) === "off");
+    const tryToken = async (tok) => {
+      await frame.fill("#tokenInput", tok);
+      await frame.click("#tokenSave");
+      await frame.waitForFunction(() => !/Checking/.test(document.getElementById("tokenMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+      return (await frame.textContent("#tokenMsg")).trim();
+    };
+    const bad = await tryToken(PAT_BAD);
+    check("C2. a rejected token: a clear error, nothing saved", /didn't accept this token/.test(bad) &&
+      !((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github, bad);
+    const noScope = await tryToken(PAT_NOSCOPE);
+    check("C3. a token without the repo scope: says which scope it needs", /needs the "repo" scope/.test(noScope), noScope);
+    await frame.fill("#tokenInput", PAT);
+    await frame.press("#tokenInput", "Enter");
+    await frame.waitForFunction(() => /with a token/.test(document.getElementById("account").textContent), null, { timeout: 8000 }).catch(() => {});
+    check("C4. a working token: checked, saved, shown masked", /with a token ghp_…ABCD/.test(await frame.textContent("#account")),
+      (await frame.textContent("#account")).trim());
+    check("…the field is cleared", (await frame.inputValue("#tokenInput").catch(() => "")) === "");
+    const stored = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
+    check("…saved in extension storage", stored.token === PAT);
+    await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 8000 }).catch(() => {});
+    check("…and the repositories load with it", await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO));
+    const msgs = await page.evaluate(() => window.__pageMsgs);
+    const dom = await page.evaluate(() => document.documentElement.outerHTML);
+    const ls = await page.evaluate(() => JSON.stringify(localStorage));
+    check("C5. no token reached the page: messages, DOM, localStorage",
+      ![PAT, PAT_NOSCOPE, PAT_BAD].some((t) => msgs.some((m) => m.includes(t)) || dom.includes(t) || ls.includes(t)) &&
+      msgs.every((m) => /"type":"tb-panel-(ready|size|close)"/.test(m) || !/tb-panel/.test(m)), `${msgs.length} messages`);
+    await frame.click("#disconnect");
+    await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
+    const after = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
+    check("C6. Disconnect removes the token", !after.token && await frame.isVisible("#tokenBox"));
+    void state;
   } finally {
     await ctx.close();
   }

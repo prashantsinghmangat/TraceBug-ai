@@ -64,9 +64,12 @@ let nextNumber = 100;
 await ctx.route("https://api.github.com/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
-  const ok = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  // CORS too: leg 13 files from a plain page (script-tag SDK) with its own token.
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, accept, x-github-api-version", "access-control-allow-methods": "GET, POST" };
+  if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+  const ok = (body) => route.fulfill({ status: 200, headers: cors, contentType: "application/json", body: JSON.stringify(body) });
   if ((req.headers()["authorization"] || "") !== `Bearer ${TOKEN}`) {
-    return route.fulfill({ status: 401, contentType: "application/json", body: '{"message":"Bad credentials"}' });
+    return route.fulfill({ status: 401, headers: cors, contentType: "application/json", body: '{"message":"Bad credentials"}' });
   }
   const p = url.pathname;
   if (p === "/user") return ok({ login: "tester" });
@@ -262,6 +265,9 @@ try {
     !results.some((r) => r.includes(TOKEN)));
   await frame.click("#issueLink");
   check("…the link opens the issue when clicked", (await frame.evaluate(() => window.__opened[0])) === `https://github.com/${REPO}/issues/100`);
+  check('…and the ticket says "GitHub issue created #100" (no "Creating…" toast before it)',
+    await page.locator("text=/GitHub issue created #100/").first().isVisible().catch(() => false) &&
+    !(await page.locator("text=/Creating GitHub/").count()));
   await frame.click("#cancel"); // "Close"
   await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
   check("…Close removes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
@@ -570,6 +576,50 @@ try {
     await sleep(400);
   }
 
+  // ══ 8c. Room below the button → the panel drops down ══════════════════════
+  await page.addStyleTag({ content: "#tracebug-quick-bug-modal .tb-qb-footer { order: -1 !important; }" }).then((h) => h.evaluate((el) => { el.id = "__footerTop"; }));
+  await sleep(300);
+  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  const fd = await panelFrame();
+  if (fd) {
+    await sleep(400);
+    const g = await page.evaluate((sel) => {
+      const sl = document.querySelector("[data-tb-create-panel]");
+      return { place: sl.getAttribute("data-place"), below: sl.getBoundingClientRect().top >= document.querySelector(sel).getBoundingClientRect().bottom - 1 };
+    }, SPLIT);
+    check("8c. with the button near the top, the panel opens downward", g.place === "down" && g.below, JSON.stringify(g));
+    check("…and Create still arms there",
+      await fd.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+  } else check("8c. with the button near the top, the panel opens downward", false, "no panel");
+  await page.evaluate(() => document.getElementById("__footerTop").remove());
+
+  // ══ 8d. A ~400 px tall window: the panel scrolls inside, Create stays reachable ═
+  await page.setViewportSize({ width: 1280, height: 400 });
+  await sleep(400);
+  await page.focus(`${SPLIT} [data-tb-split-main]`);
+  await page.keyboard.press("Enter");
+  const fs4 = await panelFrame();
+  if (fs4) {
+    await sleep(500);
+    const g4 = await page.evaluate(() => {
+      const r = document.querySelector("[data-tb-create-panel] iframe").getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), vh: innerHeight };
+    });
+    check("8d. at 400 px tall the panel stays inside the window", g4.top >= 0 && g4.bottom <= g4.vh, JSON.stringify(g4));
+    check("…and scrolls inside (content taller than the panel)",
+      await fs4.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 4),
+      await fs4.evaluate(() => `${document.documentElement.scrollHeight} > ${window.innerHeight}`));
+    check("…with Create reachable: it arms and takes focus",
+      await fs4.waitForFunction(() => !document.getElementById("send").disabled && document.activeElement && document.activeElement.id === "send", null, { timeout: 6000 }).then(() => true, () => false));
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+    check("…Esc closes it and focus returns to the button", (await pageFocus()) === "main", await pageFocus());
+  } else check("8d. at 400 px tall the panel stays inside the window", false, "no panel");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await sleep(300);
+
   // ══ 9. Small viewport ════════════════════════════════════════════════════
   await page.setViewportSize({ width: 360, height: 640 });
   await sleep(400);
@@ -636,6 +686,34 @@ try {
   } else if (win12) {
     await win12.close();
   }
+
+  // ══ 13. Script-tag SDK (no extension, no panel): toast + the issue in a new tab ══
+  const sdkPage = await ctx.newPage();
+  await sdkPage.goto(SITE, { waitUntil: "load" });
+  await sdkPage.evaluate((t) => localStorage.setItem("tracebug_integrations", JSON.stringify({ github: { token: t, repo: "acme/api" } })), TOKEN);
+  await sdkPage.evaluate(() => { const sc = document.createElement("script"); sc.src = "/tracebug-sdk.js"; document.body.appendChild(sc); });
+  await sdkPage.waitForFunction(() => !!window.TraceBug, null, { timeout: 15000 });
+  await sdkPage.evaluate(() => window.TraceBug.init({ projectId: "inpage-panel-sdk", enabled: "all" }));
+  await sleep(500);
+  await sdkPage.evaluate(() => { try { window.TraceBug.startEventsCapture && window.TraceBug.startEventsCapture(); } catch (e) {} });
+  await sdkPage.fill("#coupon", "SAVE20");
+  await sdkPage.click("#orderBtn");
+  await sleep(600);
+  await sdkPage.keyboard.press("Control+Shift+KeyB");
+  await sdkPage.waitForSelector("#tracebug-quick-bug-modal", { timeout: 8000 });
+  await sleep(800);
+  check("13. script-tag SDK: no split button and no panel (the extension isn't involved)",
+    !(await sdkPage.$("#tracebug-quick-bug-modal [data-tb-send-split]")));
+  const before13 = posts.length;
+  const tabP13 = ctx.waitForEvent("page", { timeout: 8000 }).catch(() => null);
+  await sdkPage.locator('#tracebug-quick-bug-modal [data-action="open-github"], #tracebug-quick-bug-modal [data-action="github"]').first().click();
+  const tab13 = await tabP13;
+  await sdkPage.waitForSelector("text=/GitHub issue created #\d+/", { timeout: 8000 }).catch(() => {});
+  check("…filing shows the toast with the issue number", posts.length === before13 + 1 &&
+    await sdkPage.locator(`text=/GitHub issue created #${nextNumber - 1}/`).first().isVisible().catch(() => false));
+  check("…and opens the issue in a new tab", !!tab13 && tab13.url().includes(`/acme/api/issues/${nextNumber - 1}`), tab13 ? tab13.url() : "no tab");
+  check("…and no panel frame appeared", !sdkPage.frames().some((f) => f.url().includes("/create-issue.html")));
+  if (tab13) await tab13.close().catch(() => {});
 } finally {
   await ctx.close();
   server.close();

@@ -33204,7 +33204,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const opens = target === "github" || target === "linear" ? ` aria-haspopup="dialog" aria-expanded="false"` : "";
     const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` }) : _sendButtonHtml(panel, true, {
       attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
-      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Send to app`
+      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Connect a tracker`
     });
     const tip = !s2.trackerConnected ? "No tracker connected \xB7 connect one" : `${TRACKER_LABELS[panel]} \xB7 ${s2.trackerAttention ? "a connection needs attention" : "connected"}`;
     const dot = s2.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : "";

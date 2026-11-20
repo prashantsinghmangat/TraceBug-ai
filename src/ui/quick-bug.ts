@@ -144,7 +144,7 @@ function _panelTarget(primary: _SendTarget): "github" | "linear" | null {
  * The footer's main send control. Extension mode with a tracker that has a
  * Create panel: a split button — the main part sends to the default tracker
  * (the panel opens with Create focused), ▾ or Alt+Down opens the same panel on
- * the tracker picker. Nothing connected yet: "Send to app", which opens the
+ * the tracker picker. Nothing connected yet: "Connect a tracker", which opens the
  * panel to connect. The page learns only ids and booleans: the tooltip names
  * the tracker, never the repository, team or account (those stay in the
  * extension's frame and pages). Elsewhere: the plain main button.
@@ -159,7 +159,7 @@ function _primarySendHtml(): string {
     ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` })
     : _sendButtonHtml(panel, true, {
       attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
-      inner: `<span class="tb-qb-split-logos">${(["github", "linear"] as const).filter((t) => hasIntegration(t)).map((t) => brandLogo(t, 14)).join("")}</span> Send to app`,
+      inner: `<span class="tb-qb-split-logos">${(["github", "linear"] as const).filter((t) => hasIntegration(t)).map((t) => brandLogo(t, 14)).join("")}</span> Connect a tracker`,
     });
   const tip = !s.trackerConnected
     ? "No tracker connected · connect one"

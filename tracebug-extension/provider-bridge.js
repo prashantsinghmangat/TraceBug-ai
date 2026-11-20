@@ -42,6 +42,12 @@
     "tb:tracker:connect-show",
     // Integrations hub: which connection the ticket's send button targets.
     "tb:tracker:set-primary",
+    // Create panel: "Use a token instead" (checked against the API, then
+    // saved — the answer never carries the secret) and "Install TraceBug on
+    // GitHub" (the worker opens the page and says when it's closed).
+    "tb:tracker:save-token",
+    "tb:tracker:open-install",
+    "tb:tracker:install-state",
   ];
 
   // The pages allowed to send them.

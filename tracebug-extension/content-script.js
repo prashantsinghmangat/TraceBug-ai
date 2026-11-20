@@ -685,7 +685,9 @@ function setSplitExpanded(p, open) {
  * button when it fits, else above it (the usual case: the button is in the
  * footer), pinned by its bottom edge so the Create row stays put as the panel
  * grows; on a short window it's kept inside the ticket, over the button if it
- * must be. Only styles change: moving an iframe in the DOM would reload it.
+ * must be, and no taller than the ticket: the panel then scrolls inside, with
+ * its Create row pinned to its bottom edge. Only styles change: moving an
+ * iframe in the DOM would reload it.
  */
 function placeCreatePanel(p) {
   if (!p.split || !p.split.isConnected) return;
@@ -693,7 +695,8 @@ function placeCreatePanel(p) {
   var shell = p.modal.querySelector(".tb-qb-shell");
   var sr = shell ? shell.getBoundingClientRect() : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
   var top = Math.max(sr.top, 0) + 8, bottom = Math.min(sr.bottom, window.innerHeight) - 8;
-  var h = p.frame.getBoundingClientRect().height;
+  var h = Math.max(80, Math.min(p.wantH || p.frame.getBoundingClientRect().height, bottom - top));
+  p.frame.style.setProperty("height", Math.round(h) + "px", "important");
   var fp = p.footer.getBoundingClientRect();
   var width = Math.min(560, sr.right - sr.left - 24);
   var left = Math.max(sr.left + 12, Math.min(btn.left, sr.right - 12 - width)) - fp.left;
@@ -768,8 +771,9 @@ function mountCreatePanel(id, nonce) {
       try { frame.focus(); } catch (e) {}
     } else if (d.type === "tb-panel-size" && Object.keys(d).length === 2 &&
       typeof d.height === "number" && isFinite(d.height) && d.height >= 40 && d.height <= 1400) {
-      frame.style.setProperty("height", Math.ceil(d.height) + "px", "important");
-      placeCreatePanel(p);
+      p.wantH = Math.ceil(d.height);
+      if (p.split) placeCreatePanel(p);
+      else frame.style.setProperty("height", p.wantH + "px", "important");
     } else if (d.type === "tb-panel-close" && Object.keys(d).length === 1) {
       unmountCreatePanel();
     }

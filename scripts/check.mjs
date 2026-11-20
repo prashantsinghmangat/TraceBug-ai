@@ -26,7 +26,9 @@
 // every warning, so a floating /errors\s+(\d+)/ could match prose in a warning
 // description instead of the count.
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const FAST = ["typecheck", "lint", "test", "build"];
 const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality", "e2e:audit", "e2e:audit-ext", "e2e:audit-gate", "e2e:email-ask", "e2e:annotate", "e2e:trim", "e2e:video-cut", "e2e:ticket-view", "e2e:shot-editor", "e2e:tracker", "e2e:github-connect", "e2e:firefox-token", "e2e:inpage-panel", "e2e:panel-connect", "e2e:linear", "e2e:hub"];
@@ -53,6 +55,27 @@ if (blocked.length) {
   console.log("Run it directly instead.");
   process.exit(2);
 }
+
+// One run at a time. Two overlapping runs (a run that was interrupted but
+// whose children kept going, plus a new one) starve each other: both flaky
+// failures seen so far — vitest's "reading 'config'" worker crash and the
+// Linear sign-in timeouts — happened only in runs started right after another
+// was stopped, and never reproduced alone or under plain CPU load.
+const LOCK = join(tmpdir(), "tracebug-check.lock");
+if (existsSync(LOCK)) {
+  const pid = Number(readFileSync(LOCK, "utf8"));
+  let alive = false;
+  try { process.kill(pid, 0); alive = true; } catch {}
+  if (alive) {
+    console.log(`another check.mjs (pid ${pid}) is still running — wait for it or end it first.`);
+    process.exit(2);
+  }
+}
+writeFileSync(LOCK, String(process.pid));
+process.on("exit", () => { try { unlinkSync(LOCK); } catch {} });
+// The full output of every failing gate, for the next time a flake shows up
+// (the 40-line tail below cut off what caused the vitest crash).
+const LOGS = join(tmpdir(), "tracebug-check-logs");
 
 const BASE = "scripts/check-baseline.json";
 const baseline = existsSync(BASE) ? JSON.parse(readFileSync(BASE, "utf8")) : {};
@@ -135,6 +158,12 @@ for (const gate of gates) {
   if (!ok) {
     failed++;
     console.log(tail(out, 40));
+    try {
+      mkdirSync(LOGS, { recursive: true });
+      const file = join(LOGS, gate.replace(/[^a-z0-9-]/gi, "_") + ".log");
+      writeFileSync(file, out);
+      console.log(`  | full output: ${file}`);
+    } catch {}
   } else if (verbose && out.trim()) {
     console.log(tail(out, 10_000));
   }

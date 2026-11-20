@@ -395,3 +395,91 @@ describe('one Ctrl+Shift+B press never fires both handlers', () => {
     expect(browserOwnsQuickCapture()).toBe(false);
   });
 });
+
+// ── Redesign step 3: "Use a token instead" in the Create panel ─────────────
+// The token is typed into the extension frame, checked by the worker against
+// the API, and saved there. These pin: the check's answers (valid, rejected,
+// missing scope, no access) never carry the secret, and the frame never posts
+// the token (or any field value) to the page.
+import { checkTrackerSecret, plausibleSecret } from '../src/providers/trackers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+describe('panel token entry: checked before saving, never echoed', () => {
+  const TOKEN = 'ghp_PANELsecret0123456789abcdefABCDEF';
+  const reply = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('a working classic token with repo scope → its account', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      seen.push(String((init.headers as Record<string, string>).authorization));
+      if (url.endsWith('/user')) return reply(200, { login: 'octo' }, { 'x-oauth-scopes': 'repo, read:org' });
+      return reply(200, { full_name: 'acme/api' });
+    }));
+    const r = await checkTrackerSecret('github', TOKEN, 'acme/api');
+    expect(r).toEqual({ ok: true, account: 'octo' });
+    expect(seen.every((h) => h === `Bearer ${TOKEN}`)).toBe(true);
+  });
+
+  it('a rejected token (401) → bad_token, and the message has no secret', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply(401, { message: `Bad credentials ${TOKEN}` })));
+    const r = await checkTrackerSecret('github', TOKEN);
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.code).toBe('bad_token');
+    expect(JSON.stringify(r)).not.toContain(TOKEN);
+  });
+
+  it('a classic token without repo/public_repo → missing_scope', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => reply(200, { login: 'octo' }, { 'x-oauth-scopes': 'read:user, gist' })));
+    const r = await checkTrackerSecret('github', TOKEN);
+    expect(r.ok === false && r.code).toBe('missing_scope');
+  });
+
+  it('a token that cannot see the chosen repository → no_access, naming the repo', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/user')
+      ? reply(200, { login: 'octo' }) // fine-grained: no scopes header
+      : reply(404, { message: 'Not Found' })));
+    const r = await checkTrackerSecret('github', TOKEN, 'acme/private');
+    expect(r.ok === false && r.code).toBe('no_access');
+    expect(r.ok === false && r.error).toContain('acme/private');
+  });
+
+  it('a Linear key: viewer → account; a rejected key → bad_token', async () => {
+    const KEY = 'lin_api_PANELsecret0123456789abcdef';
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: RequestInit) => {
+      expect((init.headers as Record<string, string>).authorization).toBe(KEY);
+      return reply(200, { data: { viewer: { email: 'ana@acme.test' } } });
+    }));
+    expect(await checkTrackerSecret('linear', KEY)).toEqual({ ok: true, account: 'ana@acme.test' });
+    vi.stubGlobal('fetch', vi.fn(async () => reply(401, { errors: [{ message: 'Authentication required' }] })));
+    const bad = await checkTrackerSecret('linear', KEY);
+    expect(bad.ok === false && bad.code).toBe('bad_token');
+    expect(JSON.stringify(bad)).not.toContain(KEY);
+  });
+
+  it('junk is refused before any request', async () => {
+    const f = vi.fn();
+    vi.stubGlobal('fetch', f);
+    expect(plausibleSecret('not a token')).toBe(false);
+    const r = await checkTrackerSecret('github', 'ghp_ x');
+    expect(r.ok === false && r.code).toBe('invalid');
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('the panel frame posts only layout messages to the page — never the token', () => {
+    const src = readFileSync(join(__dirname, '..', 'tracebug-extension', 'confirm-send.js'), 'utf8');
+    // Every postParent(...) call sends a literal of a known type and no field values.
+    const calls = [...src.matchAll(/(?<!function )postParent\(([^;]*?)\);/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) {
+      expect(c).toMatch(/^\{ type: "tb-panel-(ready|size|close)"(, height: [^}]+)? \}$/);
+    }
+    // The token input is read in one place, and goes only to the worker.
+    const reads = [...src.matchAll(/\$\("tokenInput"\)\.value/g)];
+    expect(reads.length).toBeGreaterThan(0);
+    expect(src).toMatch(/send\("tb:tracker:save-token", \{ tracker: t\.id, secret, container \}\)/);
+    expect(src).not.toMatch(/postMessage\([^)]*secret/);
+  });
+});

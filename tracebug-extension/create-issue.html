@@ -48,7 +48,7 @@
     .plabel { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
     .grow { flex: 1 1 auto; }
     .muted { color: var(--muted); font-size: 12px; }
-    select, input[type="text"], input[type="search"] {
+    select, input[type="text"], input[type="search"], input[type="password"] {
       background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
       padding: 6px 8px; font: inherit; min-width: 0;
     }
@@ -82,7 +82,11 @@
     .done { font-size: 14px; font-weight: 600; margin: 2px 0; }
     a { color: var(--accent); }
     .actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    /* A short window caps the panel's height and it scrolls inside: Create stays in view. */
+    .panel > .actions { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0 2px; margin-bottom: -2px; z-index: 1; }
     #manageInt { font-size: 12px; }
+    #tokenBox summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+    #tokenInput { flex: 1 1 220px; min-width: 0; }
     .countdown { font-size: 11px; color: var(--muted); }
     .fatal { padding: 10px 12px; color: var(--muted); font-size: 12px; }
   </style>
@@ -103,7 +107,6 @@
       <p class="muted" id="connectText"></p>
       <div class="prow">
         <button type="button" class="small" id="connect">Connect</button>
-        <a href="#" id="settingsLink">Use a token in TraceBug settings</a>
       </div>
       <div class="pblock" id="deviceBox" hidden>
         <span class="plabel" id="deviceHint"></span>
@@ -113,6 +116,18 @@
           <button type="button" class="ghost small" id="openDevice" hidden>Reopen GitHub</button>
         </div>
       </div>
+      <!-- The token lives in this extension frame only: never in the page,
+           never in a message to it. Checked against the API, then saved. -->
+      <details class="pblock" id="tokenBox">
+        <summary id="tokenSummary">Use a token instead</summary>
+        <label class="plabel" for="tokenInput" id="tokenLabel">Personal access token</label>
+        <div class="prow">
+          <input type="password" id="tokenInput" autocomplete="off" spellcheck="false" autocapitalize="off" />
+          <button type="button" class="small" id="tokenSave">Check and save</button>
+        </div>
+        <p class="muted"><span id="tokenHelpText"></span> <a href="#" id="tokenHelp"></a></p>
+        <p class="msg" id="tokenMsg" role="status" aria-live="polite"></p>
+      </details>
     </div>
 
     <div class="pblock" id="accessBox" hidden>
@@ -125,6 +140,16 @@
       <input type="text" id="container" list="containerList" autocomplete="off" spellcheck="false" />
       <datalist id="containerList"></datalist>
       <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
+      <p class="muted" id="repoNote" hidden>TraceBug isn't allowed on <strong id="repoNoteName"></strong> yet.
+        <a href="#" id="configureRepo">Configure repository access on GitHub</a></p>
+      <div class="pblock" id="installBox" hidden>
+        <p class="muted">TraceBug isn't installed on any of your GitHub repositories yet. Install it on the ones you
+          want to file into, then come back here.</p>
+        <div class="prow">
+          <button type="button" class="small" id="installApp">Install TraceBug on GitHub</button>
+          <button type="button" class="ghost small" id="refreshRepos">Refresh</button>
+        </div>
+      </div>
       <div id="fields"></div>
       <p class="muted" id="attachNote" hidden></p>
     </div>

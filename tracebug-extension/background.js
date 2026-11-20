@@ -2493,16 +2493,28 @@ function oauthUiSupported() {
   catch { return false; }
 }
 
-/** { github: true, … } for each tracker whose Connect this build can offer. */
+/** { github: true, … } for each tracker the ticket can start with nothing set
+ *  up: where this build offers Connect, or where the in-page panel can take a
+ *  token instead (a Chrome build without its GitHub App yet). Firefox has
+ *  neither, so its ticket keeps pointing to settings. */
 function connectableTrackers() {
   const api = providerApi();
   const out = {};
   if (!api || typeof api.trackerAdapter !== "function" || !oauthUiSupported()) return out;
+  const panelTokens = panelBuild();
   for (const id of api.ISSUE_TRACKERS) {
     const a = api.trackerAdapter(id);
-    if (a && a.connect()) out[id] = true;
+    if (a && (a.connect() || panelTokens)) out[id] = true;
   }
   return out;
+}
+
+/** This build frames the Create panel (its page is web-accessible). */
+function panelBuild() {
+  try {
+    const war = chrome.runtime.getManifest().web_accessible_resources || [];
+    return war.some((e) => e && Array.isArray(e.resources) && e.resources.indexOf("create-issue.html") !== -1);
+  } catch { return false; }
 }
 
 function authContext(adapter, integrations) {
@@ -2637,6 +2649,8 @@ async function trackerStatusList(api) {
       // false = the API host was granted once and has since been removed: the
       // hub shows Error. Asked only where there is a credential to use it.
       hostsGranted: map[id] || api.describeAuth(id, map, integrations).connected ? await hasAllHosts(a.apiHosts) : undefined,
+      // A saved token, masked ("ghp_…wxyz"), so the panel can show which one.
+      tokenHint: integrations[id] ? maskedSecret(integrations[id].token || integrations[id].apiKey) : "",
     }, api.describeAuth(id, map, integrations));
   }));
 }
@@ -2861,8 +2875,18 @@ if (chrome.windows && chrome.windows.onRemoved) {
   chrome.windows.onRemoved.addListener((windowId) => { onDevicePopupClosed(windowId).catch(() => {}); });
 }
 
-async function disconnectTracker(api, adapter) {
+async function disconnectTracker(api, adapter, alsoToken) {
   const gone = await api.forgetOAuth(trackerAuthStore, adapter.id);
+  // The panel's Disconnect on a token connection removes the token (the
+  // repository/team stays, as in settings).
+  if (alsoToken) {
+    const all = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+    if (all[adapter.id]) {
+      delete all[adapter.id].token;
+      delete all[adapter.id].apiKey;
+      await localSet({ [INT_KEY]: all });
+    }
+  }
   // Linear lets a public (PKCE) client revoke its own grant; GitHub doesn't.
   if (adapter.id === "linear" && gone && gone.tokens) {
     if (gone.tokens.refreshToken) await api.revokeLinearToken(gone.tokens.refreshToken, "refresh_token");
@@ -2875,6 +2899,69 @@ async function disconnectTracker(api, adapter) {
   // GitHub's revoke endpoint needs the client secret we don't have (ADR 010 §6),
   // so the window links the user to where they can revoke it themselves.
   return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/apps/authorizations" : null };
+}
+
+// ── Create panel: "Use a token instead" ────────────────────────────────────
+// The frame (an extension page; never the site) sends the pasted secret here.
+// It is checked against the API first, saved only if it works, read back to
+// make sure the write landed, and never echoed: the answer is the account.
+async function saveTrackerToken(api, adapter, message) {
+  if (!(await hasAllHosts(adapter.apiHosts))) return { needsAccess: adapter.apiHosts };
+  const secret = typeof message.secret === "string" ? message.secret.trim() : "";
+  const container = typeof message.container === "string" ? message.container.trim().slice(0, 300) : "";
+  const r = await api.checkTrackerSecret(adapter.id, secret, container);
+  if (!r.ok) return { error: r.error, code: r.code };
+  const field = adapter.id === "github" ? "token" : "apiKey";
+  const all = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+  all[adapter.id] = Object.assign({}, all[adapter.id] || {}, { [field]: secret });
+  await localSet({ [INT_KEY]: all });
+  const back = (((await localGet([INT_KEY], {}))[INT_KEY] || {})[adapter.id] || {})[field];
+  if (back !== secret) return { error: "TraceBug couldn't save it. Try again." };
+  return { ok: true, account: r.account || "" };
+}
+
+/** "ghp_…wxyz": enough to recognise a saved token, for extension pages only. */
+function maskedSecret(secret) {
+  const s = typeof secret === "string" ? secret : "";
+  return s.length > 12 ? s.slice(0, 4) + "…" + s.slice(-4) : s ? "…" : "";
+}
+
+// ── Create panel: "Install TraceBug on GitHub" ─────────────────────────────
+// Opened here (a small window, a tab if that fails), so the frame needs no
+// user activation; the frame asks whether it's still open and refreshes the
+// repository list once it's gone.
+const INSTALL_KEY = "tb_install_page_v1";
+const INSTALL_POPUP = { type: "popup", width: 1000, height: 760 };
+
+async function openInstallPage(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== "https:" || u.hostname !== "github.com" || !/^\/apps\/[\w-]+\/installations\/new$/.test(u.pathname)) return null;
+  let rec = null;
+  try {
+    const win = await chrome.windows.create(Object.assign({ url: u.toString(), focused: true }, INSTALL_POPUP));
+    if (win && win.id != null) rec = { windowId: win.id };
+  } catch {}
+  if (!rec) {
+    try {
+      const tab = await chrome.tabs.create({ url: u.toString(), active: true });
+      if (tab && tab.id != null) rec = { tabId: tab.id };
+    } catch {}
+  }
+  if (!rec) return null;
+  await sessionSet({ [INSTALL_KEY]: rec });
+  return rec.windowId != null ? "popup" : "tab";
+}
+
+async function installPageOpen() {
+  const rec = await sessionGet(INSTALL_KEY, null);
+  if (!rec) return false;
+  try {
+    if (rec.windowId != null) { await chrome.windows.get(rec.windowId); return true; }
+    if (rec.tabId != null) { await chrome.tabs.get(rec.tabId); return true; }
+  } catch {}
+  await sessionSet({ [INSTALL_KEY]: null });
+  return false;
 }
 
 async function handleTrackerUi(message, sender) {
@@ -2924,7 +3011,14 @@ async function handleTrackerUi(message, sender) {
       case "tb:tracker:connect": return await connectTracker(api, adapter, sender);
       case "tb:tracker:connect-show": return await showDevicePopup(adapter.id);
       case "tb:tracker:connect-poll": return await pollTrackerConnect(api, adapter);
-      case "tb:tracker:disconnect": return await disconnectTracker(api, adapter);
+      case "tb:tracker:disconnect": return await disconnectTracker(api, adapter, message.token === true);
+      case "tb:tracker:save-token": return await saveTrackerToken(api, adapter, message);
+      case "tb:tracker:open-install": {
+        if (adapter.id !== "github" || !adapter.manageUrl) return { error: "There is nothing to install for " + adapter.label + "." };
+        const how = await openInstallPage(adapter.manageUrl);
+        return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
+      }
+      case "tb:tracker:install-state": return { open: await installPageOpen() };
       case "tb:tracker:set-default": {
         const c = b.validateChoice({ tracker: adapter.id, container: message.container, fields: {} });
         if (!c.ok) return { error: c.error };

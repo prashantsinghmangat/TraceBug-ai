@@ -44,7 +44,8 @@ the extension is public.
      - **Updated 2026-11-19:** when v2 says hidden (any filter, e.g. a dark-mode extension), the content script gives
        a second opinion (hit test at the Create row, click-through layers over it, ancestor opacity/transform/filter;
        colour filters allowed); two clean checks arm, re-checked on the click. **Accepted gap, no fix planned:** a
-       click-through `::before`/`::after` whose host element's box lies outside the Create row isn't checked. Worst
+       click-through `::before`/`::after` whose host element's box lies outside the Create row isn't checked, and
+       neither is the shadow tree (open or closed) of a host whose own box lies outside the row. Worst
        case is an unwanted issue in the user's own repository;
      - a port from the frame ties the request to it, so closing the ticket or navigating away cancels it;
      - if the frame doesn't come up within 3.5 s, the extension window opens instead.

@@ -218,18 +218,24 @@ async function selectTracker(id) {
   renderAttachNote(t.id);
 
   put("account", t.connected
-    ? (t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token")
+    ? (t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token" + (t.tokenHint ? " " + t.tokenHint : ""))
     : "");
-  show("disconnect", t.via === "oauth");
+  // The panel can also remove a token; the window leaves that to settings.
+  show("disconnect", t.via === "oauth" || (EMBED && t.via === "token"));
+  show("installBox", false);
+  show("repoNote", false);
 
   if (!t.connected) {
     show("pickBox", false);
     show("connectBox", true);
     put("connectText", t.canConnect
       ? (t.needsReconnect ? t.label + " needs you to sign in again." : "Connect " + t.label + " to pick where this goes.")
-      : t.label + " isn't connected. Add a token in TraceBug settings, then send again.");
+      : $("tokenBox")
+        ? "Connect " + t.label + " with " + (t.id === "linear" ? "an API key" : "a token") + " to pick where this goes."
+        : t.label + " isn't connected. Add a token in TraceBug settings, then send again.");
     show("connect", t.canConnect);
     $("connect").textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
+    setupTokenBox(t);
     syncCreateButton();
     return;
   }
@@ -281,7 +287,12 @@ async function loadContainers() {
     else if (it.detail) o.label = String(it.detail);
     list.appendChild(o);
   });
-  panelMsg(panel.items.length ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
+  // Signed in to the GitHub App but it's on no repository: offer the install.
+  const noInstall = !panel.items.length && t.id === "github" && t.via === "oauth" && !!$("installBox");
+  show("installBox", noInstall);
+  if (noInstall) panel.installWatch = true;
+  panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
+  checkRepoAllowed();
   // Linear's container id is opaque; show the team the remembered id is.
   if (!selectedContainer() && panel.items.length === 1) $("container").value = panel.items[0].id;
   syncCreateButton();
@@ -454,6 +465,99 @@ function openExternal(url) {
   try { chrome.tabs.create({ url: u.toString(), active: true }); } catch {}
 }
 
+// ── "Use a token instead" (panel only) ─────────────────────────────────────
+// The token is typed into THIS frame, sent to the worker (which checks it
+// against the API and saves it), and cleared. It is never posted to the page.
+
+const TOKEN_HELP = {
+  github: { url: "https://github.com/settings/tokens/new?scopes=repo&description=TraceBug", text: "A classic token with the \"repo\" scope, or a fine-grained one with Issues: Read and write." },
+  linear: { url: "https://linear.app/settings/account/security", text: "A personal API key from Linear's security settings." },
+};
+
+function secretNoun(t) {
+  return t && t.id === "linear" ? "API key" : "token";
+}
+
+function setupTokenBox(t) {
+  const box = $("tokenBox");
+  if (!box) return;
+  const help = TOKEN_HELP[t.id] || TOKEN_HELP.github;
+  put("tokenSummary", "Use " + (t.id === "linear" ? "an API key" : "a token") + " instead");
+  put("tokenLabel", t.id === "linear" ? "Linear API key" : "GitHub personal access token");
+  put("tokenHelpText", help.text);
+  put("tokenHelp", t.id === "linear" ? "Create one in Linear" : "Create one on GitHub");
+  $("tokenHelp").dataset.url = help.url;
+  $("tokenInput").value = "";
+  tokenMsg("");
+  // No sign-in in this build (a store build without its GitHub App yet): the
+  // token is the way in, so it starts open — never a dead Connect button.
+  box.open = !t.canConnect;
+}
+
+function tokenMsg(text, isErr) {
+  const el = $("tokenMsg");
+  el.textContent = String(text || "");
+  el.className = "msg" + (isErr ? " err" : "");
+}
+
+async function onTokenSave() {
+  const t = panel.current;
+  if (!t || panel.tokenSaving) return;
+  const secret = ($("tokenInput").value || "").trim();
+  if (!secret) { tokenMsg("Paste " + (t.id === "linear" ? "an API key" : "a token") + " first.", true); $("tokenInput").focus(); return; }
+  // Host access first, inside the click (an await before it loses the gesture).
+  const granted = await requestPermissions({ origins: t.apiHosts || [] });
+  if (!granted) { tokenMsg("TraceBug needs access to " + t.label + " to check and use the " + secretNoun(t) + ".", true); return; }
+  panel.tokenSaving = true;
+  $("tokenSave").disabled = true;
+  tokenMsg("Checking with " + t.label + "…");
+  const container = (selectedContainer() || (t.last && t.last.container) || "").trim();
+  const res = await send("tb:tracker:save-token", { tracker: t.id, secret, container });
+  panel.tokenSaving = false;
+  $("tokenSave").disabled = false;
+  if (!res || res.error || !res.ok) {
+    tokenMsg((res && res.error) || "Could not check the " + secretNoun(t) + ".", true);
+    return;
+  }
+  $("tokenInput").value = "";
+  tokenMsg("");
+  await refreshAfterAuthChange(t.id);
+  panelMsg("Connected" + (res.account ? " as " + res.account : "") + " with " + (t.id === "linear" ? "an API key" : "a token") + ".");
+}
+
+// ── "Install TraceBug on GitHub" (panel only) ──────────────────────────────
+// The worker opens GitHub's install page; we refresh the repositories when it
+// closes, when the user comes back, or on Refresh.
+
+async function openInstall() {
+  const res = await send("tb:tracker:open-install", { tracker: "github" });
+  if (!res || !res.ok) { panelMsg((res && res.error) || "Could not open GitHub.", true); return; }
+  panelMsg("Pick the repositories on GitHub, then come back — the list refreshes by itself.");
+  panel.installWatch = true;
+  clearTimeout(panel.installTimer);
+  const started = Date.now();
+  const tick = async () => {
+    if (decided || !panel.installWatch) return;
+    const st = await send("tb:tracker:install-state", { tracker: "github" });
+    if (st && st.open === false) { await loadContainers(); return; }
+    if (Date.now() - started < 10 * 60 * 1000) panel.installTimer = setTimeout(tick, 1500);
+  };
+  panel.installTimer = setTimeout(tick, 1500);
+}
+
+/** Signed in through the app, the list loaded, and the typed repo isn't on it. */
+function checkRepoAllowed() {
+  const t = panel.current;
+  if (!$("repoNote") || !t) return;
+  const c = selectedContainer();
+  const off = t.id === "github" && t.via === "oauth" && panel.items.length > 0 && /^[\w.-]+\/[\w.-]+$/.test(c) &&
+    !panel.items.some((it) => String(it.id).toLowerCase() === c.toLowerCase());
+  show("repoNote", off);
+  if (off) put("repoNoteName", c);
+  // Repositories are there now: stop refreshing on focus.
+  if (panel.items.length) panel.installWatch = false;
+}
+
 async function onConnect() {
   const t = panel.current;
   if (!t || !t.canConnect) return;
@@ -519,7 +623,7 @@ function schedulePoll(id, seconds) {
 async function onDisconnect() {
   const t = panel.current;
   if (!t) return;
-  const res = await send("tb:tracker:disconnect", { tracker: t.id });
+  const res = await send("tb:tracker:disconnect", { tracker: t.id, token: EMBED && t.via === "token" });
   if (!res || res.error) { panelMsg((res && res.error) || "Could not disconnect.", true); return; }
   await refreshAfterAuthChange(t.id);
   if (res.revokeUrl) panelMsg("Disconnected. To revoke TraceBug's access entirely, visit " + res.revokeUrl);
@@ -529,10 +633,27 @@ function wirePanel() {
   $("tracker").addEventListener("change", () => selectTracker($("tracker").value));
   $("connect").addEventListener("click", onConnect);
   $("disconnect").addEventListener("click", onDisconnect);
-  $("settingsLink").addEventListener("click", (e) => {
+  if ($("settingsLink")) $("settingsLink").addEventListener("click", (e) => {
     e.preventDefault();
     try { chrome.runtime.openOptionsPage(); } catch {}
   });
+  if ($("tokenSave")) {
+    $("tokenSave").addEventListener("click", onTokenSave);
+    $("tokenInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); onTokenSave(); }
+    });
+    $("tokenHelp").addEventListener("click", (e) => { e.preventDefault(); openExternal($("tokenHelp").dataset.url || ""); });
+  }
+  if ($("installApp")) {
+    $("installApp").addEventListener("click", openInstall);
+    $("configureRepo").addEventListener("click", (e) => { e.preventDefault(); openInstall(); });
+    $("refreshRepos").addEventListener("click", () => loadContainers());
+    $("container").addEventListener("input", checkRepoAllowed);
+    // Back from GitHub (window focus, tab shown again): look again.
+    const back = () => { if (panel.installWatch) loadContainers(); };
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) back(); });
+  }
   // The ticket's plug icon is gone: the Integrations hub is reached from here.
   if ($("manageInt")) $("manageInt").addEventListener("click", (e) => {
     e.preventDefault();
@@ -543,6 +664,7 @@ function wirePanel() {
   });
   $("manageLink").addEventListener("click", (e) => {
     e.preventDefault();
+    if ($("installBox")) { openInstall(); return; }
     openExternal($("manageLink").dataset.url || "");
   });
   $("openDevice").addEventListener("click", async () => {

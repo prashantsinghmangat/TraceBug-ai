@@ -45,6 +45,7 @@ var TraceBugProviderAPI = (() => {
     buildAuthorizeUrl: () => buildAuthorizeUrl,
     callLLM: () => callLLM,
     capProviderBody: () => capProviderBody,
+    checkTrackerSecret: () => checkTrackerSecret,
     connectionState: () => connectionState,
     createPkcePair: () => createPkcePair,
     describeAuth: () => describeAuth,
@@ -70,6 +71,7 @@ var TraceBugProviderAPI = (() => {
     parseRedirect: () => parseRedirect,
     parseTokenResponse: () => parseTokenResponse,
     pkceChallenge: () => pkceChallenge,
+    plausibleSecret: () => plausibleSecret,
     pollDeviceToken: () => pollDeviceToken,
     postGitHubIssue: () => postGitHubIssue,
     postLinearIssue: () => postLinearIssue,
@@ -1126,6 +1128,55 @@ var TraceBugProviderAPI = (() => {
       return res.ok;
     } catch (e) {
       return false;
+    }
+  }
+  function plausibleSecret(secret) {
+    return typeof secret === "string" && /^[A-Za-z0-9_\-.:]{16,400}$/.test(secret);
+  }
+  var REPO_RE = /^[\w.-]+\/[\w.-]+$/;
+  async function checkTrackerSecret(tracker, secret, container, signal) {
+    const label = tracker === "github" ? "GitHub" : "Linear";
+    const noun = tracker === "github" ? "token" : "API key";
+    if (!plausibleSecret(secret)) {
+      return { ok: false, code: "invalid", error: `That doesn't look like a ${label} ${noun}. Paste the whole ${noun}, with nothing around it.` };
+    }
+    const auth = { via: "token", token: secret };
+    try {
+      if (tracker === "github") {
+        const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+        if (res.status === 401) {
+          return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
+        }
+        const me = await parseJsonOrThrow(res, "GitHub", "tracker");
+        const scopes = res.headers.get("x-oauth-scopes");
+        if (scopes !== null) {
+          const list = scopes.split(",").map((x) => x.trim());
+          if (!list.includes("repo") && !list.includes("public_repo")) {
+            return { ok: false, code: "missing_scope", error: `This token can't create issues: it needs the "repo" scope (or "public_repo" for public repositories only).` };
+          }
+        }
+        const repo = typeof container === "string" ? container.trim() : "";
+        if (repo && REPO_RE.test(repo)) {
+          const r = await fetch(`${GH_API}/repos/${repo}`, { headers: ghHeaders(auth), signal });
+          if (r.status === 404 || r.status === 403) {
+            return { ok: false, code: "no_access", error: `This token can't see ${repo}. Give it access to that repository (a fine-grained token needs it under "Repository access", with Issues: Read and write).` };
+          }
+        }
+        return { ok: true, account: me.login || "" };
+      }
+      const d = await linearQuery(auth, "query { viewer { name email } }", signal);
+      return { ok: true, account: d.viewer && (d.viewer.email || d.viewer.name) || "" };
+    } catch (err) {
+      const e = err;
+      if (e && e.status === 401) return { ok: false, code: "bad_token", error: `${label} didn't accept this ${noun}. Check it was copied whole and hasn't been revoked.` };
+      if (e && /permission|scope|forbidden/i.test(e.message || "")) {
+        return { ok: false, code: "missing_scope", error: `This ${label} ${noun} doesn't have the permissions TraceBug needs (read, and create issues).` };
+      }
+      if (e && (e.name === "TypeError" || /failed to fetch|networkerror/i.test(e.message || ""))) {
+        return { ok: false, code: "network", error: `Could not reach ${label} to check the ${noun}. Check your connection and try again.` };
+      }
+      const msg = String(e && e.message || `${label} request failed.`).split(secret).join("\u2026");
+      return { ok: false, code: "error", error: msg };
     }
   }
   var TRACKER_ADAPTERS = { github, linear };
