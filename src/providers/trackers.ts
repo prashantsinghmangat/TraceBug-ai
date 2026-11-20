@@ -594,6 +594,26 @@ export async function checkTrackerSecret(
   }
 }
 
+/** Can this credential see this repository/team? For a remembered pick the
+ *  list can't vouch for (it hit MAX_CONTAINERS): asked directly. */
+export async function containerAccessible(
+  tracker: IssueTracker,
+  auth: ResolvedAuth,
+  container: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (tracker === "github") {
+    if (!REPO_RE.test(container)) return false;
+    const res = await fetch(`${GH_API}/repos/${container}`, { headers: ghHeaders(auth), signal });
+    if (res.status === 404 || res.status === 403) return false;
+    await parseJsonOrThrow(res, "GitHub", "tracker");
+    return true;
+  }
+  const d = await linearQuery<{ team?: { id?: string } | null }>(
+    auth, "query($id: String!) { team(id: $id) { id } }", signal, { id: container }).catch(() => ({ team: null }));
+  return !!(d.team && d.team.id);
+}
+
 export const TRACKER_ADAPTERS: Record<IssueTracker, TrackerAdapter> = { github, linear };
 
 export function trackerAdapter(id: string): TrackerAdapter | null {

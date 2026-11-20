@@ -298,7 +298,8 @@ async function loadContainers() {
   if (noInstall) panel.installWatch = true;
   panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
   checkRepoAllowed();
-  checkPrefill(t);
+  await checkPrefill(t);
+  if (seq !== panel.loadSeq) return;
   // Linear's container id is opaque; show the team the remembered id is.
   if (!selectedContainer() && panel.items.length === 1) $("container").value = panel.items[0].id;
   syncCreateButton();
@@ -308,23 +309,39 @@ async function loadContainers() {
  * A remembered repository/team the fresh list no longer has (removed, access
  * revoked, app uninstalled) is never selected: fall back to the default if it
  * is still there, else leave it empty, and say so in one line. A list that hit
- * the cap may just be cut short, so it isn't used to judge.
+ * the cap may just be cut short: then each candidate is asked about directly
+ * (the field stays empty meanwhile, so Create can't use it unchecked).
  */
 const LIST_CAP = 500;
-function checkPrefill(t) {
+async function checkPrefill(t) {
   const pf = panel.prefill;
   panel.prefill = null;
-  if (!pf || !pf.container || !panel.items.length || panel.items.length >= LIST_CAP) return;
+  if (!pf || !pf.container || !panel.items.length) return;
   if (selectedContainer() !== pf.container) return;
-  const has = (c) => panel.items.some((it) => String(it.id).toLowerCase() === String(c).toLowerCase());
-  if (has(pf.container)) return;
+  const capped = panel.items.length >= LIST_CAP;
+  const listed = (c) => panel.items.some((it) => String(it.id).toLowerCase() === String(c).toLowerCase());
+  const usable = async (c) => {
+    if (listed(c)) return true;
+    if (!capped) return false;
+    const r = await send("tb:tracker:check-container", { tracker: t.id, container: c });
+    return !!(r && r.ok === true);
+  };
+  if (listed(pf.container)) return;
+  $("container").value = "";
+  syncCreateButton();
+  if (await usable(pf.container)) {
+    if (!selectedContainer()) $("container").value = pf.container;
+    syncCreateButton();
+    return;
+  }
   const def = t.last && t.last.container;
-  const useDef = pf.from === "site" && def && def !== pf.container && has(def);
-  $("container").value = useDef ? def : "";
+  const useDef = pf.from === "site" && def && def !== pf.container && await usable(def);
+  if (!selectedContainer() && useDef) $("container").value = def;
   // Linear team ids are opaque: name GitHub repos, describe Linear teams.
   const gone = t.id === "github" ? pf.container : "The team you used last";
   const now = t.id === "github" ? "your default " + def : "your default team";
   panelMsg(gone + " is no longer available" + (useDef ? ", using " + now + "." : ". Pick one below."));
+  syncCreateButton();
 }
 
 async function loadFields(useRemembered) {
@@ -971,6 +988,8 @@ function startProbing() {
 
 let focusWanted = "";
 
+window.addEventListener("focus", () => { if (EMBED) focusSendIfWanted(); });
+
 function focusFirst(hint) {
   if (hint === "picker") { $("tracker").focus(); return; }
   if (!$("connectBox").hidden && !$("connect").hidden) { $("connect").focus(); return; }
@@ -980,8 +999,9 @@ function focusFirst(hint) {
 
 function focusSendIfWanted() {
   if (focusWanted !== "send" || $("send").disabled) return;
-  // Never pull focus back from the ticket if the user went there meanwhile.
-  if (!document.hasFocus()) { focusWanted = ""; return; }
+  // Never pull focus from the ticket: wait until the panel has it again (the
+  // window focus listener below calls back here).
+  if (!document.hasFocus()) return;
   const a = document.activeElement;
   if (a && a !== document.body) { focusWanted = ""; return; }
   focusWanted = "";

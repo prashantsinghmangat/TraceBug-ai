@@ -62,6 +62,7 @@ const ctx = await chromium.launchPersistentContext(
 const posts = [];
 let nextNumber = 100;
 let dropApiRepo = false; // leg 6b: acme/api is gone from the account
+let bigList = false;     // leg 6c: the account has more repos than the list holds (500)
 await ctx.route("https://api.github.com/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
@@ -74,7 +75,11 @@ await ctx.route("https://api.github.com/**", async (route) => {
   }
   const p = url.pathname;
   if (p === "/user") return ok({ login: "tester" });
-  if (p === "/user/repos") return ok(dropApiRepo ? [{ full_name: "acme/web" }] : [{ full_name: REPO }, { full_name: "acme/web" }]);
+  if (p === "/user/repos") {
+    if (bigList) return ok(Array.from({ length: 500 }, (_, i) => ({ full_name: `acme/r${i}` })));
+    return ok(dropApiRepo ? [{ full_name: "acme/web" }] : [{ full_name: REPO }, { full_name: "acme/web" }]);
+  }
+  if (p === `/repos/${REPO}` && dropApiRepo) return route.fulfill({ status: 404, headers: cors, contentType: "application/json", body: '{"message":"Not Found"}' });
   if (p === `/repos/${REPO}/labels`) return ok([{ name: "bug" }, { name: "ui" }]);
   if (p === "/repos/acme/web/labels" || p === "/repos/acme/web/assignees" || p === "/repos/acme/web/milestones") return ok([]);
   if (p === "/repos/acme/web") return ok({ permissions: { push: true } });
@@ -337,6 +342,26 @@ try {
     `${await r6c.frame.inputValue("#container")} | ${(await r6c.frame.textContent("#panelMsg")).trim()}`);
   await r6c.frame.click("#cancel");
   await sleep(400);
+  // A list that hit the 500 cap can't vouch for the pick: it's asked about directly.
+  dropApiRepo = false;
+  bigList = true;
+  const r6d = await sendToGitHub(page);
+  await r6d.frame.waitForFunction((r) => document.getElementById("container").value === r, REPO, { timeout: 8000 }).catch(() => {});
+  check("6c. list at the 500 cap: the remembered repo is checked directly and kept",
+    (await r6d.frame.inputValue("#container")) === REPO && !/no longer available/.test(await r6d.frame.textContent("#panelMsg")),
+    `${await r6d.frame.inputValue("#container")} | ${(await r6d.frame.textContent("#panelMsg")).trim()}`);
+  await r6d.frame.click("#cancel");
+  await sleep(400);
+  dropApiRepo = true;
+  const r6e = await sendToGitHub(page);
+  await r6e.frame.waitForFunction(() => /no longer available/.test(document.getElementById("panelMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+  check("…and when that check fails, the same fallback and note",
+    (await r6e.frame.inputValue("#container")) === "acme/web" &&
+    (await r6e.frame.textContent("#panelMsg")).trim() === `${REPO} is no longer available, using your default acme/web.`,
+    `${await r6e.frame.inputValue("#container")} | ${(await r6e.frame.textContent("#panelMsg")).trim()}`);
+  await r6e.frame.click("#cancel");
+  await sleep(400);
+  bigList = false;
   dropApiRepo = false;
   await sw.evaluate(async (repo) => {
     const g = (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1 || {};

@@ -4,10 +4,26 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 
 ## In the extension
 
-### The Integrations hub
+### Settings → Manage integrations
 
-One place to see and manage connections: the plug/logo icon in the popup's header, and **Settings → Integrations**
-(the same view in both).
+Where each connection is managed: **Settings → Manage integrations** (the Create panel's **Manage integrations**
+link opens it). At the top, **Sending**: the **Default tracker** (the ticket's main button) and **Open the issue
+after creating**, plus **Forget remembered choices** for every site. Then one card per tracker:
+
+- **Status**, in the same words as the popup and the ticket's ▾ tooltip: **Connected**, **Needs reconnect**,
+  **Error** or **Not connected**.
+- **How it's connected:** "Signed in as octo", or "Using a token ghp_…abcd" (masked; the token itself is never shown).
+- **Default repository / team** (a picker), and **Remembered choices on N sites** with **Forget** for that tracker.
+- **Connect** (where this build can sign in), **Use a token instead** (GitHub) / **Use an API key instead** (Linear)
+  — checked with the tracker before it's saved — and **Disconnect**, which signs out or removes the token and that
+  tracker's remembered choices. Slack: the webhook URL, **Save** and **Disconnect**.
+- Builds without TraceBug's GitHub App (store builds until it's registered) and Firefox show the token path, open —
+  never a Connect button that can't work.
+- Keyboard-only, light and dark, no sideways scroll at 360 px.
+
+### The popup's hub
+
+The plug/logo icon in the popup's header opens the same connections as a compact view:
 
 - **My connections (N):** one row per connected tracker — logo, account, default repository or team, and a status:
   **Connected**, **Needs reconnect ⚠** (the sign-in expired or was revoked) or **Error** (TraceBug lost access to the

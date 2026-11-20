@@ -69,8 +69,11 @@ the same step.
   `pageIntegrationHint`; in the worker bundle) → worker `integrationSummary` / `pageIntegrationHintNow` (status
   answer `summary`, TB_HOST_ACCESS `integrations`), default key `tb_tracker_default_v1` (`tb:tracker:set-primary`).
   UI `integrations-hub.js` + `.css` (`mount(container, {mode, handoff, tokenPath, onSummary})`: tabs, rows, roving
-  grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) and `options.js`
-  (`#integrations`, deep links `#integrations:connect=<id>` / `:token=<id>`). Ticket: `quick-bug.ts`
+  grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) only. **Settings → Manage
+  integrations (redesign step 5):** `options.html` `#integrations` (`#intGlobal`: `#defaultTracker`,
+  `#openAfterCreate`, `#forgetChoices`) + the `.tracker-acct` cards; `options.js` `renderTrackerAccounts` (state from
+  the status `summary`, `tokenHint`, `.acct-sites` count/Forget, `renderDefaultTracker`), `saveTrackerSecret` (via
+  `tb:tracker:save-token`), deep links `#integrations:connect=<id>` (focus the card's Connect) / `:token=<id>`. Ticket: `quick-bug.ts`
   `_primaryTarget`/`_sendButtonHtml`/`_trackerStatusHtml`, logos `src/ui/brand-logos.ts` (copy in the hub JS).
   Tests `tests/integration-status.test.ts`, e2e `e2e/ext-integrations-hub.e2e.mjs` (`e2e:hub`).
   `connectableTrackers()` rides on the `TB_HOST_ACCESS` answer so the page offers "Send to GitHub" before any

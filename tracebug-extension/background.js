@@ -3103,6 +3103,13 @@ async function handleTrackerUi(message, sender) {
         return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
       }
       case "tb:tracker:install-state": return { open: await installPageOpen() };
+      case "tb:tracker:check-container": {
+        const container = typeof message.container === "string" ? message.container.trim().slice(0, 300) : "";
+        if (!container) return { ok: false };
+        if (!(await hasAllHosts(adapter.apiHosts))) return { needsAccess: adapter.apiHosts };
+        const ok = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => api.containerAccessible(adapter.id, auth, container));
+        return { ok: !!ok };
+      }
       case "tb:tracker:set-default": {
         const c = b.validateChoice({ tracker: adapter.id, container: message.container, fields: {} });
         if (!c.ok) return { error: c.error };

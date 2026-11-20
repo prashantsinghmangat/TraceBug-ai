@@ -47,6 +47,7 @@ var TraceBugProviderAPI = (() => {
     capProviderBody: () => capProviderBody,
     checkTrackerSecret: () => checkTrackerSecret,
     connectionState: () => connectionState,
+    containerAccessible: () => containerAccessible,
     createPkcePair: () => createPkcePair,
     describeAuth: () => describeAuth,
     describeOAuthError: () => describeOAuthError,
@@ -1181,6 +1182,22 @@ var TraceBugProviderAPI = (() => {
       const msg = String(e && e.message || `${label} request failed.`).split(secret).join("\u2026");
       return { ok: false, code: "error", error: msg };
     }
+  }
+  async function containerAccessible(tracker, auth, container, signal) {
+    if (tracker === "github") {
+      if (!REPO_RE.test(container)) return false;
+      const res = await fetch(`${GH_API}/repos/${container}`, { headers: ghHeaders(auth), signal });
+      if (res.status === 404 || res.status === 403) return false;
+      await parseJsonOrThrow(res, "GitHub", "tracker");
+      return true;
+    }
+    const d = await linearQuery(
+      auth,
+      "query($id: String!) { team(id: $id) { id } }",
+      signal,
+      { id: container }
+    ).catch(() => ({ team: null }));
+    return !!(d.team && d.team.id);
   }
   var TRACKER_ADAPTERS = { github, linear };
   function trackerAdapter(id) {

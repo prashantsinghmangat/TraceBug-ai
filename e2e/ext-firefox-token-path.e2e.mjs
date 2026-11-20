@@ -144,6 +144,9 @@ try {
   check('the token files the issue: "Created #7"', (await win.textContent("#doneBox")).includes("Created #7"));
   check("GitHub got the repo, label and title", !!issuePost && JSON.stringify(issuePost.labels) === '["bug"]' && !!issuePost.title);
   check("the token never reached the page", !(await page.content()).includes(TOKEN));
+  await sleep(800);
+  const opened = await sw.evaluate(async (u) => (await chrome.tabs.query({})).filter((t) => (t.pendingUrl || t.url || "").startsWith(u)).length, ISSUE_URL);
+  check("the Create window opens the issue in a new tab (\"Open the issue after creating\", default on)", opened === 1, `${opened} tab(s)`);
 
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/options.html`);

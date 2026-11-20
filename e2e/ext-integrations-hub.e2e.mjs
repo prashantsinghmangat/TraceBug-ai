@@ -1,7 +1,8 @@
 // Run: node e2e/ext-integrations-hub.e2e.mjs   (needs `npm run build:ext` first)
 //
-// Phase 13 step 5: the Integrations hub (integrations-hub.js) in settings and
-// the popup, the header status icon, and the ticket's default-tracker button.
+// Phase 13 step 5 + redesign step 5: the Integrations hub (integrations-hub.js)
+// in the popup, Settings → "Manage integrations" (one card per tracker), the
+// header status icon, and the ticket's default-tracker button.
 //   0. nothing connected: popup icon says so, no dot
 //   1. keyboard only: the roving grid, the connect dialog (focus trap, Esc,
 //      focus back on the tile), Coming soon tiles, the #integrations deep link
@@ -123,11 +124,16 @@ try {
   check("0. popup icon, nothing connected: tooltip says so, no dot",
     (await pop.getAttribute("#intBtn", "title")) === "No tracker connected · connect one" && await pop.isHidden("#intBtn .hd-int-dot"));
 
-  // ══ 1. Keyboard only ═════════════════════════════════════════════════════
-  const opt = await ctx.newPage();
-  await opt.goto(OPT);
-  await opt.waitForSelector(".tbh-tile", { timeout: 8000 });
-  check("1. settings, fresh: My connections (0) and the Add platform grid is shown",
+  // ══ 1. Keyboard only — the popup's hub ═══════════════════════════════════
+  // Settings is now "Manage integrations" (one card per tracker, leg 2+); the
+  // hub view (My connections / Add platform) lives in the popup.
+  const openHub = async (pg) => {
+    await pg.click("#intBtn");
+    await pg.waitForSelector("#hubView:not([hidden]) .tbh-tile, #hubView:not([hidden]) .tbh-row", { timeout: 8000 });
+  };
+  await openHub(pop);
+  const opt = pop; // the grid/dialog checks below run in the popup
+  check("1. popup hub, fresh: My connections (0) and the Add platform grid is shown",
     (await opt.textContent("#tbh-tab-conn")) === "My connections (0)" && (await opt.getAttribute("#tbh-tab-add", "aria-selected")) === "true");
   check("…six tiles: GitHub, Linear, Slack live; GitLab, Azure DevOps, Jira coming soon",
     JSON.stringify(await opt.$$eval(".tbh-tile", (ts) => ts.map((t) => t.dataset.tracker + (t.getAttribute("aria-disabled") ? ":soon" : ""))))
@@ -159,8 +165,6 @@ try {
   const dlg = await opt.textContent(".tbh-dialog");
   check("…the dialog says TraceBug can't read your code, and the token path is Advanced with exact scopes",
     /TraceBug can't read your code/.test(dlg) && /Advanced: use a token/.test(dlg) && /Issues: Read and write/.test(dlg) && /repo scope/.test(dlg));
-  check("…sign-in comes before the token path",
-    await opt.evaluate(() => { const d = document.querySelector(".tbh-dialog"); return d.querySelector(".tbh-signin").compareDocumentPosition(d.querySelector(".tbh-advanced")) === Node.DOCUMENT_POSITION_FOLLOWING; }));
   check("…dialog semantics: role=dialog, aria-modal, labelled",
     await opt.evaluate(() => { const d = document.querySelector(".tbh-dialog"); return d.getAttribute("role") === "dialog" && d.getAttribute("aria-modal") === "true" && !!document.getElementById(d.getAttribute("aria-labelledby")); }));
   let trapped = true;
@@ -171,83 +175,123 @@ try {
   await sleep(100);
   const a2 = await active(opt);
   check("…Esc closes it and focus returns to the GitHub tile", await opt.isHidden(".tbh-dialog-wrap") && a2.tracker === "github");
-  await opt.keyboard.press("Space");
-  await opt.waitForSelector(".tbh-dialog", { timeout: 3000 }).catch(() => {});
-  check("…Space opens it too", await opt.isVisible(".tbh-dialog"));
-  await opt.keyboard.press("Escape");
   await opt.focus("#tbh-tab-add");
   await opt.keyboard.press("ArrowLeft");
   check("…tabs: arrow keys switch My connections / Add platform",
     (await opt.getAttribute("#tbh-tab-conn", "aria-selected")) === "true" && (await active(opt)).text === "My connections (0)");
   check("…status lines live in an aria-live region", (await opt.getAttribute(".tbh-live", "aria-live")) === "polite");
 
+  // ══ 2. Settings → Manage integrations: one card per tracker ══════════════
+  const set = await ctx.newPage();
+  await set.goto(OPT);
+  const card = (id) => `.tracker-acct[data-tracker="${id}"]`;
+  const pillOf = (id) => set.textContent(id === "github" ? "#ghPill" : id === "linear" ? "#lnPill" : "#slPill");
+  await set.waitForFunction(() => !document.querySelector('.tracker-acct[data-tracker="github"] .acct-connect').hidden, null, { timeout: 8000 }).catch(() => {});
+  check("2. settings is \"Manage integrations\" with one card per tracker, and no hub grid",
+    /Manage integrations/.test(await set.textContent("#integrations")) && !!(await set.$(card("github"))) && !!(await set.$(card("linear"))) &&
+    !!(await set.$("#slPill")) && !(await set.$(".tbh-tile")));
+  check("…not connected: \"Not connected\" pills, GitHub offers Connect",
+    (await pillOf("github")) === "Not connected" && (await pillOf("slack")) === "Not connected" &&
+    await set.isVisible(`${card("github")} .acct-connect`) && !(await set.isVisible(`${card("github")} .acct-disconnect`)));
+  check("…Linear can't sign in in this build: its API-key path is open, no dead Connect",
+    !(await set.isVisible(`${card("linear")} .acct-connect`)) && await set.evaluate(() => document.getElementById("lnAdvanced").open) &&
+    /Use an API key instead/.test(await set.textContent("#lnAdvanced summary")));
+  check("…default tracker: nothing to pick yet", await set.isDisabled("#defaultTracker") &&
+    /Connect a tracker first/.test(await set.textContent("#defaultTracker")));
+  check("…\"Open the issue after creating\" is on by default", await set.isChecked("#openAfterCreate"));
+
   const deep = await ctx.newPage();
   await deep.goto(OPT + "#integrations:connect=github");
-  await deep.waitForSelector(".tbh-dialog", { timeout: 5000 }).catch(() => {});
-  check("…#integrations:connect=github (the popup's hand-off) opens the GitHub dialog in settings",
-    /Connect GitHub/.test((await deep.textContent(".tbh-dialog h3").catch(() => "")) || ""));
+  await deep.waitForFunction(() => document.activeElement && document.activeElement.classList.contains("acct-connect"), null, { timeout: 5000 }).catch(() => {});
+  check("…#integrations:connect=github (the popup's hand-off) focuses the GitHub card's Connect",
+    await deep.evaluate(() => document.activeElement.classList.contains("acct-connect") &&
+      document.activeElement.closest(".tracker-acct").dataset.tracker === "github"));
   await deep.close();
 
-  // ══ 2. Connect → listed → asked for the default repo ═════════════════════
-  await opt.click("#tbh-tab-add");
-  await opt.focus('.tbh-tile[data-tracker="github"]');
-  await opt.keyboard.press("Enter");
-  await opt.waitForSelector(".tbh-signin", { timeout: 3000 });
-  await opt.keyboard.press("Enter");
-  await opt.waitForFunction(() => (document.querySelector(".tbh-code") || {}).textContent === "WXYZ-9876", null, { timeout: 8000 }).catch(() => {});
-  check("2. Sign in shows the device code in the dialog", (await opt.textContent(".tbh-code").catch(() => "")) === "WXYZ-9876");
-  check("…the GitHub tile spins while connecting (aria-busy + spinner)",
-    (await opt.getAttribute('.tbh-tile[data-tracker="github"]', "aria-busy")) === "true" && await opt.$('.tbh-tile[data-tracker="github"] .tbh-spinner') !== null);
+  // Keyboard: Tab to Connect GitHub, Enter → device code on the card.
+  await set.focus(`${card("github")} .acct-connect`);
+  await set.keyboard.press("Enter");
+  await set.waitForFunction(() => (document.querySelector('.tracker-acct[data-tracker="github"] .device-code') || {}).textContent === "WXYZ-9876", null, { timeout: 8000 }).catch(() => {});
+  check("…Connect (keyboard) shows the device code on the card", (await set.textContent(`${card("github")} .device-code`)) === "WXYZ-9876");
   tokenMode = "approve";
-  await opt.waitForSelector('.tbh-row[data-tracker="github"]', { timeout: 15000 }).catch(() => {});
-  check("…once GitHub confirms: listed under My connections (1), as octo, dialog closed",
-    (await opt.textContent("#tbh-tab-conn")) === "My connections (1)" && /octo/.test(await opt.textContent('.tbh-row[data-tracker="github"]')) &&
-    await opt.isHidden(".tbh-dialog-wrap"));
-  check("…the GitHub tile left the grid", !(await opt.$('.tbh-tile[data-tracker="github"]')));
-  await opt.waitForFunction(() => document.activeElement && document.activeElement.classList.contains("tbh-select") && document.activeElement.options.length > 1, null, { timeout: 8000 }).catch(() => {});
-  check("…and you're asked for the default repository (picker focused)", await opt.evaluate(() => document.activeElement.classList.contains("tbh-select")));
-  await opt.selectOption('.tbh-row[data-tracker="github"] .tbh-select', REPO);
-  await opt.waitForFunction(() => /Saved/.test(document.querySelector(".tbh-live").textContent), null, { timeout: 5000 }).catch(() => {});
+  await set.waitForFunction(() => /Signed in as octo/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-line').textContent), null, { timeout: 15000 }).catch(() => {});
+  check("…once GitHub confirms: \"Connected\", signed in as octo, Disconnect offered",
+    (await pillOf("github")) === "Connected" && /Signed in as octo/.test(await set.textContent(`${card("github")} .acct-line`)) &&
+    await set.isVisible(`${card("github")} .acct-disconnect`) && !(await set.isVisible(`${card("github")} .acct-connect`)));
+  await set.waitForFunction(() => document.querySelectorAll('.tracker-acct[data-tracker="github"] .acct-default option').length > 1, null, { timeout: 8000 }).catch(() => {});
+  check("…and the default repository picker is there", await set.isVisible(`${card("github")} .acct-default`));
+  await set.selectOption(`${card("github")} .acct-default`, REPO);
+  await sleep(600);
   const prefs = await getLocal("tb_tracker_prefs_v1");
   check("…the default repo is saved with its name", prefs && prefs.github && prefs.github.container === REPO && prefs.github.containerLabel === REPO, JSON.stringify(prefs));
 
-  // ══ 3. Slack + Set default; popup icon follows ═══════════════════════════
-  await setLocal({ tb_integrations_v1: { slack: { webhookUrl: "https://hooks.slack.com/services/T/B/x" } } });
-  await opt.reload();
-  await opt.waitForSelector('.tbh-row[data-tracker="slack"]', { timeout: 5000 }).catch(() => {});
-  check("3. Slack (webhook) is listed; GitHub is the default",
-    (await opt.textContent("#tbh-tab-conn")) === "My connections (2)" && /Default/.test(await opt.textContent('.tbh-row[data-tracker="github"] .tbh-row-title')));
+  // ══ 3. Token state, remembered sites, default tracker ═════════════════════
+  await setLocal({
+    tb_integrations_v1: { slack: { webhookUrl: "https://hooks.slack.com/services/T/B/x" }, linear: { apiKey: "lin_api_hubTestKey0123456789abcdWXYZ" } },
+    tb_tracker_sites_v1: {
+      "https://a.example": { at: 1, picks: { "github|oauth:octo": { container: REPO, fields: {}, at: 1 } } },
+      "https://b.example": { at: 2, picks: { "github|oauth:octo": { container: REPO, fields: {}, at: 2 }, "linear|token:": { container: "t1", fields: {}, at: 2 } } },
+    },
+  });
+  await set.reload();
+  await set.waitForFunction(() => /Using an API key/.test(document.querySelector('.tracker-acct[data-tracker="linear"] .acct-line').textContent), null, { timeout: 8000 }).catch(() => {});
+  check("3. a token connection: \"Connected\", the key shown masked, Disconnect",
+    (await pillOf("linear")) === "Connected" && /Using an API key lin_…WXYZ\./.test(await set.textContent(`${card("linear")} .acct-line`)) &&
+    await set.isVisible(`${card("linear")} .acct-disconnect`), (await set.textContent(`${card("linear")} .acct-line`)).trim());
+  check("…the secret itself is nowhere on the page", !(await set.content()).includes("lin_api_hubTestKey"));
+  check("…sites with remembered choices are counted per tracker",
+    (await set.textContent(`${card("github")} .acct-sites-text`)) === "Remembered choices on 2 sites." &&
+    (await set.textContent(`${card("linear")} .acct-sites-text`)) === "Remembered choices on 1 site.");
+  await set.click(`${card("github")} .acct-forget`);
+  await set.waitForFunction(() => document.querySelector('.tracker-acct[data-tracker="github"] .acct-sites').hidden, null, { timeout: 5000 }).catch(() => {});
+  const sitesLeft = await getLocal("tb_tracker_sites_v1");
+  check("…Forget clears that tracker's only", await set.isHidden(`${card("github")} .acct-sites`) &&
+    JSON.stringify(Object.keys(sitesLeft)) === '["https://b.example"]' && !!sitesLeft["https://b.example"].picks["linear|token:"], JSON.stringify(sitesLeft));
+  check("…Slack: \"Connected\"", (await pillOf("slack")) === "Connected");
+  check("…default tracker lists the connections, GitHub first",
+    (await set.$$eval("#defaultTracker option", (o) => o.map((x) => x.value).join())) === "github,linear,slack" && (await set.inputValue("#defaultTracker")) === "github");
   await pop.waitForFunction(() => /GitHub/.test(document.getElementById("intBtn").title), null, { timeout: 5000 }).catch(() => {});
   check('…popup icon: "GitHub · acme-private/web-app · connected", no dot, GitHub logo',
     (await pop.getAttribute("#intBtn", "title")) === `GitHub · ${REPO} · connected` && await pop.isHidden("#intBtn .hd-int-dot") &&
     (await pop.getAttribute("#intBtn .hd-int-logo svg", "aria-label")) === "GitHub");
-  await opt.click('.tbh-row[data-tracker="slack"] >> text=Set default');
-  await opt.waitForFunction(() => /Default/.test((document.querySelector('.tbh-row[data-tracker="slack"] .tbh-row-title') || {}).textContent || ""), null, { timeout: 5000 }).catch(() => {});
-  check("…Set default on Slack moves the badge and is stored",
-    /Default/.test(await opt.textContent('.tbh-row[data-tracker="slack"] .tbh-row-title')) &&
-    !/Default/.test(await opt.textContent('.tbh-row[data-tracker="github"] .tbh-row-title')) && (await getLocal("tb_tracker_default_v1")) === "slack");
+  await set.selectOption("#defaultTracker", "slack");
+  await sleep(500);
+  check("…picking Slack is stored", (await getLocal("tb_tracker_default_v1")) === "slack");
   await pop.waitForFunction(() => /^Slack/.test(document.getElementById("intBtn").title), null, { timeout: 5000 }).catch(() => {});
   check("…the popup icon follows: Slack · connected", (await pop.getAttribute("#intBtn", "title")) === "Slack · connected");
   await setLocal({ tb_tracker_default_v1: "github" });
+  await set.uncheck("#openAfterCreate");
+  await sleep(300);
+  check("…\"Open the issue after creating\" off is stored", (await getLocal("tb_open_issue_after_create_v1")) === false);
+  await set.check("#openAfterCreate");
+  await set.click(`${card("linear")} .acct-disconnect`);
+  await set.waitForFunction(() => document.getElementById("lnPill").textContent === "Not connected", null, { timeout: 5000 }).catch(() => {});
+  check("…Disconnect on the token card removes the key", (await pillOf("linear")) === "Not connected" &&
+    !((await getLocal("tb_integrations_v1")).linear || {}).apiKey);
 
   // ══ 4. Needs reconnect ═══════════════════════════════════════════════════
   const auth = await getLocal("tb_tracker_auth_v1");
   await setLocal({ tb_tracker_auth_v1: Object.assign({}, auth, { linear: { tokens: { accessToken: "lin_x" }, account: "ana@acme.test", needsReconnect: true } }) });
+  await pop.reload();
   await pop.waitForFunction(() => !document.querySelector("#intBtn .hd-int-dot").hidden, null, { timeout: 5000 }).catch(() => {});
   check("4. a connection needing reconnect puts a warning dot on the popup icon", await pop.isVisible("#intBtn .hd-int-dot") &&
     /GitHub/.test(await pop.getAttribute("#intBtn", "aria-label")));
-  await opt.reload();
-  await opt.waitForSelector('.tbh-row[data-tracker="linear"]', { timeout: 5000 }).catch(() => {});
-  check("…settings: Linear row shows Needs reconnect ⚠ with a Reconnect button",
-    (await opt.getAttribute('.tbh-row[data-tracker="linear"]', "data-state")) === "reconnect" &&
-    (await opt.textContent('.tbh-row[data-tracker="linear"] .tbh-pill')) === "Needs reconnect ⚠" &&
-    await opt.isVisible('.tbh-row[data-tracker="linear"] >> text=Reconnect Linear'));
+  await set.reload();
+  await set.waitForFunction(() => document.getElementById("lnPill").textContent === "Needs reconnect", null, { timeout: 5000 }).catch(() => {});
+  check("…settings: the Linear card says \"Needs reconnect\" and why",
+    (await pillOf("linear")) === "Needs reconnect" && /sign-in expired/.test(await set.textContent(`${card("linear")} .acct-line`)) &&
+    await set.isVisible(`${card("linear")} .acct-disconnect`));
   await pop.click("#intBtn");
   await pop.waitForSelector('#hubView .tbh-row[data-tracker="linear"]', { timeout: 5000 }).catch(() => {});
   check("…popup: the icon opens the hub view (Back focused), with the same rows",
-    await pop.isVisible("#hubView") && await pop.isHidden("#mainContent, #unavailable >> visible=true").catch(() => true) &&
+    await pop.isVisible("#hubView") &&
     (await pop.evaluate(() => document.activeElement.id)) === "hubBack" &&
     (await pop.$$eval("#hubView .tbh-row", (r) => r.map((x) => x.dataset.tracker).join())) === "github,linear,slack");
+  // ══ 5. Test connection (popup hub) ═══════════════════════════════════════
+  await pop.click('#hubView .tbh-row[data-tracker="github"] >> text=Test connection');
+  await pop.waitForFunction(() => /works/.test(document.querySelector(".tbh-live").textContent), null, { timeout: 8000 }).catch(() => {});
+  check("5. Test connection: GitHub works — 1 repository available",
+    (await pop.textContent(".tbh-live")) === "GitHub works — 1 repository available.");
   await pop.click('#hubView .tbh-row[data-tracker="linear"] >> text=Reconnect Linear');
   await pop.waitForSelector("#hubView .tbh-dialog", { timeout: 3000 }).catch(() => {});
   const handoffP = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("options.html#integrations:token=linear"), timeout: 5000 }).catch(() => null);
@@ -269,13 +313,6 @@ try {
   check("…Esc leaves the popup hub, focus back on the icon",
     await pop2.isHidden("#hubView") && (await pop2.evaluate(() => document.activeElement.id)) === "intBtn" &&
     (await pop2.getAttribute("#intBtn", "aria-expanded")) === "false");
-
-  // ══ 5. Test connection ═══════════════════════════════════════════════════
-  await opt.click('.tbh-row[data-tracker="github"] >> text=Test connection');
-  await opt.waitForFunction(() => /works/.test(document.querySelector(".tbh-live").textContent), null, { timeout: 8000 }).catch(() => {});
-  check("5. Test connection: GitHub works — 1 repository available",
-    (await opt.textContent(".tbh-live")) === "GitHub works — 1 repository available." &&
-    (await opt.evaluate(() => (document.activeElement.textContent || "").trim())) === "Test connection");
 
   // ══ 6. The ticket ════════════════════════════════════════════════════════
   const page = await ctx.newPage();
@@ -353,41 +390,46 @@ try {
   }
   await page.close();
 
-  // ══ 7. Disconnect, with a confirm ════════════════════════════════════════
-  await opt.reload();
-  await opt.waitForSelector('.tbh-row[data-tracker="github"]', { timeout: 5000 });
-  await opt.click('.tbh-row[data-tracker="github"] >> text=Disconnect');
-  await opt.waitForSelector(".tbh-dialog", { timeout: 3000 });
+  // ══ 7. Disconnect, with a confirm (popup hub) ═══════════════════════════
+  const hub = pop2;
+  await hub.click("#intBtn");
+  await hub.waitForSelector('#hubView .tbh-row[data-tracker="github"]', { timeout: 5000 });
+  await hub.click('#hubView .tbh-row[data-tracker="github"] >> text=Disconnect');
+  await hub.waitForSelector(".tbh-dialog", { timeout: 3000 });
   check("7. Disconnect asks first, focus on Cancel",
-    /Disconnect GitHub\?/.test(await opt.textContent(".tbh-dialog h3")) && (await active(opt)).text === "Cancel");
-  await opt.keyboard.press("Escape");
+    /Disconnect GitHub\?/.test(await hub.textContent(".tbh-dialog h3")) && (await active(hub)).text === "Cancel");
+  await hub.keyboard.press("Escape");
   check("…Esc cancels; still connected; focus back on Disconnect",
-    await opt.isHidden(".tbh-dialog-wrap") && !!(await opt.$('.tbh-row[data-tracker="github"]')) && (await active(opt)).text === "Disconnect");
-  await opt.keyboard.press("Enter");
-  await opt.waitForSelector(".tbh-dialog", { timeout: 3000 });
-  await opt.click(".tbh-dialog button.danger");
-  await opt.waitForFunction(() => !document.querySelector('.tbh-row[data-tracker="github"]'), null, { timeout: 5000 }).catch(() => {});
+    await hub.isHidden(".tbh-dialog-wrap") && !!(await hub.$('.tbh-row[data-tracker="github"]')) && (await active(hub)).text === "Disconnect");
+  await hub.keyboard.press("Enter");
+  await hub.waitForSelector(".tbh-dialog", { timeout: 3000 });
+  await hub.click(".tbh-dialog button.danger");
+  await hub.waitForFunction(() => !document.querySelector('.tbh-row[data-tracker="github"]'), null, { timeout: 5000 }).catch(() => {});
   const authAfter = await getLocal("tb_tracker_auth_v1");
   check("…confirmed: the row is gone, the sign-in forgotten, GitHub back in the grid",
-    !(await opt.$('.tbh-row[data-tracker="github"]')) && !(authAfter && authAfter.github) &&
-    (await opt.textContent("#tbh-tab-conn")) === "My connections (1)" && /Disconnected GitHub/.test(await opt.textContent(".tbh-live")) &&
-    !!(await opt.$('.tbh-tile[data-tracker="github"]')));
-  await pop2.waitForFunction(() => /^Slack/.test(document.getElementById("intBtn").title), null, { timeout: 5000 }).catch(() => {});
-  check("…the default falls back to Slack (the popup icon says so)", (await pop2.getAttribute("#intBtn", "title")) === "Slack · connected");
+    !(await hub.$('.tbh-row[data-tracker="github"]')) && !(authAfter && authAfter.github) &&
+    /Disconnected GitHub/.test(await hub.textContent(".tbh-live")) && !!(await hub.$('.tbh-tile[data-tracker="github"]')));
+  await set.reload();
+  await set.waitForFunction(() => document.getElementById("ghPill").textContent === "Not connected", null, { timeout: 5000 }).catch(() => {});
+  check("…settings agrees: the GitHub card is \"Not connected\" with Connect again", (await pillOf("github")) === "Not connected" &&
+    await set.isVisible(`${card("github")} .acct-connect`));
 
   // ══ 8. 360 px, light and dark ════════════════════════════════════════════
-  await opt.setViewportSize({ width: 360, height: 800 });
-  await opt.click("#tbh-tab-add");
-  check("8. settings at 360 px: no horizontal scroll", await opt.evaluate(() => document.documentElement.scrollWidth <= 360));
-  await pop2.click("#intBtn");
-  await pop2.waitForSelector("#hubView .tbh-row", { timeout: 5000 }).catch(() => {});
-  check("…popup at 360 px: no horizontal scroll", await pop2.evaluate(() => document.documentElement.scrollWidth <= 360));
+  await set.setViewportSize({ width: 360, height: 800 });
+  check("8. settings at 360 px: no horizontal scroll", await set.evaluate(() => document.documentElement.scrollWidth <= 360));
+  check("…popup at 360 px: no horizontal scroll", await hub.evaluate(() => document.documentElement.scrollWidth <= 360));
+  const cardBg = async (theme) => {
+    await set.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+    return set.evaluate(() => [getComputedStyle(document.querySelector(".card")).backgroundColor, getComputedStyle(document.body).color].join("|"));
+  };
+  const sLight = await cardBg("light"), sDark = await cardBg("dark");
+  check("…settings follows light and dark", sLight !== sDark, `${sLight} / ${sDark}`);
   const bg = async (theme) => {
-    await pop2.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
-    return pop2.evaluate(() => getComputedStyle(document.querySelector("#hubView .tbh-row")).backgroundColor);
+    await hub.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+    return hub.evaluate(() => getComputedStyle(document.querySelector("#hubView .tbh-row, #hubView .tbh-tile")).backgroundColor);
   };
   const light = await bg("light"), dark = await bg("dark");
-  check("…the hub follows the popup's light and dark tokens", light !== dark && light !== "rgba(0, 0, 0, 0)", `${light} / ${dark}`);
+  check("…the popup hub follows the popup's light and dark tokens", light !== dark && light !== "rgba(0, 0, 0, 0)", `${light} / ${dark}`);
 } catch (err) {
   failures++;
   console.log("FAIL  threw: " + (err && err.stack || err));

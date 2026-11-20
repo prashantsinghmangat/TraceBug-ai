@@ -133,10 +133,13 @@ function say(el, msg, kind, extra) {
   if (kind === "ok" && !extra) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
 }
 
-function pill(el, on) {
-  el.textContent = on ? "Configured" : "Not configured";
+function pill(el, on, words) {
+  const w = words || ["Configured", "Not configured"];
+  el.textContent = on ? w[0] : w[1];
   el.className = "pill" + (on ? " on" : "");
 }
+// The trackers' words, as in the hub and the ticket's ▾ tooltip.
+const TRACKER_WORDS = ["Connected", "Not connected"];
 
 // ── Status pills ────────────────────────────────────────────────────────────
 // Reflects what is stored WITHOUT reading the secret back into the DOM.
@@ -147,9 +150,9 @@ async function refreshPills() {
   const a = r[AI_KEY] || null;
   // A credential is enough since ADR 010 (the repo/team is picked when filing).
   // renderTrackerAccounts() then refines these with any OAuth sign-in.
-  pill($("ghPill"), !!(i.github && i.github.token));
-  pill($("lnPill"), !!(i.linear && i.linear.apiKey));
-  pill($("slPill"), !!(i.slack && i.slack.webhookUrl));
+  pill($("ghPill"), !!(i.github && i.github.token), TRACKER_WORDS);
+  pill($("lnPill"), !!(i.linear && i.linear.apiKey), TRACKER_WORDS);
+  pill($("slPill"), !!(i.slack && i.slack.webhookUrl), TRACKER_WORDS);
   pill($("aiPill"), !!(a && a.provider && (a.provider === "ollama" || a.apiKey)));
 
   // Show the provider/model that is set, which is not secret, so the user can
@@ -160,8 +163,6 @@ async function refreshPills() {
     if (a.baseUrl) $("aiBaseUrl").placeholder = a.baseUrl;
     applyProviderUI();
   }
-  if (i.github && i.github.repo) $("ghRepo").value = i.github.repo;
-  if (i.linear && i.linear.teamId) $("lnTeam").value = i.linear.teamId;
 }
 
 // ── Migration notice ────────────────────────────────────────────────────────
@@ -340,32 +341,42 @@ async function keptSecret(name, field) {
   return prev.token || prev.apiKey || prev.webhookUrl || "";
 }
 
-async function saveGitHub(granted) {
-  const status = $("ghStatus");
-  const repo = $("ghRepo").value.trim();
-  const token = await keptSecret("github", "ghToken");
-  if (!token) { say(status, "Enter a personal access token.", "err"); return; }
-  if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) { say(status, 'Repository must look like "owner/repo".', "err"); return; }
-  const note = accessNote(granted, "api.github.com");
-  if (await saveProvider("github", { token, repo }, status, note)) $("ghToken").value = "";
+/**
+ * Save a pasted token/key. With API access granted, the worker checks it with
+ * GitHub/Linear first (tb:tracker:save-token, as the Create panel does) and
+ * saves only a working one. Declined: saved as typed, as before, with the note
+ * — the user can allow access later. Either way a stored default repo/team
+ * stays (the old forms' optional field is gone; nothing is dropped).
+ */
+async function saveTrackerSecret(id, field, statusEl, granted, hostLabel) {
+  const typed = $(field).value.trim();
+  if (!typed) { say(statusEl, id === "linear" ? "Enter a Linear API key." : "Enter a personal access token.", "err"); return; }
+  if (granted !== false) {
+    say(statusEl, "Checking with " + (id === "linear" ? "Linear" : "GitHub") + "…");
+    const res = await trackerMsg("tb:tracker:save-token", { tracker: id, secret: typed });
+    if (!res || res.error || !res.ok) {
+      say(statusEl, (res && res.error) || "Could not check it.", "err");
+      return;
+    }
+    $(field).value = "";
+    await refreshPills();
+    say(statusEl, "Saved" + (res.account ? " — connected as " + res.account : "") + ".", "ok");
+    await renderTrackerAccounts();
+    return;
+  }
+  const cfg = (await get([INT_KEY]))[INT_KEY] || {};
+  const prev = cfg[id] || {};
+  const value = Object.assign({}, prev, id === "linear" ? { apiKey: typed } : { token: typed });
+  if (await saveProvider(id, value, statusEl, accessNote(granted, hostLabel))) $(field).value = "";
 }
 
-$("ghSave").addEventListener("click", withHostAccess(() => HOSTS.github, saveGitHub));
+$("ghSave").addEventListener("click", withHostAccess(() => HOSTS.github,
+  (granted) => saveTrackerSecret("github", "ghToken", $("ghStatus"), granted, "api.github.com")));
+$("ghToken").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("ghSave").click(); } });
 
-$("ghClear").addEventListener("click", () => clearProvider("github", $("ghStatus"), ["ghToken", "ghRepo"]));
-
-async function saveLinear(granted) {
-  const status = $("lnStatus");
-  const teamId = $("lnTeam").value.trim();
-  const apiKey = await keptSecret("linear", "lnKey");
-  if (!apiKey) { say(status, "Enter a Linear API key.", "err"); return; }
-  const note = accessNote(granted, "api.linear.app");
-  if (await saveProvider("linear", { apiKey, teamId }, status, note)) $("lnKey").value = "";
-}
-
-$("lnSave").addEventListener("click", withHostAccess(() => HOSTS.linear, saveLinear));
-
-$("lnClear").addEventListener("click", () => clearProvider("linear", $("lnStatus"), ["lnKey", "lnTeam"]));
+$("lnSave").addEventListener("click", withHostAccess(() => HOSTS.linear,
+  (granted) => saveTrackerSecret("linear", "lnKey", $("lnStatus"), granted, "api.linear.app")));
+$("lnKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("lnSave").click(); } });
 
 async function saveSlack(granted) {
   const status = $("slStatus");
@@ -477,19 +488,51 @@ function trackerMsg(type, extra) {
 
 const PILL_IDS = { github: "ghPill", linear: "lnPill" };
 const ADVANCED_IDS = { github: "ghAdvanced", linear: "lnAdvanced" };
+const STATE_PILL = { connected: ["Connected", " on"], reconnect: ["Needs reconnect", " warn"], error: ["Error", " warn"] };
+const SITES_COUNT_KEY = "tb_tracker_sites_v1";
 
+/** Sites with remembered choices for this tracker (any account). */
+function sitesFor(all, id) {
+  return Object.keys(all || {}).filter((o) => Object.keys((all[o] && all[o].picks) || {}).some((k) => k.indexOf(id + "|") === 0));
+}
+
+async function forgetSitesFor(id) {
+  const all = (await get([SITES_COUNT_KEY]))[SITES_COUNT_KEY] || {};
+  for (const o of Object.keys(all)) {
+    const picks = (all[o] && all[o].picks) || {};
+    for (const k of Object.keys(picks)) if (k.indexOf(id + "|") === 0) delete picks[k];
+    if (!Object.keys(picks).length) delete all[o];
+  }
+  await set({ [SITES_COUNT_KEY]: all });
+}
+
+/**
+ * One card per tracker, from the worker's status (tb:tracker:status): the
+ * state in the hub's words, how it's connected (signed in, or a token shown
+ * masked), the default repository/team, the sites with remembered choices,
+ * and Connect / Use a token / Disconnect as they apply. Connect only where the
+ * build can sign in (feature detection: Firefox and store builds without the
+ * GitHub App get the token path, open, never a dead button).
+ */
 async function renderTrackerAccounts() {
   const res = await trackerMsg("tb:tracker:status");
   if (!res || !Array.isArray(res.trackers)) return;
+  const conns = (res.summary && res.summary.connections) || [];
+  const sites = (await get([SITES_COUNT_KEY]))[SITES_COUNT_KEY] || {};
   res.trackers.forEach((t) => {
     const box = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"]');
     if (!box) return;
+    const conn = conns.find((c) => c.id === t.id) || null;
+    const state = conn ? conn.state : null;
     const line = box.querySelector(".acct-line");
     let text = "";
-    if (t.via === "oauth") text = "Connected" + (t.account ? " as " + t.account : "") + ".";
-    else if (t.via === "token") text = "Using a token." + (t.needsReconnect ? " Your " + t.label + " sign-in expired." : "");
+    if (t.via === "oauth") text = "Signed in" + (t.account ? " as " + t.account : "") + ".";
+    else if (t.via === "token") text = "Using " + (t.id === "linear" ? "an API key" : "a token") + (t.tokenHint ? " " + t.tokenHint : "") + "." +
+      (t.needsReconnect ? " Your " + t.label + " sign-in expired." : "");
     else if (t.needsReconnect) text = "Your " + t.label + " sign-in expired. Reconnect to keep filing issues.";
     else if (t.canConnect) text = "Connect " + t.label + " to pick repositories and fields when you file.";
+    else text = "Paste " + (t.id === "linear" ? "an API key" : "a token") + " below to connect " + t.label + ".";
+    if (state === "error" && conn.detail) text += " " + conn.detail;
     line.textContent = text;
     line.hidden = !text;
     const connect = box.querySelector(".acct-connect");
@@ -497,29 +540,72 @@ async function renderTrackerAccounts() {
     connect.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
     connect.onclick = () => connectFromOptions(t, box);
     const disconnect = box.querySelector(".acct-disconnect");
-    disconnect.hidden = t.via !== "oauth";
+    disconnect.hidden = !t.connected && !t.needsReconnect;
     // No button to show → no empty row under the account line.
     connect.parentElement.hidden = connect.hidden && disconnect.hidden;
     disconnect.onclick = () => disconnectFromOptions(t, box);
-    // Signed in: pick the default repo/team here (filled once per render).
+    // Connected (either way): pick the default repo/team here.
     const pickWrap = box.querySelector(".acct-default-wrap");
     if (pickWrap) {
-      pickWrap.hidden = t.via !== "oauth";
-      if (t.via === "oauth") {
+      pickWrap.hidden = !t.connected;
+      if (t.connected) {
         TraceBugTrackerConnect.fillDefaultPicker(t, pickWrap.querySelector("select"),
-          (text, isErr) => say(box.querySelector(".acct-status"), text, isErr ? "err" : "ok", isErr ? " " : ""));
+          (msg, isErr) => say(box.querySelector(".acct-status"), msg, isErr ? "err" : "ok", isErr ? " " : ""));
       }
+    }
+    // Sites with remembered choices, and Forget.
+    const sitesEl = box.querySelector(".acct-sites");
+    if (sitesEl) {
+      const n = sitesFor(sites, t.id).length;
+      sitesEl.hidden = n === 0;
+      sitesEl.querySelector(".acct-sites-text").textContent =
+        "Remembered choices on " + n + " site" + (n === 1 ? "" : "s") + ".";
+      sitesEl.querySelector(".acct-forget").onclick = async () => {
+        await forgetSitesFor(t.id);
+        say(box.querySelector(".acct-status"), "Forgot " + t.label + "'s remembered choices.", "ok");
+        await renderTrackerAccounts();
+      };
     }
     const pillEl = $(PILL_IDS[t.id]);
     if (pillEl) {
-      pillEl.textContent = t.via === "oauth" ? "Connected" : t.connected ? "Configured" : t.needsReconnect ? "Reconnect" : "Not configured";
-      pillEl.className = "pill" + (t.connected ? " on" : t.needsReconnect ? " warn" : "");
+      const w = STATE_PILL[state] || ["Not connected", ""];
+      pillEl.textContent = w[0];
+      pillEl.className = "pill" + w[1];
     }
     // The token form is the main path wherever sign-in isn't offered.
     const adv = $(ADVANCED_IDS[t.id]);
     if (adv && !t.canConnect) adv.open = true;
   });
+  renderDefaultTracker(res.summary);
 }
+
+/** The ticket's main button: one of the connections. */
+function renderDefaultTracker(summary) {
+  const sel = $("defaultTracker");
+  if (!sel || !summary) return;
+  const conns = summary.connections || [];
+  sel.textContent = "";
+  if (!conns.length) {
+    const o = document.createElement("option");
+    o.textContent = "Connect a tracker first";
+    sel.appendChild(o);
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  conns.forEach((c) => {
+    const o = document.createElement("option");
+    o.value = c.id;
+    o.textContent = c.label + (c.state === "connected" ? "" : " (" + STATE_PILL[c.state][0].toLowerCase() + ")");
+    sel.appendChild(o);
+  });
+  sel.value = summary.defaultId || conns[0].id;
+}
+
+$("defaultTracker").addEventListener("change", async () => {
+  const res = await trackerMsg("tb:tracker:set-primary", { tracker: $("defaultTracker").value });
+  say($("prefsStatus"), res && res.ok ? "The ticket's main button now sends to " + $("defaultTracker").selectedOptions[0].textContent + "." : "Couldn't change it.", res && res.ok ? "ok" : "err");
+});
 
 function connectFromOptions(t, box) {
   const status = box.querySelector(".acct-status");
@@ -557,7 +643,8 @@ function connectFromOptions(t, box) {
 
 async function disconnectFromOptions(t, box) {
   const status = box.querySelector(".acct-status");
-  const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id });
+  // A token connection: Disconnect removes the token too.
+  const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id, token: t.via === "token" });
   if (!res || res.error) { say(status, (res && res.error) || "Could not disconnect.", "err"); return; }
   say(status, res.revokeUrl
     ? "Disconnected. To revoke TraceBug's access entirely, visit " + res.revokeUrl
@@ -567,14 +654,16 @@ async function disconnectFromOptions(t, box) {
 
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && (changes.tb_tracker_auth_v1 || changes[INT_KEY])) renderTrackerAccounts();
+    if (area === "local" && (changes.tb_tracker_auth_v1 || changes[INT_KEY] || changes.tb_tracker_sites_v1 ||
+      changes.tb_tracker_default_v1)) renderTrackerAccounts();
   });
 } catch {}
 
-// ── Integrations hub (Phase 13 step 5) ──────────────────────────────────────
-// integrations-hub.js, the same component as the popup's view. Its Advanced
-// path lands on the token forms below; the popup hands sign-in off to here
-// (#integrations:connect=<id>) because it can't survive a sign-in window.
+// ── Hand-offs into Manage integrations ─────────────────────────────────────
+// The popup's hub can't run a sign-in (it closes when GitHub's window takes
+// focus), so it opens #integrations:connect=<id> or #integrations:token=<id>
+// here. Connect needs a click on this page (permissions.request needs the
+// gesture), so the card's Connect button is focused and highlighted.
 
 const TOKEN_FORMS = {
   github: { details: "ghAdvanced", field: "ghToken" },
@@ -582,30 +671,37 @@ const TOKEN_FORMS = {
   slack: { details: null, field: "slHook" },
 };
 
+function highlight(card) {
+  if (!card) return;
+  card.scrollIntoView({ block: "center" });
+  card.classList.add("deep-link-target");
+  setTimeout(() => card.classList.remove("deep-link-target"), 2500);
+}
+
 function showTokenForm(id) {
   const f = TOKEN_FORMS[id];
   if (!f) return;
   if (f.details && $(f.details)) $(f.details).open = true;
   const field = $(f.field);
   if (!field) return;
-  const card = field.closest(".card");
-  if (card) {
-    card.scrollIntoView({ block: "center" });
-    card.classList.add("deep-link-target");
-    setTimeout(() => card.classList.remove("deep-link-target"), 2500);
-  }
+  highlight(field.closest(".card"));
   field.focus();
 }
 
-const integrationsHub = window.TraceBugIntegrationsHub
-  ? TraceBugIntegrationsHub.mount($("hubMount"), { mode: "options", tokenPath: showTokenForm })
-  : null;
+async function showConnect(id) {
+  await renderTrackerAccounts();
+  const box = document.querySelector('.tracker-acct[data-tracker="' + id + '"]');
+  const btn = box && box.querySelector(".acct-connect");
+  if (!btn || btn.hidden) { showTokenForm(id); return; }
+  highlight(box.closest(".card"));
+  btn.focus();
+}
 
 (function followIntegrationsLink() {
   const m = /^#integrations(?::(connect|token)=(github|linear|slack))?$/.exec(location.hash);
   if (!m) return;
   $("integrations").scrollIntoView({ block: "start" });
-  if (m[1] === "connect" && integrationsHub) integrationsHub.openConnect(m[2]);
+  if (m[1] === "connect") showConnect(m[2]);
   else if (m[1] === "token") showTokenForm(m[2]);
 })();
 

@@ -48,6 +48,8 @@
     "tb:tracker:save-token",
     "tb:tracker:open-install",
     "tb:tracker:install-state",
+    // A remembered repo/team the (capped) list can't vouch for: ask directly.
+    "tb:tracker:check-container",
   ];
 
   // The pages allowed to send them.

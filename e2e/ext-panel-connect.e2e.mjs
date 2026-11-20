@@ -309,7 +309,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     const tryToken = async (tok) => {
       await frame.fill("#tokenInput", tok);
       await frame.click("#tokenSave");
-      await frame.waitForFunction(() => !/Checking/.test(document.getElementById("tokenMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+      // An answer, not the empty line before the check starts or "Checking…".
+      await frame.waitForFunction(() => { const t = document.getElementById("tokenMsg").textContent; return !!t && !/Checking/.test(t); }, null, { timeout: 8000 }).catch(() => {});
       return (await frame.textContent("#tokenMsg")).trim();
     };
     const bad = await tryToken(PAT_BAD);

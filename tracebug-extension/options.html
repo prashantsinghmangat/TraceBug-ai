@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <title>TraceBug settings</title>
-  <link rel="stylesheet" href="integrations-hub.css" />
   <!-- Extension page: CSP is script-src 'self', so all script is external. -->
   <style>
     :root {
@@ -15,6 +14,25 @@
       --accent: #FF5C6C;
       --ok: #4CC38A;
       --warn: #E0A040;
+      --field-line: #333A4D;
+      --on-accent: #0B0D14;
+      --note-text: #FDE68A;
+      --strong-text: #EEF0F5;
+      --link: #FF8590;
+      color-scheme: dark;
+    }
+    /* Light: the system's choice, or data-theme="light"; data-theme="dark" forces dark. */
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #F6F7FA; --panel: #FFFFFF; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
+        --accent: #D93A4C; --ok: #1E8A55; --warn: #A86A00; --field-line: #C9CFDA; --on-accent: #FFFFFF;
+        --note-text: #7A4A00; --strong-text: #141823; --link: #C62834; color-scheme: light;
+      }
+    }
+    :root[data-theme="light"] {
+      --bg: #F6F7FA; --panel: #FFFFFF; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
+      --accent: #D93A4C; --ok: #1E8A55; --warn: #A86A00; --field-line: #C9CFDA; --on-accent: #FFFFFF;
+      --note-text: #7A4A00; --strong-text: #141823; --link: #C62834; color-scheme: light;
     }
     * { box-sizing: border-box; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
@@ -40,6 +58,9 @@
     /* Marks the card a #hash deep link (e.g. #mic) landed on, so it's
        unmistakable which one matters on a page that otherwise shows every
        setting at once. */
+    .acct-sites { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .acct-sites[hidden] { display: none; }
+    button.small { padding: 4px 10px; font-size: 12px; }
     .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 92, 108, 0.25); }
     .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
     label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
@@ -47,7 +68,7 @@
       width: 100%;
       margin-top: 4px;
       padding: 8px 10px;
-      border: 1px solid #333A4D;
+      border: 1px solid var(--field-line);
       border-radius: 8px;
       background: var(--bg);
       color: var(--text);
@@ -59,7 +80,7 @@
       width: 100%;
       margin-top: 4px;
       padding: 8px 10px;
-      border: 1px solid #333A4D;
+      border: 1px solid var(--field-line);
       border-radius: 8px;
       background: var(--bg);
       color: var(--text);
@@ -73,13 +94,13 @@
       border-radius: 8px;
       cursor: pointer;
       background: var(--accent);
-      color: #0B0D14;
+      color: var(--on-accent);
       font: 600 13px "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     button.ghost {
       background: transparent;
       color: var(--muted);
-      border: 1px solid #333A4D;
+      border: 1px solid var(--field-line);
     }
     .status { font-size: 12px; color: var(--muted); min-height: 18px; margin-top: 8px; }
     .status.ok { color: var(--ok); }
@@ -102,7 +123,7 @@
       padding: 12px 14px;
       font-size: 12.5px;
       margin-bottom: 16px;
-      color: #FDE68A;
+      color: var(--note-text);
     }
     .notice button { margin-top: 10px; }
     .privacy {
@@ -111,7 +132,7 @@
       border-radius: 10px;
       padding: 12px 14px;
       font-size: 12.5px;
-      color: #EEF0F5;
+      color: var(--strong-text);
       margin-bottom: 20px;
     }
     .rotate { color: var(--muted); font-size: 12px; margin-top: 6px; }
@@ -129,7 +150,7 @@
       word-break: break-all;
     }
     .siterow button { padding: 5px 10px; font-size: 12px; }
-    a { color: #FF8590; }
+    a { color: var(--link); }
     /* ADR 010: sign-in row + the token fallback tucked under Advanced. */
     .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
     .advanced { margin-top: 10px; }
@@ -179,14 +200,17 @@
       <div class="status" id="aiStatus"></div>
     </div>
 
-    <!-- Integrations hub (Phase 13 step 5): the same component as the popup's
-         Integrations view. The per-tracker cards below hold the token forms
-         its "Advanced" path points to. -->
-    <section class="card" id="integrations" aria-labelledby="integrationsTitle">
-      <h2 id="integrationsTitle">Integrations</h2>
-      <p class="hint">Where the ticket's Send button files issues. The default connection is the ticket's main button; the others are under More ▾.</p>
-      <div id="hubMount"></div>
-      <label class="inline-check" style="display:flex;gap:8px;align-items:center;margin-top:14px">
+    <!-- Manage integrations (redesign step 5): one card per tracker. The popup
+         keeps the hub view (My connections / Add platform); settings is where
+         each connection is managed. Status words match the hub and the ticket's
+         ▾ tooltip: Connected / Needs reconnect / Error / Not connected. -->
+    <h2 class="section-title" id="integrations">Manage integrations</h2>
+    <section class="card" id="intGlobal" aria-labelledby="intGlobalTitle">
+      <h2 id="intGlobalTitle">Sending</h2>
+      <label>Default tracker — the ticket's main send button
+        <select id="defaultTracker"></select>
+      </label>
+      <label class="inline-check" style="display:flex;gap:8px;align-items:center;margin-top:10px">
         <input id="openAfterCreate" type="checkbox" checked />
         Open the issue after creating
       </label>
@@ -196,13 +220,11 @@
       <div class="row">
         <button class="ghost" id="forgetChoices" type="button">Forget remembered choices</button>
       </div>
-      <div class="status" id="prefsStatus"></div>
+      <div class="status" id="prefsStatus" role="status" aria-live="polite"></div>
     </section>
 
-    <h2 class="section-title" id="trackerSettings">Tracker settings</h2>
-
     <div class="card">
-      <h2>GitHub <span class="pill" id="ghPill">Not configured</span></h2>
+      <h2>GitHub <span class="pill" id="ghPill">Not connected</span></h2>
       <!-- ADR 010: sign-in first (shown only where this build supports it),
            the pasted token as the advanced fallback. -->
       <div class="tracker-acct" data-tracker="github">
@@ -211,6 +233,8 @@
           <button class="acct-connect" type="button" hidden>Connect GitHub</button>
           <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
+        <p class="hint acct-sites" hidden><span class="acct-sites-text"></span>
+          <button class="ghost small acct-forget" type="button">Forget</button></p>
         <div class="device" hidden>
           <p class="hint">Your code: <b class="device-code"></b></p>
           <div class="row">
@@ -218,68 +242,65 @@
             <button class="ghost device-reopen" type="button" hidden>Reopen GitHub</button>
           </div>
         </div>
-        <!-- Right after connecting: where the Create panel starts. -->
+        <!-- Connected (signed in or token): where the Create panel starts. -->
         <label class="acct-default-wrap" hidden>Default repository
           <select class="acct-default"></select>
         </label>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="ghAdvanced">
-        <summary>Advanced: use a token</summary>
-        <p class="hint">Personal access token with <code>repo</code> scope. Issues are created directly from your browser. You pick the repository when you create an issue.</p>
+        <summary>Use a token instead</summary>
+        <p class="hint">A fine-grained token with Issues: Read and write (and Metadata: Read) on the repositories you
+          file into, or a classic token with the <code>repo</code> scope. Issues are created directly from your
+          browser; you pick the repository when you create one.</p>
         <label>Token
           <input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" />
         </label>
-        <label>Default repository (optional)
-          <input id="ghRepo" type="text" spellcheck="false" placeholder="owner/repo" />
-        </label>
         <div class="row">
           <button id="ghSave" type="button">Save</button>
-          <button class="ghost" id="ghClear" type="button">Remove</button>
         </div>
         <div class="status" id="ghStatus"></div>
       </details>
     </div>
 
     <div class="card">
-      <h2>Linear <span class="pill" id="lnPill">Not configured</span></h2>
+      <h2>Linear <span class="pill" id="lnPill">Not connected</span></h2>
       <div class="tracker-acct" data-tracker="linear">
         <p class="hint acct-line"></p>
         <div class="row">
           <button class="acct-connect" type="button" hidden>Connect Linear</button>
           <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
+        <p class="hint acct-sites" hidden><span class="acct-sites-text"></span>
+          <button class="ghost small acct-forget" type="button">Forget</button></p>
         <label class="acct-default-wrap" hidden>Default team
           <select class="acct-default"></select>
         </label>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="lnAdvanced">
-        <summary>Advanced: use a key</summary>
-        <p class="hint">Personal API key. You pick the team when you create an issue.</p>
+        <summary>Use an API key instead</summary>
+        <p class="hint">A personal API key (Linear → Settings → Security &amp; access). You pick the team when you
+          create an issue.</p>
         <label>API key
           <input id="lnKey" type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" />
         </label>
-        <label>Default team ID (optional)
-          <input id="lnTeam" type="text" spellcheck="false" placeholder="TEAM" />
-        </label>
         <div class="row">
           <button id="lnSave" type="button">Save</button>
-          <button class="ghost" id="lnClear" type="button">Remove</button>
         </div>
         <div class="status" id="lnStatus"></div>
       </details>
     </div>
 
     <div class="card">
-      <h2>Slack <span class="pill" id="slPill">Not configured</span></h2>
+      <h2>Slack <span class="pill" id="slPill">Not connected</span></h2>
       <p class="hint">Incoming-webhook URL for the channel reports should post to.</p>
       <label>Webhook URL
         <input id="slHook" type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" />
       </label>
       <div class="row">
         <button id="slSave" type="button">Save</button>
-        <button class="ghost" id="slClear" type="button">Remove</button>
+        <button class="ghost" id="slClear" type="button">Disconnect</button>
       </div>
       <div class="status" id="slStatus"></div>
     </div>
@@ -397,7 +418,6 @@
   </div>
   <script src="diagnostics.js"></script>
   <script src="tracker-connect.js"></script>
-  <script src="integrations-hub.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

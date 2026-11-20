@@ -361,15 +361,15 @@ try {
   check("…and Create files it", (await f3.textContent("#issueLink")).trim() === `ENG-${creates.length}` && creates.length === createsBefore + 1);
   await f3.click("#cancel");
 
-  // ══ Settings: Connect shown, key path under "Advanced: use a key", Disconnect revokes ══
+  // ══ Settings: Connect shown, key path under "Use an API key instead", Disconnect revokes ══
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/options.html`);
   const acct = '.tracker-acct[data-tracker="linear"]';
   await opt.waitForFunction((a) => /ana@acme\.test/.test(document.querySelector(a + " .acct-line").textContent || ""), acct, { timeout: 5000 }).catch(() => {});
-  check('settings: "Connected as ana@acme.test" and a Default team picker',
-    /Connected as ana@acme\.test/.test(await opt.textContent(acct + " .acct-line")) && await opt.isVisible(acct + " .acct-default"));
-  check('settings: the key path is "Advanced: use a key", folded away',
-    (await opt.textContent("#lnAdvanced summary")).trim() === "Advanced: use a key" && !(await opt.evaluate(() => document.getElementById("lnAdvanced").open)));
+  check('settings: "Signed in as ana@acme.test" and a Default team picker',
+    /Signed in as ana@acme\.test/.test(await opt.textContent(acct + " .acct-line")) && await opt.isVisible(acct + " .acct-default"));
+  check('settings: the key path is "Use an API key instead", folded away',
+    (await opt.textContent("#lnAdvanced summary")).trim() === "Use an API key instead" && !(await opt.evaluate(() => document.getElementById("lnAdvanced").open)));
   await opt.click(acct + " .acct-disconnect");
   await opt.waitForFunction((a) => /Disconnected/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 5000 }).catch(() => {});
   check("Disconnect revokes the grant at Linear (refresh and access token, no secret)",

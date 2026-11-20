@@ -350,7 +350,7 @@ try {
   await opt.goto(`chrome-extension://${extId}/options.html`);
   await opt.waitForFunction(() => /octo/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-line').textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const line = await opt.textContent('.tracker-acct[data-tracker="github"] .acct-line');
-  check('settings: "Connected as octo."', (line || "").trim() === "Connected as octo.", line);
+  check('settings: "Signed in as octo."', (line || "").trim() === "Signed in as octo.", line);
   check("settings: no token in the page", !(await opt.content()).includes(ACCESS));
   check("settings: the token form is folded away", !(await opt.evaluate(() => document.getElementById("ghAdvanced").open)));
   const defSel = '.tracker-acct[data-tracker="github"] .acct-default';
