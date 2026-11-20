@@ -142,9 +142,16 @@
       <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
       <p class="muted" id="repoNote" hidden>TraceBug isn't allowed on <strong id="repoNoteName"></strong> yet.
         <a href="#" id="configureRepo">Configure repository access on GitHub</a></p>
+      <!-- SAML single sign-on: an organisation hides repositories (or refused a
+           call) until TraceBug is authorised for it. Links are github.com only,
+           opened by the worker. -->
+      <div class="pblock" id="ssoBox" hidden>
+        <p class="muted" id="ssoText"></p>
+        <div class="prow" id="ssoLinks"></div>
+      </div>
       <div class="pblock" id="installBox" hidden>
-        <p class="muted">TraceBug isn't installed on any of your GitHub repositories yet. Install it on the ones you
-          want to file into, then come back here.</p>
+        <p class="muted" id="installText">TraceBug isn't installed on any of your GitHub repositories yet. Install it on the
+          ones you want to file into, then come back here.</p>
         <div class="prow">
           <button type="button" class="small" id="installApp">Install TraceBug on GitHub</button>
           <button type="button" class="ghost small" id="refreshRepos">Refresh</button>
@@ -154,9 +161,16 @@
       <p class="muted" id="attachNote" hidden></p>
     </div>
 
+    <p class="muted" id="revokeNote" hidden>Disconnected — TraceBug deleted its GitHub sign-in from this browser.
+      It can't revoke it at GitHub (that needs a server secret TraceBug doesn't have): to fully revoke, remove TraceBug
+      at <a href="#" id="revokeLink">github.com/settings/applications</a>.</p>
+
     <div class="pblock" id="doneBox" hidden>
       <p class="done">✓ Created <a href="#" id="issueLink"></a></p>
       <p class="muted" id="doneNote"></p>
+      <!-- GitHub can't take files through its API: copy the ticket's screenshot
+           and paste it into a comment. Shown only with a screenshot and a clipboard. -->
+      <button type="button" class="small" id="copyShot" hidden>Copy screenshot</button>
     </div>
 
     <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>

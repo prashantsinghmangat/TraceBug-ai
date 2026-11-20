@@ -154,6 +154,16 @@ try {
   await inject(page, GLOB);
   await page.fill("#coupon", "SAVE20");
   await openTicket(page, "#orderBtn", "Panel ticket one");
+  // A screenshot in this ticket (for "Copy screenshot" after Create).
+  await page.click('#tracebug-quick-bug-modal [data-action="add-screenshot"]').catch(() => {});
+  await sleep(600);
+  // It's a drag-to-select region capture.
+  await page.mouse.move(120, 120);
+  await page.mouse.down();
+  await page.mouse.move(420, 320, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForSelector("#tracebug-quick-bug-modal [data-delete-screenshot]", { state: "attached", timeout: 10000 }).catch(() => {});
+  await page.waitForSelector('#tracebug-quick-bug-modal [data-action="open-github"]', { state: "visible", timeout: 10000 }).catch(() => {});
 
   const t0 = Date.now();
   const { frame, winP } = await sendToGitHub(page);
@@ -282,6 +292,22 @@ try {
   const results = await page.evaluate(() => window.__tbResults);
   check("…the page heard only the result (link and number), no token", results.some((r) => r.includes("issues/100")) &&
     !results.some((r) => r.includes(TOKEN)));
+  // Copy screenshot (GitHub can't take files): on a real click only.
+  const shots5 = await page.$$eval("#tracebug-quick-bug-modal [data-delete-screenshot]", (b) => b.length);
+  check("5b. with a screenshot in the ticket, \"Copy screenshot\" is offered after Create", shots5 > 0 && await frame.isVisible("#copyShot"), `${shots5} screenshot(s)`);
+  await frame.evaluate(() => {
+    window.__clip = [];
+    navigator.clipboard.write = async (items) => { window.__clip.push({ types: items.map((i) => i.types.join()).join("|"), active: navigator.userActivation.isActive }); };
+  });
+  await frame.evaluate(() => document.getElementById("copyShot").click());
+  await sleep(200);
+  check("…a click a script made writes nothing", (await frame.evaluate(() => window.__clip.length)) === 0);
+  await frame.click("#copyShot");
+  await frame.waitForFunction(() => window.__clip.length > 0, null, { timeout: 5000 }).catch(() => {});
+  const clip = await frame.evaluate(() => window.__clip);
+  check("…a real click puts the screenshot on the clipboard as a PNG", clip.length === 1 && clip[0].types === "image/png" && clip[0].active, JSON.stringify(clip));
+  check("…and says what to do with it", (await frame.textContent("#panelMsg")).trim() === "Screenshot copied. Paste it into a comment on the issue.");
+  check("…the screenshot never reached GitHub", !JSON.stringify(posts[0]).includes("base64") && !("attachments" in posts[0]));
   await frame.click("#issueLink");
   check("…the link opens the issue when clicked", (await frame.evaluate(() => window.__opened[0])) === `https://github.com/${REPO}/issues/100`);
   check('…and the ticket says "GitHub issue created #100" (no "Creating…" toast before it)',
@@ -295,6 +321,13 @@ try {
   await page.keyboard.press("Escape");
   await sleep(400);
   await openTicket(page, "#applyBtn", "Panel ticket two");
+  // No screenshot in this ticket: "Copy screenshot" must not appear.
+  for (let i = 0; i < 10; i++) {
+    const del = await page.$("#tracebug-quick-bug-modal [data-delete-screenshot]");
+    if (!del) break;
+    await del.evaluate((b) => b.click());
+    await sleep(250);
+  }
   const r6 = await sendToGitHub(page);
   const f6 = r6.frame;
   await f6.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
@@ -306,6 +339,8 @@ try {
   await f6.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
   check('…one click on Create → "Created #101"', (await f6.textContent("#issueLink")).trim() === "#101" && posts.length === 2,
     JSON.stringify(posts.map((p) => p.n)));
+  check("…no screenshot in the ticket: no \"Copy screenshot\"",
+    (await page.$$eval("#tracebug-quick-bug-modal [data-delete-screenshot]", (b) => b.length)) === 0 && !(await f6.isVisible("#copyShot")));
   await sleep(600);
   check("…with \"Open the issue after creating\" off, no tab opens", (await issueTabs()).length === 0, JSON.stringify(await issueTabs()));
   await f6.click("#cancel");

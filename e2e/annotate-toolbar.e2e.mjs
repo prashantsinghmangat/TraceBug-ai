@@ -230,8 +230,13 @@ async function run(name) {
     const y0 = await page.evaluate(() => window.scrollY);
     await page.mouse.move(500, 300);
     await page.mouse.wheel(0, 200);
-    // Wait for (smooth) scrolling to settle.
-    await page.waitForFunction(() => new Promise((r) => { const a = scrollY; requestAnimationFrame(() => requestAnimationFrame(() => r(scrollY === a && a > 0))); }));
+    // Wait for the scroll to START, then settle. The page may already be
+    // scrolled (y0 > 0) from earlier steps, and Firefox starts a wheel scroll
+    // asynchronously: "stable and > 0" was true before it had moved at all.
+    await page.waitForFunction((from) => new Promise((r) => {
+      const a = scrollY;
+      requestAnimationFrame(() => requestAnimationFrame(() => r(scrollY === a && a > from + 50)));
+    }), y0, { timeout: 10000 }).catch(() => {});
     const scrolled = (await page.evaluate(() => window.scrollY)) - y0;
     const afterTop = await page.evaluate(() => document.querySelector('#tracebug-annot-layer [data-tb-annot-shape="rect"]').getBoundingClientRect().top);
     check("mouse wheel scrolls the page while drawing", scrolled > 50, `scrollY=${scrolled}`);

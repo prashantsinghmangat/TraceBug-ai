@@ -194,9 +194,9 @@ try {
   check("no duplicate Destination/Via rows", !(await win.isVisible("#meta")));
 
   await win.waitForFunction(() => document.querySelectorAll("#containerList option").length > 0, null, { timeout: 8000 });
-  const listed = await win.$$eval("#containerList option", (os) => os.map((o) => o.value));
-  check("repos are listed from GitHub, archived ones left out",
-    JSON.stringify(listed) === '["acme/widgets","acme/api"]', JSON.stringify(listed));
+  const listed = await win.$$eval("#containerList option", (os) => os.map((o) => o.value + (/Archived/.test(o.label) ? ":archived" : "")));
+  check("repos are listed from GitHub, archived ones marked unavailable",
+    JSON.stringify(listed) === '["acme/widgets","acme/api","acme/old:archived"]', JSON.stringify(listed));
   check("the worker's fetches went through the stub", apiHits.includes("GET /user/repos"), apiHits.join(", "));
 
   // A repo the user can't push to: the warning shows.

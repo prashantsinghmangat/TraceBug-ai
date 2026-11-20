@@ -133,9 +133,12 @@ async function doRefresh(
       }
       throw err;
     }
-    const again = await store.read();
-    again[tracker] = { ...(again[tracker] || cur), tokens: next, needsReconnect: false };
-    await store.write(again);
+    // GitHub has already spent the old refresh token: store the new one NOW,
+    // with no other await first, so an MV3 worker shut down mid-flight can't
+    // lose it. `map` was read just before the request (one tracker refreshes
+    // at a time, so this tracker's entry can't have moved).
+    map[tracker] = { ...cur, tokens: next, needsReconnect: false };
+    await store.write(map);
     return next;
   })();
   inflight.set(tracker, p);

@@ -130,8 +130,8 @@ function issueTitle(report: BugReport): string {
  * path and the extension bridge path all funnel through this one function, so
  * one path cannot get out of step with another.
  */
-function issueBody(report: BugReport): string {
-  return signIssueBody(generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, ""));
+function issueBody(report: BugReport, filedOnGitHub = false): string {
+  return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub }).replace(/^##\s+[^\n]+\n+/, ""));
 }
 
 /** The Slack text, signed. Slack's link syntax differs — see issue-signature. */
@@ -148,7 +148,7 @@ export async function createGitHubIssue(
   config: GitHubConfig,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
-  return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
+  return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report, true) }, signal);
 }
 
 export async function createLinearIssue(
@@ -191,7 +191,7 @@ export async function createTrackerIssue(
     }
     const content = provider === "slack"
       ? { text: slackText(report) }
-      : { title: issueTitle(report), body: issueBody(report) };
+      : { title: issueTitle(report), body: issueBody(report, provider === "github") };
     return sendTrackerViaBridge(provider, content, provider === "slack" ? undefined : attachments);
   }
   const c = getIntegrationsConfig();

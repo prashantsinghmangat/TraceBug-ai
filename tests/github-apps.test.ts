@@ -51,3 +51,37 @@ describe('GitHub App ids per build', () => {
       .toBe('id:"Iv23prodprodprod",u:"https://github.com/apps/x/installations/new"');
   });
 });
+
+// Release prep: run the swapped worker bundle itself. With the production id
+// still the placeholder, the store build must offer NO Connect GitHub (the
+// panel and settings then show the token path); with a real id, Connect uses it.
+import { createContext, runInContext } from 'node:vm';
+
+function storeBundle(productionId: string) {
+  const bundle = join(root, 'tracebug-extension', 'tracebug-provider-api.js');
+  if (!existsSync(bundle)) return null;
+  const src = swapGitHubApp(readFileSync(bundle, 'utf8'), { dev: apps.dev, production: { ...apps.production, clientId: productionId } });
+  const ctx: Record<string, unknown> = { URL, TextEncoder, TextDecoder, crypto: globalThis.crypto, fetch: async () => { throw new Error('no network'); }, setTimeout, clearTimeout, AbortSignal };
+  ctx.self = ctx;
+  ctx.globalThis = ctx;
+  createContext(ctx);
+  runInContext(src, ctx);
+  return (ctx as { TraceBugProviderAPI: { trackerAdapter(id: string): { connect(): { spec: { clientId: string } } | null; manageUrl?: string } } }).TraceBugProviderAPI;
+}
+
+describe('the store build, run', () => {
+  it('placeholder production id → no Connect GitHub (token path only), never the dev app', () => {
+    const api = storeBundle(TODO_OWNER_CLIENT_ID);
+    if (!api) return;
+    expect(api.trackerAdapter('github').connect()).toBeNull();
+    expect(api.trackerAdapter('github').manageUrl).toBe(`https://github.com/apps/${apps.production.slug}/installations/new`);
+  });
+
+  it('a real production id → Connect uses it (and not the dev one)', () => {
+    const api = storeBundle('Iv23liFakeProdId0001');
+    if (!api) return;
+    const c = api.trackerAdapter('github').connect();
+    expect(c && c.spec.clientId).toBe('Iv23liFakeProdId0001');
+    expect(c && c.spec.clientId).not.toBe(apps.dev.clientId);
+  });
+});

@@ -420,6 +420,93 @@ export class ProviderHttpError extends Error {
   }
 }
 
+// ── GitHub's special answers ───────────────────────────────────────────────
+// Read before the generic status message, because each has a fix the user
+// can act on: authorise TraceBug for an SSO organisation, wait out a rate
+// limit, or pick another repository.
+
+/** An https://github.com/… page — the only kind TraceBug opens from a GitHub answer. */
+export function isGitHubPageUrl(url: unknown): url is string {
+  if (typeof url !== "string") return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === "github.com" && !u.username && !u.password && !u.port;
+  } catch { return false; }
+}
+
+/** "14:05" in local time. */
+export function localHHMM(ms: number): string {
+  const d = new Date(ms);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/** SAML SSO: the organisation wants this token authorised (X-GitHub-SSO: required; url=…). */
+export class GitHubSsoError extends ProviderHttpError {
+  url: string;
+  org: string;
+  constructor(url: string, org: string) {
+    super(`Authorise TraceBug for ${org || "your organisation"} on GitHub (single sign-on), then try again.`, 403);
+    this.name = "GitHubSsoError";
+    this.url = url;
+    this.org = org;
+  }
+}
+
+/** Primary (x-ratelimit-*) or secondary (retry-after / abuse) rate limit. */
+export class GitHubRateLimitError extends ProviderHttpError {
+  resetAt: number;
+  constructor(resetAt: number, status: number) {
+    super(`GitHub rate limit: try again after ${localHHMM(resetAt)}.`, status);
+    this.name = "GitHubRateLimitError";
+    this.resetAt = resetAt;
+  }
+}
+
+/** The org in an SSO URL (https://github.com/orgs/<org>/sso?...), or "". */
+export function ssoOrgOf(url: string): string {
+  const m = /^https:\/\/github\.com\/orgs\/([^/?#]+)/.exec(url);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+/**
+ * A GitHub error response that means SSO or a rate limit, else null. `body`
+ * is the parsed JSON (or null). A 403 for a missing permission is NOT one of
+ * these: it keeps its own message.
+ */
+export function githubSpecialError(res: Response, body: unknown, now: number = Date.now()): ProviderHttpError | null {
+  if (res.ok) return null;
+  const sso = res.headers.get("x-github-sso") || "";
+  if (res.status === 403 && /^\s*required/i.test(sso)) {
+    const m = /url=(\S+)/i.exec(sso);
+    const url = m && isGitHubPageUrl(m[1]) ? m[1] : "";
+    return new GitHubSsoError(url, url ? ssoOrgOf(url) : "");
+  }
+  if (res.status !== 403 && res.status !== 429) return null;
+  const msg = body && typeof body === "object" && typeof (body as { message?: unknown }).message === "string"
+    ? (body as { message: string }).message : "";
+  const retry = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(retry) && retry > 0) return new GitHubRateLimitError(now + retry * 1000, res.status);
+  const reset = Number(res.headers.get("x-ratelimit-reset"));
+  if (res.headers.get("x-ratelimit-remaining") === "0" || /api rate limit exceeded/i.test(msg)) {
+    return new GitHubRateLimitError(Number.isFinite(reset) && reset > 0 ? reset * 1000 : now + 60_000, res.status);
+  }
+  // Secondary limit with no header to go by: GitHub asks for at least a minute.
+  if (/secondary rate limit|abuse detection/i.test(msg)) return new GitHubRateLimitError(now + 60_000, res.status);
+  return null;
+}
+
+async function bodyOf(res: Response): Promise<unknown> {
+  try { return await res.clone().json(); } catch { return null; }
+}
+
+/** Throw GitHub's special errors (SSO, rate limit) for a failed response. */
+export async function throwIfGitHubSpecial(res: Response): Promise<void> {
+  if (res.ok) return;
+  const e = githubSpecialError(res, await bodyOf(res));
+  if (e) throw e;
+}
+
 export async function parseJsonOrThrow(
   res: Response,
   label: string,
@@ -471,11 +558,24 @@ export async function postGitHubIssue(
       milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : undefined,
     }),
   });
-  // A fine-grained token (or an app) that can see the repository but not
-  // write issues: the check at save time can't tell, so say it here, plainly.
-  // A 403 with no requests left is a rate limit, not this.
-  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
-    throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+  if (!res.ok) {
+    const body = await bodyOf(res);
+    // SSO and rate limits first: each has its own fix.
+    const special = githubSpecialError(res, body);
+    if (special) throw special;
+    const msg = body && typeof body === "object" ? String((body as { message?: unknown }).message || "") : "";
+    // Issues turned off in the repository (GitHub: 410 Gone).
+    if (res.status === 410 || /issues are disabled/i.test(msg)) {
+      throw new ProviderHttpError(`Issues are turned off in ${config.repo}, so it can't take new issues. Pick another repository.`, res.status);
+    }
+    if (/archived/i.test(msg)) {
+      throw new ProviderHttpError(`${config.repo} is archived, so it can't take new issues. Pick another repository.`, res.status);
+    }
+    // A fine-grained token (or an app) that can see the repository but not
+    // write issues: the check at save time can't tell, so say it here, plainly.
+    if (res.status === 403) {
+      throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+    }
   }
   const data = await parseJsonOrThrow(res, "GitHub", "tracker");
   return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : undefined };

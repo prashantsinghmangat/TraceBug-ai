@@ -53,31 +53,55 @@ The plug/logo icon in the popup's header opens the same connections as a compact
   **Ctrl+Enter** (⌘+Enter on Mac) creates the issue and Esc closes it.
 - **Firefox:** the same hub; the dialogs offer the token path only until the Firefox step.
 
-### GitHub: Connect, no token (Chrome)
+### GitHub, end to end (Chrome)
 
-Connect once — from the welcome page (step 5), TraceBug settings (GitHub card), or the first time you send:
+GitHub is the integration TraceBug supports end to end. **GitHub Enterprise Server isn't supported** — github.com only.
 
-1. Capture a bug and click **Send to GitHub** in the ticket. TraceBug opens its own **Create GitHub issue** window.
-2. The first time, click **Connect GitHub**. TraceBug copies a short code and opens GitHub's sign-in page in a
-   small window (a tab, if the window can't open). Press **Ctrl+V** (⌘V on a Mac), click **Continue**, then
-   **Authorize**. When GitHub hands TraceBug the sign-in, TraceBug closes that window and comes back saying "as <your
-   login>". If copying failed, use **Copy code** or select the code. Closed GitHub's window too early? Click
-   **Reopen GitHub**; the code still works until it expires. Declined on GitHub shows "Cancelled"; an expired code
-   offers **Get a new code**.
-   - GitHub asks you to install **TraceBug Dev** on the repositories it may file into. Add more any time from the
-     **Add repositories** link in the window.
-3. Pick the **Repository** (settings and the welcome page ask for a default right after you connect), tick
-   **Labels** (**bug** starts ticked), choose an **Assignee** and **Milestone** if you want, and click
-   **Create issue**. The panel shows **Created #123** with a link, and the issue opens in a new tab (turn that off
-   with **Open the issue after creating** in Settings → Integrations).
+1. **Connect.** Capture a bug and click **Send to GitHub** (or **Connect a tracker** the first time). The Create panel
+   opens inside the ticket. Click **Connect GitHub**: Chrome asks once for access to github.com and api.github.com,
+   then TraceBug copies a short code and opens GitHub's sign-in page in a small window. Press **Ctrl+V** (⌘V on a
+   Mac), **Continue**, **Authorize**. The window closes itself and the panel says "as <your login>". No token to
+   create. (Closed the window too early? **Reopen GitHub** — the code works until it expires.)
+2. **Install on repositories.** TraceBug files only into repositories you install its GitHub App on. If it's on none
+   yet, the panel shows **Install TraceBug on GitHub**: pick repositories in GitHub's window and come back — the
+   list refreshes by itself (or press **Refresh**).
+   - In an organisation where you aren't an owner, GitHub turns the install into a **request**. The panel then says
+     **Waiting for your organisation owner to approve TraceBug**; once they do, **Refresh** shows the repositories.
+   - Organisations with **single sign-on (SAML)** hide their repositories until you authorise TraceBug for them. The
+     panel keeps the rest of the list and adds **Authorise TraceBug for <org>** (GitHub's own page; TraceBug opens
+     only github.com links). Come back and the list reloads. If a Create is blocked the same way, the panel says so,
+     nothing is filed, and your ticket stays.
+   - A repository TraceBug's app isn't on gets **Configure repository access on GitHub**.
+3. **Repository, labels, assignee.** Pick the **Repository** (remembered per site), tick **Labels** (**bug** starts
+   ticked), choose an **Assignee** and **Milestone** if you want. Archived repositories and ones with Issues turned
+   off are listed as unavailable and can't be picked to file into.
+4. **Create.** **Create issue** (or Enter / Ctrl+Enter) files it. The panel shows **Created #123** and the issue opens
+   in a new tab (turn that off in Settings → Manage integrations → **Open the issue after creating**). A failure
+   keeps your ticket and your choices; **Retry** checks first, so it's never filed twice. A GitHub rate limit says
+   **GitHub rate limit: try again after HH:MM**.
+5. **Screenshots.** GitHub's API can't attach files, so the issue says what was captured and asks the reader to get
+   the replay or screenshots from the reporter — it never claims something is attached. After Create, **Copy
+   screenshot** in the panel puts the ticket's screenshot on your clipboard: paste it into a comment on the issue.
+6. **Token instead.** **Use a token instead** in the panel or settings: a fine-grained token with Issues: Read and
+   write (and Metadata: Read), or a classic token with `repo`. It's checked with GitHub before it's saved; a
+   rejected token, a missing scope or no access to the repository are named plainly. Store builds released before
+   TraceBug's production GitHub App is registered offer only this path.
+7. **Disconnect.** **Disconnect** (panel or settings) deletes TraceBug's GitHub sign-in from this browser.
+   TraceBug can't revoke it at GitHub — that needs a server secret it doesn't have — so to fully revoke, remove
+   TraceBug at [github.com/settings/applications](https://github.com/settings/applications) (Authorized GitHub
+   Apps).
 
-You connect once. Next time it is pick → Create, with your last repository and fields preselected. **Disconnect**
-lives in TraceBug settings (GitHub card); to revoke the app entirely, use GitHub → Settings → Applications.
+The sign-in renews itself (GitHub's sign-ins last 8 hours; renewal is automatic). If GitHub refuses the renewal —
+revoked, or unused for 6 months — the panel shows **Reconnect GitHub** and keeps your choices.
 
 Why a code instead of a redirect: GitHub only allows the redirect sign-in for apps that keep a secret on a server,
 and TraceBug has no server (ADR 010). The code flow needs no secret.
 
-### Linear: Connect with one click (Chrome)
+### Linear: Connect with one click (Chrome) — frozen
+
+Linear works as described below, but it isn't being extended until the GitHub release ships. Its sign-in needs
+TraceBug's Linear client id, which isn't set yet: until then use **Use an API key instead**. Slack's webhook works as
+before.
 
 1. In TraceBug settings (Linear card), on the welcome page (step 5), or from the ticket (**More ▾ → Send to Linear**),
    click **Connect Linear**. Linear's sign-in opens in a popup; approve it and you're back, connected. No key to copy.

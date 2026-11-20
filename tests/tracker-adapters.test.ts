@@ -22,13 +22,17 @@ describe('nextLink', () => {
 });
 
 describe('GitHub', () => {
-  it('lists repos across pages, skipping archived ones', async () => {
+  it('lists repos across pages, marking archived ones unavailable', async () => {
     const spy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json([{ full_name: 'a/one', private: true }, { full_name: 'a/old', archived: true }], 200,
         { link: '<https://api.github.com/user/repos?page=2>; rel="next"' }))
       .mockResolvedValueOnce(json([{ full_name: 'b/two' }]));
     const items = await github.listContainers(PAT);
-    expect(items).toEqual([{ id: 'a/one', label: 'a/one', detail: 'private' }, { id: 'b/two', label: 'b/two', detail: undefined }]);
+    expect(items).toEqual([
+      { id: 'a/one', label: 'a/one', detail: 'private', unavailable: undefined },
+      { id: 'a/old', label: 'a/old', detail: undefined, unavailable: 'Archived' },
+      { id: 'b/two', label: 'b/two', detail: undefined, unavailable: undefined },
+    ]);
     expect(spy).toHaveBeenCalledTimes(2);
     expect((spy.mock.calls[0][1] as RequestInit).headers).toMatchObject({ authorization: 'Bearer ghp_PAT' });
   });

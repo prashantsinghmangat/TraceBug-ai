@@ -76,6 +76,12 @@ the same step.
   `tb:tracker:save-token`), deep links `#integrations:connect=<id>` (focus the card's Connect) / `:token=<id>`. Ticket: `quick-bug.ts`
   `_primaryTarget`/`_sendButtonHtml`/`_trackerStatusHtml`, logos `src/ui/brand-logos.ts` (copy in the hub JS).
   Tests `tests/integration-status.test.ts`, e2e `e2e/ext-integrations-hub.e2e.mjs` (`e2e:hub`).
+  **GitHub hardening (first release):** `src/providers/api.ts` `githubSpecialError` / `GitHubSsoError` /
+  `GitHubRateLimitError` / `isGitHubPageUrl`; `trackers.ts` `ghFetch` (SSO partial notes, `ssoLinks`),
+  `toContainers` (`unavailable`), `containerAccessible`, `checkTrackerSecret`; worker `tb:tracker:open-sso`,
+  `onInstallTabUrl` (`setup_action`), `tb:panel:screenshot`; panel `showSso`, `unavailableReason`, `copyShot`;
+  issue body `src/github-issue.ts` `generateGitHubIssue(report, { filed })`. Tests `tests/github-hardening.test.ts`,
+  `tests/github-issue-body.test.ts`, `tests/tracker-auth-store.test.ts`, e2e `ext-panel-connect` leg D.
   `connectableTrackers()` rides on the `TB_HOST_ACCESS` answer so the page offers "Send to GitHub" before any
   sign-in. GitHub App repos: `trackers.ts` `github.listContainers` walks `/user/installations` for OAuth tokens.
   Tests `tests/tracker-{oauth,auth-store,adapters}.test.ts`; e2e `e2e/ext-tracker-create.e2e.mjs` (`e2e:tracker`,

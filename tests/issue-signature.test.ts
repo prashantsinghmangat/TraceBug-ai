@@ -113,7 +113,7 @@ describe('it cannot be applied twice', () => {
 
 describe('every send path is signed at one chokepoint', () => {
   it('signs issueBody, which GitHub, Linear and the bridge all use', () => {
-    expect(TRACKER).toContain('return signIssueBody(generateGitHubIssue(report)');
+    expect(TRACKER).toContain('return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub })');
     // All four call sites go through issueBody / slackText, never the raw
     // generators — that is what keeps the paths from drifting.
     expect(TRACKER).toContain('body: issueBody(report) }, signal)');

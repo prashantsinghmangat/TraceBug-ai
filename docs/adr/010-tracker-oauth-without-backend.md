@@ -95,6 +95,22 @@ the extension is public.
 | Slack | incoming webhook (unchanged; OAuth needs a secret) | — | — |
 
 ### GitHub
+- **Updated 2026-11-20 (first tracker release = GitHub only):**
+  - Refresh: one at a time in the worker; a caller that arrives after a refresh uses the stored token; the rotated
+    tokens are written before any other await (an MV3 shutdown can't lose them).
+  - SAML SSO: `X-GitHub-SSO: required; url=…` → "Authorise TraceBug for <org>"; `partial-results; organizations=…`
+    → the list is kept with a link per org (`/organizations/{id}` → `https://github.com/orgs/<login>/sso`). Only
+    `https://github.com/…` links are opened, by the worker (`tb:tracker:open-sso`).
+  - Owner approval: GitHub reports a pending request only by sending the install window to the app's **Setup URL**
+    with `?setup_action=request`. The production app's Setup URL is its own github.com page; with github.com access
+    (granted at Connect) the worker reads only `setup_action` from that window's address (`tabs.onUpdated`) and
+    shows "Waiting for your organisation owner to approve TraceBug". Unlike the device flow (whose window is never
+    read), this is a hint, never an auth signal; nothing is injected into github.com.
+  - Rate limits (primary and secondary) → "GitHub rate limit: try again after HH:MM"; archived / Issues-off
+    repositories are listed as unavailable.
+  - Disconnect deletes the token locally; GitHub needs the client secret to revoke, so the user is pointed to
+    github.com/settings/applications.
+  - GitHub Enterprise Server isn't supported.
 - **Device flow, with no secret.** It works for GitHub Apps once it is enabled in the app settings. The device-code
   request and the poll send only `client_id` ([authorizing OAuth apps][gh-dev]).
   - The endpoints don't support CORS pre-flight, so the service worker calls them using `https://github.com/*`.

@@ -114,10 +114,19 @@ export async function cutVideo(blob: Blob, mimeType: string, startS: number, end
       if (opts.signal?.aborted) throw _abortError();
       await new Promise((r) => requestAnimationFrame(r));
     }
+    // Playback ran while we waited (Firefox's mozCaptureStream can take a second
+    // to add its track): go back to the start of the selection before recording,
+    // or the cut silently loses its first part.
+    v.pause();
+    if (Math.abs(v.currentTime - startS) > 0.02) {
+      v.currentTime = startS;
+      await _once(v, "seeked", opts.signal);
+    }
     const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 2_500_000 });
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     const stopped = new Promise<void>((res) => { rec.onstop = () => res(); });
     rec.start(1000);
+    await v.play();
 
     await new Promise<void>((resolve, reject) => {
       const span = Math.max(0.001, endS - startS);

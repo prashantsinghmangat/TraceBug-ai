@@ -646,9 +646,20 @@ async function disconnectFromOptions(t, box) {
   // A token connection: Disconnect removes the token too.
   const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id, token: t.via === "token" });
   if (!res || res.error) { say(status, (res && res.error) || "Could not disconnect.", "err"); return; }
-  say(status, res.revokeUrl
-    ? "Disconnected. To revoke TraceBug's access entirely, visit " + res.revokeUrl
-    : "Disconnected.", "ok");
+  if (res.revokeUrl) {
+    // GitHub can't be told to revoke without a client secret: the sign-in is
+    // deleted here, and the user removes TraceBug at GitHub to fully revoke.
+    say(status, "Disconnected — TraceBug deleted its " + t.label + " sign-in from this browser. To fully revoke, remove TraceBug at ", "ok", " ");
+    const a = document.createElement("a");
+    a.href = res.revokeUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "revoke-link";
+    a.textContent = "github.com/settings/applications";
+    status.append(a, ".");
+  } else {
+    say(status, "Disconnected.", "ok");
+  }
   await renderTrackerAccounts();
 }
 

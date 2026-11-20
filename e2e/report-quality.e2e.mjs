@@ -194,21 +194,25 @@ async function startCapture() {
   const page = await ctx.newPage();
   await page.goto(LANDING, { waitUntil: "load" });
   await page.evaluate(() => { try { localStorage.clear(); } catch {} });
-  await sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+  // The tab is found by its exact URL, newest first — NOT by "active": the
+  // extension opens welcome.html on install, and when that lands just after
+  // this page it is the active tab, the lookup found nothing and the suite
+  // crashed ("reading 'id'").
+  await sw.evaluate(async (u) => {
+    const [tab] = (await chrome.tabs.query({})).filter((t) => t.url === u).sort((a, b) => b.id - a.id);
     const target = { tabId: tab.id };
     await chrome.scripting.executeScript({ target, files: ["content-script.js"] });
     await chrome.scripting.executeScript({ target, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target, files: ["tracebug-init.js"], world: "MAIN" });
-  }, GLOB);
+  }, page.url());
   await page.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await sleep(400);
-  await sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+  await sw.evaluate(async (u) => {
+    const [tab] = (await chrome.tabs.query({})).filter((t) => t.url === u).sort((a, b) => b.id - a.id);
     return chrome.tabs.sendMessage(tab.id, {
       type: "TB_START_RECORDING", video: false, withMic: false, blurFirst: false, delaySec: 0, surfaceMode: "desktop",
     });
-  }, GLOB);
+  }, page.url());
   await page.waitForSelector('[data-tb-hud="stop"]', { timeout: 10000 });
   await sleep(500);
   return page;

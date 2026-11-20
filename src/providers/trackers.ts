@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CreateIssueResult, IssueAttachment, IssueContent } from "./api";
-import { capProviderBody, isSendId, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue, PROVIDER_BODY_LIMITS } from "./api";
+import { capProviderBody, isGitHubPageUrl, isSendId, issueMarkerComment, parseJsonOrThrow, postGitHubIssue, postLinearIssue, PROVIDER_BODY_LIMITS, throwIfGitHubSpecial } from "./api";
 import type { IssueTracker, ResolvedAuth } from "./auth-store";
 import type { OAuthSpec } from "./oauth";
 import { GITHUB_APP_INSTALL_URL, OAUTH_CLIENTS, hasOAuthClient } from "./oauth-clients";
@@ -23,6 +23,8 @@ export interface Container {
   label: string;
   /** e.g. "private". */
   detail?: string;
+  /** Listed but can't take issues ("Archived", "Issues are turned off"). */
+  unavailable?: string;
 }
 
 export interface FieldOption {
@@ -115,6 +117,25 @@ export function nextLink(link: string | null): string | null {
   return null;
 }
 
+/** Organisations GitHub left out of a list until the token is SSO-authorised. */
+export interface SsoNotes { orgIds: Set<number> }
+
+/**
+ * Every GitHub API call: SSO and rate-limit answers become their own errors
+ * (api.ts githubSpecialError), and "X-GitHub-SSO: partial-results;
+ * organizations=1,2" on a list is noted rather than lost.
+ */
+async function ghFetch(auth: ResolvedAuth, url: string, signal?: AbortSignal, notes?: SsoNotes): Promise<Response> {
+  const res = await fetch(url, { headers: ghHeaders(auth), signal });
+  await throwIfGitHubSpecial(res);
+  const sso = res.headers.get("x-github-sso") || "";
+  if (notes && /^\s*partial-results/i.test(sso)) {
+    const m = /organizations=([\d,\s]+)/i.exec(sso);
+    if (m) m[1].split(",").map((x) => Number(x.trim())).filter((n) => n > 0).forEach((n) => notes.orgIds.add(n));
+  }
+  return res;
+}
+
 /**
  * Follow GitHub's pagination. `key` names the array inside an object response
  * (`/user/installations` answers `{ installations: [...] }`); without it the
@@ -126,13 +147,14 @@ async function ghPages<T>(
   max: number,
   signal?: AbortSignal,
   key?: string,
+  notes?: SsoNotes,
 ): Promise<T[]> {
   const out: T[] = [];
   let url: string | null = first;
   while (url && out.length < max) {
     // Only ever follow links back to the API host: a Link header is data.
     if (!url.startsWith(GH_API + "/")) break;
-    const res = await fetch(url, { headers: ghHeaders(auth), signal });
+    const res = await ghFetch(auth, url, signal, notes);
     const data = (await parseJsonOrThrow(res, "GitHub", "tracker")) as unknown;
     const list = key && data && typeof data === "object" ? (data as Record<string, unknown>)[key] : data;
     if (!Array.isArray(list)) break;
@@ -142,15 +164,37 @@ async function ghPages<T>(
   return out.slice(0, max);
 }
 
-type GhRepo = { full_name?: string; private?: boolean; archived?: boolean };
+type GhRepo = { full_name?: string; private?: boolean; archived?: boolean; has_issues?: boolean };
 
+/** Repositories for the picker. Archived ones and ones with Issues turned off
+ *  stay listed (so the user sees why) but are marked unavailable. */
 function toContainers(repos: GhRepo[]): Container[] {
   const seen = new Set<string>();
   const out: Container[] = [];
   for (const r of repos) {
-    if (typeof r.full_name !== "string" || r.archived || seen.has(r.full_name)) continue;
+    if (typeof r.full_name !== "string" || seen.has(r.full_name)) continue;
     seen.add(r.full_name);
-    out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : undefined });
+    const unavailable = r.archived ? "Archived" : r.has_issues === false ? "Issues are turned off" : undefined;
+    out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : undefined, unavailable });
+  }
+  return out;
+}
+
+/** A list plus the SSO organisations that hid part of it. */
+export type ContainerList = Container[] & { ssoPartial?: Array<{ org: string; url: string }> };
+
+/** Organisation ids → "Authorise TraceBug for <org>" links (best effort, a few at most). */
+async function ssoLinks(auth: ResolvedAuth, ids: Set<number>, signal?: AbortSignal): Promise<Array<{ org: string; url: string }>> {
+  const out: Array<{ org: string; url: string }> = [];
+  for (const id of Array.from(ids).slice(0, 5)) {
+    let login = "";
+    try {
+      const res = await ghFetch(auth, `${GH_API}/organizations/${id}`, signal);
+      const d = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { login?: string };
+      login = typeof d.login === "string" && /^[\w.-]+$/.test(d.login) ? d.login : "";
+    } catch { /* still worth saying, without the name */ }
+    const url = login ? `https://github.com/orgs/${login}/sso` : "https://github.com/settings/organizations";
+    if (isGitHubPageUrl(url)) out.push({ org: login, url });
   }
   return out;
 }
@@ -187,31 +231,38 @@ export const github: TrackerAdapter = {
     };
   },
   async whoAmI(auth, signal) {
-    const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+    const res = await ghFetch(auth, `${GH_API}/user`, signal);
     const d = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { login?: string };
     return d.login || "";
   },
   async listContainers(auth, signal) {
+    const notes: SsoNotes = { orgIds: new Set() };
+    let list: ContainerList;
     if (auth.via === "oauth") {
       // A GitHub App sees only the repos the user installed it on, so list
       // those — /user/repos would offer repos the app cannot file into.
       const installs = await ghPages<{ id?: number }>(
-        auth, `${GH_API}/user/installations?per_page=100`, MAX_INSTALLATIONS, signal, "installations");
+        auth, `${GH_API}/user/installations?per_page=100`, MAX_INSTALLATIONS, signal, "installations", notes);
       const repos: GhRepo[] = [];
       for (const inst of installs) {
         if (typeof inst.id !== "number" || repos.length >= MAX_CONTAINERS) continue;
         repos.push(...await ghPages<GhRepo>(
           auth, `${GH_API}/user/installations/${inst.id}/repositories?per_page=100`,
-          MAX_CONTAINERS - repos.length, signal, "repositories"));
+          MAX_CONTAINERS - repos.length, signal, "repositories", notes));
       }
-      return toContainers(repos);
+      list = toContainers(repos);
+    } else {
+      list = toContainers(await ghPages<GhRepo>(
+        auth,
+        `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+        MAX_CONTAINERS,
+        signal,
+        undefined,
+        notes,
+      ));
     }
-    return toContainers(await ghPages<GhRepo>(
-      auth,
-      `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
-      MAX_CONTAINERS,
-      signal,
-    ));
+    if (notes.orgIds.size) list.ssoPartial = await ssoLinks(auth, notes.orgIds, signal);
+    return list;
   },
   async listFields(auth, container, signal) {
     if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
@@ -222,7 +273,7 @@ export const github: TrackerAdapter = {
       optionalList(ghPages<{ number?: number; title?: string }>(
         auth, `${base}/milestones?state=open&per_page=100`, MAX_LABELS, signal)),
       // Only for its `permissions`: whether the warning below applies.
-      fetch(base, { headers: ghHeaders(auth), signal })
+      ghFetch(auth, base, signal)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null) as Promise<{ permissions?: { push?: boolean } } | null>,
     ]);
@@ -275,10 +326,10 @@ export const github: TrackerAdapter = {
     const login = await github.whoAmI(auth, signal);
     if (!login) return null;
     const after = new Date(Math.max(0, since - 60_000)).toISOString();
-    const res = await fetch(
+    const res = await ghFetch(auth,
       `${GH_API}/repos/${container}/issues?creator=${encodeURIComponent(login)}&since=${encodeURIComponent(after)}` +
       `&state=all&sort=created&direction=desc&per_page=100`,
-      { headers: ghHeaders(auth), signal });
+      signal);
     const list = (await parseJsonOrThrow(res, "GitHub", "tracker")) as unknown;
     if (!Array.isArray(list)) return null;
     const hit = list.find((i: { body?: unknown }) => typeof i.body === "string" && i.body.includes(mark)) as
@@ -556,6 +607,7 @@ export async function checkTrackerSecret(
   try {
     if (tracker === "github") {
       const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+      await throwIfGitHubSpecial(res);
       if (res.status === 401) {
         return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
       }
@@ -571,7 +623,7 @@ export async function checkTrackerSecret(
       }
       const repo = typeof container === "string" ? container.trim() : "";
       if (repo && REPO_RE.test(repo)) {
-        const r = await fetch(`${GH_API}/repos/${repo}`, { headers: ghHeaders(auth), signal });
+        const r = await ghFetch(auth, `${GH_API}/repos/${repo}`, signal);
         if (r.status === 404 || r.status === 403) {
           return { ok: false, code: "no_access", error: `This token can't see ${repo}. Give it access to that repository (a fine-grained token needs it under "Repository access", with Issues: Read and write).` };
         }
@@ -582,6 +634,10 @@ export async function checkTrackerSecret(
     return { ok: true, account: (d.viewer && (d.viewer.email || d.viewer.name)) || "" };
   } catch (err) {
     const e = err as { name?: string; status?: number; message?: string };
+    // SSO and rate limits say exactly what to do; keep their words.
+    if (e && (e.name === "GitHubSsoError" || e.name === "GitHubRateLimitError")) {
+      return { ok: false, code: "error", error: String(e.message || "") };
+    }
     if (e && e.status === 401) return { ok: false, code: "bad_token", error: `${label} didn't accept this ${noun}. Check it was copied whole and hasn't been revoked.` };
     if (e && /permission|scope|forbidden/i.test(e.message || "")) {
       return { ok: false, code: "missing_scope", error: `This ${label} ${noun} doesn't have the permissions TraceBug needs (read, and create issues).` };
@@ -604,10 +660,10 @@ export async function containerAccessible(
 ): Promise<boolean> {
   if (tracker === "github") {
     if (!REPO_RE.test(container)) return false;
-    const res = await fetch(`${GH_API}/repos/${container}`, { headers: ghHeaders(auth), signal });
+    const res = await ghFetch(auth, `${GH_API}/repos/${container}`, signal);
     if (res.status === 404 || res.status === 403) return false;
-    await parseJsonOrThrow(res, "GitHub", "tracker");
-    return true;
+    const d = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { archived?: boolean; has_issues?: boolean };
+    return !d.archived && d.has_issues !== false;
   }
   const d = await linearQuery<{ team?: { id?: string } | null }>(
     auth, "query($id: String!) { team(id: $id) { id } }", signal, { id: container }).catch(() => ({ team: null }));

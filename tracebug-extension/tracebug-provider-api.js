@@ -23,6 +23,8 @@ var TraceBugProviderAPI = (() => {
   __export(worker_exports, {
     DEFAULT_BASE_URLS: () => DEFAULT_BASE_URLS,
     GITHUB_APP_INSTALL_URL: () => GITHUB_APP_INSTALL_URL,
+    GitHubRateLimitError: () => GitHubRateLimitError,
+    GitHubSsoError: () => GitHubSsoError,
     INTEGRATION_ORDER: () => INTEGRATION_ORDER,
     ISSUE_TRACKERS: () => ISSUE_TRACKERS,
     ISSUE_URL_HOSTS: () => ISSUE_URL_HOSTS,
@@ -56,7 +58,9 @@ var TraceBugProviderAPI = (() => {
     forgetOAuth: () => forgetOAuth,
     friendlyStatus: () => friendlyStatus,
     github: () => github,
+    githubSpecialError: () => githubSpecialError,
     hasOAuthClient: () => hasOAuthClient,
+    isGitHubPageUrl: () => isGitHubPageUrl,
     isSendId: () => isSendId,
     isTrustedIssueUrl: () => isTrustedIssueUrl,
     isUnclearFailure: () => isUnclearFailure,
@@ -65,6 +69,7 @@ var TraceBugProviderAPI = (() => {
     legacyToken: () => legacyToken,
     linear: () => linear,
     linearDescription: () => linearDescription,
+    localHHMM: () => localHHMM,
     mapProviderError: () => mapProviderError,
     nextLink: () => nextLink,
     pageIntegrationHint: () => pageIntegrationHint,
@@ -83,8 +88,10 @@ var TraceBugProviderAPI = (() => {
     resolveAuth: () => resolveAuth,
     revokeLinearToken: () => revokeLinearToken,
     saveOAuth: () => saveOAuth,
+    ssoOrgOf: () => ssoOrgOf,
     statusTooltip: () => statusTooltip,
     summarizeIntegrations: () => summarizeIntegrations,
+    throwIfGitHubSpecial: () => throwIfGitHubSpecial,
     trackerAdapter: () => trackerAdapter,
     uploadLinearFiles: () => uploadLinearFiles,
     uploadStorageName: () => uploadStorageName,
@@ -217,6 +224,70 @@ var TraceBugProviderAPI = (() => {
       this.status = status;
     }
   };
+  function isGitHubPageUrl(url) {
+    if (typeof url !== "string") return false;
+    try {
+      const u = new URL(url);
+      return u.protocol === "https:" && u.hostname === "github.com" && !u.username && !u.password && !u.port;
+    } catch (e) {
+      return false;
+    }
+  }
+  function localHHMM(ms) {
+    const d = new Date(ms);
+    const two = (n) => String(n).padStart(2, "0");
+    return `${two(d.getHours())}:${two(d.getMinutes())}`;
+  }
+  var GitHubSsoError = class extends ProviderHttpError {
+    constructor(url, org) {
+      super(`Authorise TraceBug for ${org || "your organisation"} on GitHub (single sign-on), then try again.`, 403);
+      this.name = "GitHubSsoError";
+      this.url = url;
+      this.org = org;
+    }
+  };
+  var GitHubRateLimitError = class extends ProviderHttpError {
+    constructor(resetAt, status) {
+      super(`GitHub rate limit: try again after ${localHHMM(resetAt)}.`, status);
+      this.name = "GitHubRateLimitError";
+      this.resetAt = resetAt;
+    }
+  };
+  function ssoOrgOf(url) {
+    const m = /^https:\/\/github\.com\/orgs\/([^/?#]+)/.exec(url);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function githubSpecialError(res, body, now = Date.now()) {
+    if (res.ok) return null;
+    const sso = res.headers.get("x-github-sso") || "";
+    if (res.status === 403 && /^\s*required/i.test(sso)) {
+      const m = /url=(\S+)/i.exec(sso);
+      const url = m && isGitHubPageUrl(m[1]) ? m[1] : "";
+      return new GitHubSsoError(url, url ? ssoOrgOf(url) : "");
+    }
+    if (res.status !== 403 && res.status !== 429) return null;
+    const msg = body && typeof body === "object" && typeof body.message === "string" ? body.message : "";
+    const retry = Number(res.headers.get("retry-after"));
+    if (Number.isFinite(retry) && retry > 0) return new GitHubRateLimitError(now + retry * 1e3, res.status);
+    const reset = Number(res.headers.get("x-ratelimit-reset"));
+    if (res.headers.get("x-ratelimit-remaining") === "0" || /api rate limit exceeded/i.test(msg)) {
+      return new GitHubRateLimitError(Number.isFinite(reset) && reset > 0 ? reset * 1e3 : now + 6e4, res.status);
+    }
+    if (/secondary rate limit|abuse detection/i.test(msg)) return new GitHubRateLimitError(now + 6e4, res.status);
+    return null;
+  }
+  async function bodyOf(res) {
+    try {
+      return await res.clone().json();
+    } catch (e) {
+      return null;
+    }
+  }
+  async function throwIfGitHubSpecial(res) {
+    if (res.ok) return;
+    const e = githubSpecialError(res, await bodyOf(res));
+    if (e) throw e;
+  }
   async function parseJsonOrThrow(res, label, kind) {
     let body;
     try {
@@ -254,8 +325,20 @@ var TraceBugProviderAPI = (() => {
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
-    if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
-      throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+    if (!res.ok) {
+      const body = await bodyOf(res);
+      const special = githubSpecialError(res, body);
+      if (special) throw special;
+      const msg = body && typeof body === "object" ? String(body.message || "") : "";
+      if (res.status === 410 || /issues are disabled/i.test(msg)) {
+        throw new ProviderHttpError(`Issues are turned off in ${config.repo}, so it can't take new issues. Pick another repository.`, res.status);
+      }
+      if (/archived/i.test(msg)) {
+        throw new ProviderHttpError(`${config.repo} is archived, so it can't take new issues. Pick another repository.`, res.status);
+      }
+      if (res.status === 403) {
+        throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+      }
     }
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
     return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
@@ -655,9 +738,8 @@ var TraceBugProviderAPI = (() => {
         }
         throw err;
       }
-      const again = await store.read();
-      again[tracker] = { ...again[tracker] || cur, tokens: next, needsReconnect: false };
-      await store.write(again);
+      map[tracker] = { ...cur, tokens: next, needsReconnect: false };
+      await store.write(map);
       return next;
     })();
     inflight.set(tracker, p);
@@ -780,12 +862,22 @@ var TraceBugProviderAPI = (() => {
     }
     return null;
   }
-  async function ghPages(auth, first, max, signal, key) {
+  async function ghFetch(auth, url, signal, notes) {
+    const res = await fetch(url, { headers: ghHeaders(auth), signal });
+    await throwIfGitHubSpecial(res);
+    const sso = res.headers.get("x-github-sso") || "";
+    if (notes && /^\s*partial-results/i.test(sso)) {
+      const m = /organizations=([\d,\s]+)/i.exec(sso);
+      if (m) m[1].split(",").map((x) => Number(x.trim())).filter((n) => n > 0).forEach((n) => notes.orgIds.add(n));
+    }
+    return res;
+  }
+  async function ghPages(auth, first, max, signal, key, notes) {
     const out = [];
     let url = first;
     while (url && out.length < max) {
       if (!url.startsWith(GH_API + "/")) break;
-      const res = await fetch(url, { headers: ghHeaders(auth), signal });
+      const res = await ghFetch(auth, url, signal, notes);
       const data = await parseJsonOrThrow(res, "GitHub", "tracker");
       const list = key && data && typeof data === "object" ? data[key] : data;
       if (!Array.isArray(list)) break;
@@ -798,9 +890,25 @@ var TraceBugProviderAPI = (() => {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
     for (const r of repos) {
-      if (typeof r.full_name !== "string" || r.archived || seen.has(r.full_name)) continue;
+      if (typeof r.full_name !== "string" || seen.has(r.full_name)) continue;
       seen.add(r.full_name);
-      out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : void 0 });
+      const unavailable = r.archived ? "Archived" : r.has_issues === false ? "Issues are turned off" : void 0;
+      out.push({ id: r.full_name, label: r.full_name, detail: r.private ? "private" : void 0, unavailable });
+    }
+    return out;
+  }
+  async function ssoLinks(auth, ids, signal) {
+    const out = [];
+    for (const id of Array.from(ids).slice(0, 5)) {
+      let login = "";
+      try {
+        const res = await ghFetch(auth, `${GH_API}/organizations/${id}`, signal);
+        const d = await parseJsonOrThrow(res, "GitHub", "tracker");
+        login = typeof d.login === "string" && /^[\w.-]+$/.test(d.login) ? d.login : "";
+      } catch (e) {
+      }
+      const url = login ? `https://github.com/orgs/${login}/sso` : "https://github.com/settings/organizations";
+      if (isGitHubPageUrl(url)) out.push({ org: login, url });
     }
     return out;
   }
@@ -834,18 +942,21 @@ var TraceBugProviderAPI = (() => {
       };
     },
     async whoAmI(auth, signal) {
-      const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+      const res = await ghFetch(auth, `${GH_API}/user`, signal);
       const d = await parseJsonOrThrow(res, "GitHub", "tracker");
       return d.login || "";
     },
     async listContainers(auth, signal) {
+      const notes = { orgIds: /* @__PURE__ */ new Set() };
+      let list;
       if (auth.via === "oauth") {
         const installs = await ghPages(
           auth,
           `${GH_API}/user/installations?per_page=100`,
           MAX_INSTALLATIONS,
           signal,
-          "installations"
+          "installations",
+          notes
         );
         const repos = [];
         for (const inst of installs) {
@@ -855,17 +966,23 @@ var TraceBugProviderAPI = (() => {
             `${GH_API}/user/installations/${inst.id}/repositories?per_page=100`,
             MAX_CONTAINERS - repos.length,
             signal,
-            "repositories"
+            "repositories",
+            notes
           ));
         }
-        return toContainers(repos);
+        list = toContainers(repos);
+      } else {
+        list = toContainers(await ghPages(
+          auth,
+          `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
+          MAX_CONTAINERS,
+          signal,
+          void 0,
+          notes
+        ));
       }
-      return toContainers(await ghPages(
-        auth,
-        `${GH_API}/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member`,
-        MAX_CONTAINERS,
-        signal
-      ));
+      if (notes.orgIds.size) list.ssoPartial = await ssoLinks(auth, notes.orgIds, signal);
+      return list;
     },
     async listFields(auth, container, signal) {
       if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
@@ -880,7 +997,7 @@ var TraceBugProviderAPI = (() => {
           signal
         )),
         // Only for its `permissions`: whether the warning below applies.
-        fetch(base, { headers: ghHeaders(auth), signal }).then((r) => r.ok ? r.json() : null).catch(() => null)
+        ghFetch(auth, base, signal).then((r) => r.ok ? r.json() : null).catch(() => null)
       ]);
       const fields = [{
         key: "labels",
@@ -925,9 +1042,10 @@ var TraceBugProviderAPI = (() => {
       const login = await github.whoAmI(auth, signal);
       if (!login) return null;
       const after = new Date(Math.max(0, since - 6e4)).toISOString();
-      const res = await fetch(
+      const res = await ghFetch(
+        auth,
         `${GH_API}/repos/${container}/issues?creator=${encodeURIComponent(login)}&since=${encodeURIComponent(after)}&state=all&sort=created&direction=desc&per_page=100`,
-        { headers: ghHeaders(auth), signal }
+        signal
       );
       const list = await parseJsonOrThrow(res, "GitHub", "tracker");
       if (!Array.isArray(list)) return null;
@@ -1151,6 +1269,7 @@ var TraceBugProviderAPI = (() => {
     try {
       if (tracker === "github") {
         const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+        await throwIfGitHubSpecial(res);
         if (res.status === 401) {
           return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
         }
@@ -1164,7 +1283,7 @@ var TraceBugProviderAPI = (() => {
         }
         const repo = typeof container === "string" ? container.trim() : "";
         if (repo && REPO_RE.test(repo)) {
-          const r = await fetch(`${GH_API}/repos/${repo}`, { headers: ghHeaders(auth), signal });
+          const r = await ghFetch(auth, `${GH_API}/repos/${repo}`, signal);
           if (r.status === 404 || r.status === 403) {
             return { ok: false, code: "no_access", error: `This token can't see ${repo}. Give it access to that repository (a fine-grained token needs it under "Repository access", with Issues: Read and write).` };
           }
@@ -1175,6 +1294,9 @@ var TraceBugProviderAPI = (() => {
       return { ok: true, account: d.viewer && (d.viewer.email || d.viewer.name) || "" };
     } catch (err) {
       const e = err;
+      if (e && (e.name === "GitHubSsoError" || e.name === "GitHubRateLimitError")) {
+        return { ok: false, code: "error", error: String(e.message || "") };
+      }
       if (e && e.status === 401) return { ok: false, code: "bad_token", error: `${label} didn't accept this ${noun}. Check it was copied whole and hasn't been revoked.` };
       if (e && /permission|scope|forbidden/i.test(e.message || "")) {
         return { ok: false, code: "missing_scope", error: `This ${label} ${noun} doesn't have the permissions TraceBug needs (read, and create issues).` };
@@ -1189,10 +1311,10 @@ var TraceBugProviderAPI = (() => {
   async function containerAccessible(tracker, auth, container, signal) {
     if (tracker === "github") {
       if (!REPO_RE.test(container)) return false;
-      const res = await fetch(`${GH_API}/repos/${container}`, { headers: ghHeaders(auth), signal });
+      const res = await ghFetch(auth, `${GH_API}/repos/${container}`, signal);
       if (res.status === 404 || res.status === 403) return false;
-      await parseJsonOrThrow(res, "GitHub", "tracker");
-      return true;
+      const d2 = await parseJsonOrThrow(res, "GitHub", "tracker");
+      return !d2.archived && d2.has_issues !== false;
     }
     const d = await linearQuery(
       auth,

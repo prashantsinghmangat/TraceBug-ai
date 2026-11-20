@@ -2425,6 +2425,16 @@ function _blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+/** The ticket's first screenshot as an attachment, or nothing. */
+function _firstScreenshot(screenshots: ScreenshotData[]): PageAttachment[] | undefined {
+  for (const s of screenshots) {
+    const m = /^data:(image\/(png|jpeg|webp));base64,([A-Za-z0-9+/]+=*)$/.exec(s.dataUrl || "");
+    if (!m || Math.floor(m[3].length * 3 / 4) > ATTACH_FILE_CAP) continue;
+    return [{ name: _attachName(s.filename || "screenshot", m[2] === "jpeg" ? "jpg" : m[2]), type: m[1], data: m[3] }];
+  }
+  return undefined;
+}
+
 async function _trackerAttachments(report: BugReport, screenshots: ScreenshotData[]): Promise<PageAttachment[]> {
   const out: PageAttachment[] = [];
   let total = 0;
@@ -2499,7 +2509,11 @@ async function _fileViaTracker(
   // here would sit over the panel's Create row on a short window.
   if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
   try {
-    const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots) : undefined;
+    // Linear uploads its files; GitHub can't take files through its API, so it
+    // gets just the first screenshot — for the panel's "Copy screenshot".
+    const attachments = !isExtensionMode() ? undefined
+      : provider === "linear" ? await _trackerAttachments(report, screenshots)
+      : provider === "github" ? _firstScreenshot(screenshots) : undefined;
     const result = await createTrackerIssue(provider, report, undefined, attachments);
     const ref = result.ref ? ` ${result.ref}` : "";
     // The Create panel can file somewhere other than the button's tracker.

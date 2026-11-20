@@ -50,6 +50,8 @@
     "tb:tracker:install-state",
     // A remembered repo/team the (capped) list can't vouch for: ask directly.
     "tb:tracker:check-container",
+    // "Authorise TraceBug for <org>": a github.com SSO link, opened by the worker.
+    "tb:tracker:open-sso",
   ];
 
   // The pages allowed to send them.

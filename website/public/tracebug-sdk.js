@@ -25048,7 +25048,8 @@ var TraceBugModule = (() => {
       return false;
     }
   }
-  function generateGitHubIssue(report) {
+  function generateGitHubIssue(report, opts = {}) {
+    const filed = !!opts.filed;
     const env = report.environment;
     const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/u) ? report.title : `${severityTitlePrefix(report.severity)}${report.title}`;
     let md = `## ${titleWithSeverity}
@@ -25238,7 +25239,9 @@ ${(req.response || "").replace(/```/g, "` ` `")}
       md += `### Screen Recording
 
 `;
-      md += `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v2)})
+      md += filed ? `> A screen recording was captured (${formatVideoMeta(v2)}). It isn't attached here \u2014 ask the reporter for it.
+
+` : `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v2)})
 
 `;
       if (v2.comments.length > 0) {
@@ -25253,7 +25256,16 @@ ${(req.response || "").replace(/```/g, "` ` `")}
 `;
       }
     }
-    if (report.screenshots.length > 0) {
+    if (report.screenshots.length > 0 && filed) {
+      const n2 = report.screenshots.length;
+      md += `### Screenshots
+
+`;
+      md += `> ${n2} screenshot${n2 === 1 ? " was" : "s were"} captured. ${n2 === 1 ? "It isn't" : "They aren't"} attached here \u2014 `;
+      md += `the reporter can paste ${n2 === 1 ? "it" : "one"} into a comment, or send ${n2 === 1 ? "it" : "them"} to you.
+
+`;
+    } else if (report.screenshots.length > 0) {
       md += `### Screenshots
 
 `;
@@ -25289,10 +25301,18 @@ ${(req.response || "").replace(/```/g, "` ` `")}
     md += `### Full Repro Replay
 
 `;
-    md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug \u2192 More \u2192 Download .zip). `;
-    md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.
+    if (filed) {
+      md += `> Not attached. The reporter can export an offline replay of this session from TraceBug \u2014 `;
+      md += `a \`.html\` file, or a \`.zip\` holding it (session recording, console, network and timeline in one file). `;
+      md += `Ask them for it if you need more than what's above.
 
 `;
+    } else {
+      md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug \u2192 More \u2192 Download .zip). `;
+      md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.
+
+`;
+    }
     md += `---
 `;
     md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) \u2014 free, local-first bug reports \xB7 Session: \`${report.session.sessionId.slice(0, 8)}\`_
@@ -30434,6 +30454,11 @@ ${issueSignatureSlack()}`;
         if ((_a2 = opts.signal) == null ? void 0 : _a2.aborted) throw _abortError();
         await new Promise((r2) => requestAnimationFrame(r2));
       }
+      v2.pause();
+      if (Math.abs(v2.currentTime - startS) > 0.02) {
+        v2.currentTime = startS;
+        await _once(v2, "seeked", opts.signal);
+      }
       const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 25e5 });
       rec.ondataavailable = (e2) => {
         if (e2.data && e2.data.size) chunks.push(e2.data);
@@ -30442,6 +30467,7 @@ ${issueSignatureSlack()}`;
         rec.onstop = () => res();
       });
       rec.start(1e3);
+      await v2.play();
       await new Promise((resolve, reject) => {
         const span = Math.max(1e-3, endS - startS);
         const finish = () => {
@@ -32315,6 +32341,50 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
     return null;
   }
+  function isGitHubPageUrl(url) {
+    if (typeof url !== "string") return false;
+    try {
+      const u2 = new URL(url);
+      return u2.protocol === "https:" && u2.hostname === "github.com" && !u2.username && !u2.password && !u2.port;
+    } catch (e2) {
+      return false;
+    }
+  }
+  function localHHMM(ms) {
+    const d = new Date(ms);
+    const two = (n2) => String(n2).padStart(2, "0");
+    return `${two(d.getHours())}:${two(d.getMinutes())}`;
+  }
+  function ssoOrgOf(url) {
+    const m = /^https:\/\/github\.com\/orgs\/([^/?#]+)/.exec(url);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function githubSpecialError(res, body, now = Date.now()) {
+    if (res.ok) return null;
+    const sso = res.headers.get("x-github-sso") || "";
+    if (res.status === 403 && /^\s*required/i.test(sso)) {
+      const m = /url=(\S+)/i.exec(sso);
+      const url = m && isGitHubPageUrl(m[1]) ? m[1] : "";
+      return new GitHubSsoError(url, url ? ssoOrgOf(url) : "");
+    }
+    if (res.status !== 403 && res.status !== 429) return null;
+    const msg = body && typeof body === "object" && typeof body.message === "string" ? body.message : "";
+    const retry = Number(res.headers.get("retry-after"));
+    if (Number.isFinite(retry) && retry > 0) return new GitHubRateLimitError(now + retry * 1e3, res.status);
+    const reset = Number(res.headers.get("x-ratelimit-reset"));
+    if (res.headers.get("x-ratelimit-remaining") === "0" || /api rate limit exceeded/i.test(msg)) {
+      return new GitHubRateLimitError(Number.isFinite(reset) && reset > 0 ? reset * 1e3 : now + 6e4, res.status);
+    }
+    if (/secondary rate limit|abuse detection/i.test(msg)) return new GitHubRateLimitError(now + 6e4, res.status);
+    return null;
+  }
+  async function bodyOf(res) {
+    try {
+      return await res.clone().json();
+    } catch (e2) {
+      return null;
+    }
+  }
   async function parseJsonOrThrow(res, label, kind) {
     let body;
     try {
@@ -32352,8 +32422,20 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
-    if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
-      throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+    if (!res.ok) {
+      const body = await bodyOf(res);
+      const special = githubSpecialError(res, body);
+      if (special) throw special;
+      const msg = body && typeof body === "object" ? String(body.message || "") : "";
+      if (res.status === 410 || /issues are disabled/i.test(msg)) {
+        throw new ProviderHttpError(`Issues are turned off in ${config.repo}, so it can't take new issues. Pick another repository.`, res.status);
+      }
+      if (/archived/i.test(msg)) {
+        throw new ProviderHttpError(`${config.repo} is archived, so it can't take new issues. Pick another repository.`, res.status);
+      }
+      if (res.status === 403) {
+        throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+      }
     }
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
     return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
@@ -32528,7 +32610,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  var SEND_ID_RE, DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError;
+  var SEND_ID_RE, DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE, ProviderHttpError, GitHubSsoError, GitHubRateLimitError;
   var init_api = __esm({
     "src/providers/api.ts"() {
       "use strict";
@@ -32551,6 +32633,21 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
           super(message);
           this.name = "ProviderHttpError";
           this.status = status;
+        }
+      };
+      GitHubSsoError = class extends ProviderHttpError {
+        constructor(url, org) {
+          super(`Authorise TraceBug for ${org || "your organisation"} on GitHub (single sign-on), then try again.`, 403);
+          this.name = "GitHubSsoError";
+          this.url = url;
+          this.org = org;
+        }
+      };
+      GitHubRateLimitError = class extends ProviderHttpError {
+        constructor(resetAt, status) {
+          super(`GitHub rate limit: try again after ${localHHMM(resetAt)}.`, status);
+          this.name = "GitHubRateLimitError";
+          this.resetAt = resetAt;
         }
       };
     }
@@ -33070,14 +33167,14 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const raw = report.title || "Bug report";
     return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
   }
-  function issueBody(report) {
-    return signIssueBody(generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, ""));
+  function issueBody(report, filedOnGitHub = false) {
+    return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub }).replace(/^##\s+[^\n]+\n+/, ""));
   }
   function slackText(report) {
     return signSlackPost(generateSlackPost(report));
   }
   async function createGitHubIssue(report, config, signal) {
-    return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
+    return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report, true) }, signal);
   }
   async function createLinearIssue(report, config, signal) {
     return postLinearIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
@@ -33091,7 +33188,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (!hasIntegration(provider)) {
         throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured \u2014 open TraceBug settings.`);
       }
-      const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report), body: issueBody(report) };
+      const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report), body: issueBody(report, provider === "github") };
       return sendTrackerViaBridge(provider, content, provider === "slack" ? void 0 : attachments);
     }
     const c2 = getIntegrationsConfig();
@@ -35047,6 +35144,14 @@ ${report.steps}`;
       r2.readAsDataURL(blob2);
     });
   }
+  function _firstScreenshot(screenshots2) {
+    for (const s2 of screenshots2) {
+      const m = /^data:(image\/(png|jpeg|webp));base64,([A-Za-z0-9+/]+=*)$/.exec(s2.dataUrl || "");
+      if (!m || Math.floor(m[3].length * 3 / 4) > ATTACH_FILE_CAP) continue;
+      return [{ name: _attachName(s2.filename || "screenshot", m[2] === "jpeg" ? "jpg" : m[2]), type: m[1], data: m[3] }];
+    }
+    return void 0;
+  }
   async function _trackerAttachments(report, screenshots2) {
     const out = [];
     let total = 0;
@@ -35104,7 +35209,7 @@ ${report.steps}`;
   async function _fileViaTracker(provider, report, root2, screenshots2, close) {
     if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root2);
     try {
-      const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots2) : void 0;
+      const attachments = !isExtensionMode() ? void 0 : provider === "linear" ? await _trackerAttachments(report, screenshots2) : provider === "github" ? _firstScreenshot(screenshots2) : void 0;
       const result2 = await createTrackerIssue(provider, report, void 0, attachments);
       const ref = result2.ref ? ` ${result2.ref}` : "";
       const where = result2.label || TRACKER_LABELS[provider];

@@ -78,7 +78,7 @@ async function launch(ext, label) {
     mkdtempSync(join(tmpdir(), `tb-panel-connect-${label}-`)),
     extensionLaunchOptions([`--disable-extensions-except=${ext}`, `--load-extension=${ext}`]),
   );
-  const state = { approve: false, posts: 0, installed: true };
+  const state = { approve: false, posts: 0, installed: true, ssoPartial: false, extraRepos: [], createFail: null };
   await ctx.route("https://github.com/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -102,13 +102,20 @@ async function launch(ext, label) {
       if (p === "/user/repos") return json(route, [{ full_name: REPO, private: true }]);
     } else if (auth !== `Bearer ${ACCESS}`) return json(route, { message: "Bad credentials" }, 401);
     if (p === "/user") return json(route, { login: "octo" });
-    if (p === "/user/installations") return json(route, state.installed ? { total_count: 1, installations: [{ id: 9 }] } : { total_count: 0, installations: [] });
-    if (p === "/user/installations/9/repositories") return json(route, { total_count: 1, repositories: [{ full_name: REPO, private: true }] });
+    if (p === "/user/installations") {
+      const body = state.installed ? { total_count: 1, installations: [{ id: 9 }] } : { total_count: 0, installations: [] };
+      // SAML SSO: GitHub leaves an organisation out of the list until authorised.
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body),
+        headers: state.ssoPartial ? { "x-github-sso": "partial-results; organizations=4242" } : {} });
+    }
+    if (p === "/organizations/4242") return json(route, { login: "acme" });
+    if (p === "/user/installations/9/repositories") return json(route, { total_count: 1, repositories: [{ full_name: REPO, private: true }].concat(state.extraRepos) });
     if (p === `/repos/${REPO}/labels`) return json(route, [{ name: "bug" }]);
     if (p === `/repos/${REPO}/assignees`) return json(route, [{ login: "octo" }]);
     if (p === `/repos/${REPO}/milestones`) return json(route, []);
     if (p === `/repos/${REPO}`) return json(route, { permissions: { push: true } });
     if (req.method() === "POST" && p === `/repos/${REPO}/issues`) {
+      if (state.createFail) return route.fulfill(state.createFail);
       state.posts++;
       return json(route, { html_url: `https://github.com/${REPO}/issues/7`, number: 7 });
     }
@@ -361,6 +368,130 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
     check("…Disconnect removes it", !((((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).linear || {}).apiKey));
     void state;
+  } finally {
+    await ctx.close();
+  }
+}
+
+// ═══ D. GitHub hardening: approval, SSO, unavailable repos, limits, Disconnect ═
+{
+  const { ctx, sw, state } = await launch(withGrantedHostAccess(EXT_SRC, "panel-github"), "d");
+  try {
+    // Already signed in with the GitHub App (as after Connect).
+    await sw.evaluate((t) => chrome.storage.local.set({ tb_tracker_auth_v1: { github: {
+      tokens: { accessToken: t.a, refreshToken: t.r, expiresAt: Date.now() + 8 * 3600e3 }, account: "octo", connectedAt: Date.now() } } }),
+      { a: ACCESS, r: REFRESH });
+    state.installed = false;
+    const { page, frame } = await panelOnPage(ctx, sw);
+    if (!frame) throw new Error("no panel frame");
+    await frame.waitForSelector("#installBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+    check("D1. app on no repository: the Install state", /isn't installed on any/.test(await frame.textContent("#installText")));
+    await frame.click("#installApp");
+    await sleep(800);
+    // GitHub sends the install window to the app's Setup URL with setup_action=request.
+    const popTab = await sw.evaluate(async () => {
+      const w = await chrome.windows.get(self.__popupIds[self.__popupIds.length - 1], { populate: true });
+      return w.tabs[0].id;
+    });
+    await sw.evaluate((id) => chrome.tabs.update(id, { url: "https://github.com/apps/tracebug-dev?setup_action=request&installation_id=1" }), popTab);
+    await sleep(1200);
+    await sw.evaluate(() => chrome.windows.remove(self.__popupIds[self.__popupIds.length - 1]));
+    await frame.waitForFunction(() => /Waiting for your organisation owner/.test(document.getElementById("installText").textContent), null, { timeout: 8000 }).catch(() => {});
+    check("D2. GitHub says an owner must approve: \"Waiting for your organisation owner to approve TraceBug\"",
+      /^Waiting for your organisation owner to approve TraceBug/.test((await frame.textContent("#installText")).trim()),
+      (await frame.textContent("#installText")).trim());
+    // Approved: Refresh shows the repositories and the note goes.
+    state.installed = true;
+    await frame.click("#refreshRepos");
+    await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 8000 }).catch(() => {});
+    check("…once approved, Refresh lists the repositories and the note is gone",
+      await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO) &&
+      !(await frame.isVisible("#installBox")) &&
+      !(await sw.evaluate(async () => (await chrome.storage.local.get("tb_github_install_pending_v1")).tb_github_install_pending_v1)));
+
+    // SSO partial results: the list stays, with an authorise link per organisation.
+    state.ssoPartial = true;
+    await frame.click("#refreshRepos").catch(() => {});
+    await frame.evaluate(() => document.getElementById("refreshRepos") && document.getElementById("refreshRepos").click());
+    await sw.evaluate(() => { self.__popups.length = 0; });
+    await frame.waitForSelector("#ssoBox:not([hidden])", { timeout: 8000 }).catch(() => {});
+    check("D3. SSO partial results: the list stays and says some organisations hide repositories",
+      await frame.isVisible("#ssoBox") && /Some organisations hide repositories until you authorise TraceBug/.test(await frame.textContent("#ssoText")) &&
+      (await frame.textContent("#ssoLinks button")).trim() === "Authorise TraceBug for acme" &&
+      await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO));
+    const forged = await frame.evaluate(() => new Promise((res) => chrome.runtime.sendMessage({ type: "tb:tracker:open-sso", tracker: "github", url: "https://evil.example/orgs/acme/sso" }, res)));
+    check("…a link that isn't https://github.com/… is refused by the worker", !!(forged && forged.error) && (await sw.evaluate(() => self.__popups.length)) === 0, JSON.stringify(forged));
+    await frame.click("#ssoLinks button");
+    await sleep(800);
+    const ssoPop = await sw.evaluate(() => self.__popups[self.__popups.length - 1]);
+    check("…Authorise opens GitHub's SSO page for that org (from the worker)", !!ssoPop && ssoPop.url === "https://github.com/orgs/acme/sso", JSON.stringify(ssoPop));
+    // Authorised: GitHub now returns everything.
+    state.ssoPartial = false;
+    state.extraRepos = [{ full_name: "acme/secret", private: true }, { full_name: "octo/old", archived: true }, { full_name: "octo/quiet", has_issues: false }];
+    await sw.evaluate(() => chrome.windows.remove(self.__popupIds[self.__popupIds.length - 1]));
+    await frame.waitForFunction(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "acme/secret"), null, { timeout: 8000 }).catch(() => {});
+    check("…back from GitHub, the list reloads with the organisation's repositories and the note goes",
+      await frame.evaluate(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "acme/secret")) &&
+      !(await frame.isVisible("#ssoBox")));
+
+    // Archived / Issues off: listed, marked, and Create stays off.
+    const labels = await frame.evaluate(() => Object.fromEntries([...document.querySelectorAll("#containerList option")].map((o) => [o.value, o.label])));
+    check("D4. archived and Issues-off repositories are marked unavailable in the picker",
+      /Archived \(can't file here\)/.test(labels["octo/old"] || "") && /Issues are turned off \(can't file here\)/.test(labels["octo/quiet"] || ""), JSON.stringify(labels));
+    await frame.fill("#container", "octo/old");
+    await frame.dispatchEvent("#container", "input");
+    await sleep(700);
+    check("…picking one says why and keeps Create off", await frame.isDisabled("#send") &&
+      /archived, so it can't take new issues/.test(await frame.textContent("#panelMsg")), (await frame.textContent("#panelMsg")).trim());
+    await frame.fill("#container", REPO);
+    await frame.dispatchEvent("#container", "input");
+    await frame.dispatchEvent("#container", "change");
+    const armed = await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).then(() => true, () => false);
+
+    // Create blocked by SSO: the message and link; nothing filed; the ticket stays.
+    state.createFail = { status: 403, contentType: "application/json", body: '{"message":"Resource protected by organization SAML enforcement."}',
+      headers: { "x-github-sso": "required; url=https://github.com/orgs/acme/sso?authorization_request=Zz9" } };
+    if (armed) await frame.click("#send");
+    await frame.waitForFunction(() => /Authorise TraceBug for acme/.test(document.getElementById("panelMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+    check("D5. Create blocked by SSO: \"Authorise TraceBug for acme\" with GitHub's link, nothing filed, ticket kept",
+      /Authorise TraceBug for acme/.test(await frame.textContent("#panelMsg")) && await frame.isVisible("#ssoLinks button") &&
+      state.posts === 0 && await page.locator("#tracebug-quick-bug-modal").isVisible() &&
+      (await sw.evaluate(async () => Object.keys((await chrome.storage.session.get("tb_pending_sends_v1")).tb_pending_sends_v1 || {}).length)) === 1,
+      (await frame.textContent("#panelMsg")).trim());
+
+    // Rate limit on Create.
+    const reset = Math.floor(Date.now() / 1000) + 30 * 60;
+    state.createFail = { status: 403, contentType: "application/json", body: '{"message":"API rate limit exceeded for user."}',
+      headers: { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(reset) } };
+    await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).catch(() => {});
+    await frame.click("#send");
+    await frame.waitForFunction(() => /rate limit/.test(document.getElementById("panelMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+    const hhmm = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+    check("D6. a rate limit on Create: \"GitHub rate limit: try again after HH:MM\", nothing filed",
+      (await frame.textContent("#panelMsg")).includes(`GitHub rate limit: try again after ${hhmm(reset * 1000)}.`) && state.posts === 0,
+      (await frame.textContent("#panelMsg")).trim());
+    state.createFail = null;
+
+    // Disconnect: the token is deleted here; GitHub's record needs the user.
+    await frame.click("#disconnect");
+    await frame.waitForSelector("#revokeNote:not([hidden])", { timeout: 8000 }).catch(() => {});
+    const authLeft = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_auth_v1")).tb_tracker_auth_v1 || {});
+    check("D7. Disconnect deletes the sign-in and says how to fully revoke, with the link",
+      !authLeft.github && await frame.isVisible("#revokeLink") &&
+      /remove TraceBug/.test(await frame.textContent("#revokeNote")) &&
+      (await frame.textContent("#revokeLink")).trim() === "github.com/settings/applications");
+    // Settings says the same.
+    await sw.evaluate((t) => chrome.storage.local.set({ tb_tracker_auth_v1: { github: {
+      tokens: { accessToken: t.a, refreshToken: t.r, expiresAt: Date.now() + 8 * 3600e3 }, account: "octo", connectedAt: Date.now() } } }),
+      { a: ACCESS, r: REFRESH });
+    const extId = new URL(sw.url()).host;
+    const opt = await ctx.newPage();
+    await opt.goto(`chrome-extension://${extId}/options.html`);
+    await opt.waitForSelector('.tracker-acct[data-tracker="github"] .acct-disconnect:not([hidden])', { timeout: 8000 }).catch(() => {});
+    await opt.click('.tracker-acct[data-tracker="github"] .acct-disconnect');
+    await opt.waitForSelector('.tracker-acct[data-tracker="github"] .revoke-link', { timeout: 5000 }).catch(() => {});
+    check("…and so does Settings", (await opt.getAttribute('.tracker-acct[data-tracker="github"] .revoke-link', "href").catch(() => "")) === "https://github.com/settings/applications" &&
+      /deleted its GitHub sign-in from this browser/.test(await opt.textContent('.tracker-acct[data-tracker="github"] .acct-status')));
   } finally {
     await ctx.close();
   }

@@ -121,7 +121,7 @@ function renderAttachNote(trackerId) {
     : "";
   el.textContent = trackerId === "linear"
     ? "Attaches: " + list + ask
-    : "Not attached here (GitHub can't take files): " + list;
+    : "Not attached (GitHub can't take files): " + list + (EMBED ? " — after Create, Copy screenshot puts it on your clipboard to paste into a comment." : "");
   el.hidden = false;
 }
 
@@ -160,11 +160,18 @@ function selectedContainer() {
   return ($("container").value || "").trim();
 }
 
+/** Why the picked repository can't take issues ("Archived", …), or "". */
+function unavailableReason() {
+  const c = selectedContainer().toLowerCase();
+  const it = c && panel.items.find((x) => String(x.id).toLowerCase() === c);
+  return it && it.unavailable ? String(it.unavailable) : "";
+}
+
 /** Create is possible once there is a credential and a destination. */
 function syncCreateButton() {
   if (!panel.active || decided) return;
   const t = panel.current;
-  $("send").disabled = panel.busy || !panel.armed || !(t && t.connected && selectedContainer());
+  $("send").disabled = panel.busy || !panel.armed || !(t && t.connected && selectedContainer()) || !!unavailableReason();
   if (EMBED) focusSendIfWanted();
   put("destination", selectedContainer() || "(choose below)");
   put("provider", t ? t.label : "");
@@ -279,10 +286,13 @@ async function loadContainers() {
   if (needsAccess(res)) { panelMsg(""); return; }
   if (!res || res.error) {
     panelMsg((res && res.error) || "Could not load the list.", true);
+    showSso(res && res.sso ? [res.sso] : [], "");
     if (res && res.reconnect) await refreshAfterAuthChange(t.id);
     return;
   }
   panel.items = Array.isArray(res.items) ? res.items : [];
+  showSso(Array.isArray(res.ssoPartial) ? res.ssoPartial : [],
+    "Some organisations hide repositories until you authorise TraceBug for them (single sign-on).");
   const list = $("containerList");
   list.textContent = "";
   panel.items.forEach((it) => {
@@ -290,12 +300,21 @@ async function loadContainers() {
     o.value = String(it.id);
     if (it.label && it.label !== it.id) o.label = String(it.label) + (it.detail ? " · " + it.detail : "");
     else if (it.detail) o.label = String(it.detail);
+    // Listed so the user sees why, but it can't take issues.
+    if (it.unavailable) o.label = (o.label || String(it.id)) + " — " + String(it.unavailable) + " (can't file here)";
     list.appendChild(o);
   });
   // Signed in to the GitHub App but it's on no repository: offer the install.
   const noInstall = !panel.items.length && t.id === "github" && t.via === "oauth" && !!$("installBox");
   show("installBox", noInstall);
-  if (noInstall) panel.installWatch = true;
+  if (noInstall) {
+    panel.installWatch = true;
+    // GitHub told us (setup_action=request) an owner has to approve it.
+    put("installText", res.installPending
+      ? "Waiting for your organisation owner to approve TraceBug. Its repositories appear here once they do — use Refresh after they approve."
+      : "TraceBug isn't installed on any of your GitHub repositories yet. Install it on the ones you want to file into, then come back here.");
+    put("installApp", res.installPending ? "Install on another account" : "Install TraceBug on GitHub");
+  }
   panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
   checkRepoAllowed();
   await checkPrefill(t);
@@ -348,6 +367,8 @@ async function loadFields(useRemembered) {
   const t = panel.current;
   const container = selectedContainer();
   if (!t || !container || container === panel.fieldsFor) return;
+  // A repository that can't take issues: nothing to pick, and the reason stays on screen.
+  if (unavailableReason()) { $("fields").textContent = ""; panel.fieldSpecs = []; panel.fieldsFor = ""; return; }
   panel.fieldsFor = container;
   $("fields").textContent = "";
   panel.fieldSpecs = [];
@@ -572,6 +593,37 @@ async function onTokenSave() {
   panelMsg("Connected" + (res.account ? " as " + res.account : "") + " with " + (t.id === "linear" ? "an API key" : "a token") + ".");
 }
 
+// ── SAML single sign-on (panel only) ───────────────────────────────────────
+// GitHub hides an SSO organisation's repositories (or refuses a call) until
+// the token is authorised for it. Each link is a github.com page from GitHub's
+// own answer, re-checked and opened by the worker; coming back reloads.
+
+function showSso(links, text) {
+  const box = $("ssoBox");
+  if (!box) return;
+  const list = (links || []).filter((l) => l && typeof l.url === "string" && /^https:\/\/github\.com\//.test(l.url));
+  show("ssoBox", list.length > 0);
+  if (!list.length) return;
+  put("ssoText", text || "GitHub needs you to authorise TraceBug for this organisation (single sign-on) first.");
+  const row = $("ssoLinks");
+  row.textContent = "";
+  list.forEach((l) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "small";
+    b.textContent = "Authorise TraceBug for " + (l.org || "your organisation");
+    b.addEventListener("click", () => openSso(l.url));
+    row.appendChild(b);
+  });
+}
+
+async function openSso(url) {
+  const res = await send("tb:tracker:open-sso", { tracker: "github", url });
+  if (!res || !res.ok) { panelMsg((res && res.error) || "Could not open GitHub.", true); return; }
+  panelMsg("Authorise TraceBug on GitHub, then come back — the list refreshes by itself.");
+  watchGitHubWindow();
+}
+
 // ── "Install TraceBug on GitHub" (panel only) ──────────────────────────────
 // The worker opens GitHub's install page; we refresh the repositories when it
 // closes, when the user comes back, or on Refresh.
@@ -580,6 +632,11 @@ async function openInstall() {
   const res = await send("tb:tracker:open-install", { tracker: "github" });
   if (!res || !res.ok) { panelMsg((res && res.error) || "Could not open GitHub.", true); return; }
   panelMsg("Pick the repositories on GitHub, then come back — the list refreshes by itself.");
+  watchGitHubWindow();
+}
+
+/** Reload the list when the GitHub window (install or SSO) closes. */
+function watchGitHubWindow() {
   panel.installWatch = true;
   clearTimeout(panel.installTimer);
   const started = Date.now();
@@ -595,6 +652,9 @@ async function openInstall() {
 /** Signed in through the app, the list loaded, and the typed repo isn't on it. */
 function checkRepoAllowed() {
   const t = panel.current;
+  const why = unavailableReason();
+  if (why) panelMsg(selectedContainer() + ": " + (why === "Archived" ? "archived, so it can't take new issues" : "Issues are turned off there") + ". Pick another repository.", true);
+  syncCreateButton();
   if (!$("repoNote") || !t) return;
   const c = selectedContainer();
   const off = t.id === "github" && t.via === "oauth" && panel.items.length > 0 && /^[\w.-]+\/[\w.-]+$/.test(c) &&
@@ -673,7 +733,12 @@ async function onDisconnect() {
   const res = await send("tb:tracker:disconnect", { tracker: t.id, token: EMBED && t.via === "token" });
   if (!res || res.error) { panelMsg((res && res.error) || "Could not disconnect.", true); return; }
   await refreshAfterAuthChange(t.id);
-  if (res.revokeUrl) panelMsg("Disconnected. To revoke TraceBug's access entirely, visit " + res.revokeUrl);
+  if (res.revokeUrl && $("revokeNote")) {
+    $("revokeLink").dataset.url = res.revokeUrl;
+    show("revokeNote", true);
+  } else if (res.revokeUrl) {
+    panelMsg("Disconnected — TraceBug deleted its sign-in from this browser. To fully revoke, remove TraceBug at " + res.revokeUrl);
+  }
 }
 
 function wirePanel() {
@@ -691,6 +756,7 @@ function wirePanel() {
     });
     $("tokenHelp").addEventListener("click", (e) => { e.preventDefault(); openExternal($("tokenHelp").dataset.url || ""); });
   }
+  if ($("revokeLink")) $("revokeLink").addEventListener("click", (e) => { e.preventDefault(); openExternal($("revokeLink").dataset.url || ""); });
   if ($("installApp")) {
     $("installApp").addEventListener("click", openInstall);
     $("configureRepo").addEventListener("click", (e) => { e.preventDefault(); openInstall(); });
@@ -799,6 +865,8 @@ async function createIssue(e) {
   panelMsg(res && res.unclear
     ? error + " Retry checks whether it was created first, so it won't be filed twice."
     : error, true);
+  // Blocked by single sign-on: nothing was filed; authorise, then Retry.
+  if (res && res.sso) showSso([res.sso], "");
   $("send").textContent = "Retry";
   syncCreateButton();
 }
@@ -820,11 +888,56 @@ function showDone(tracker, r) {
     ? "It had already been created — TraceBug found it rather than filing it twice."
     : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.") + attached + missing);
   show("attachNote", false);
+  show("copyShot", tracker === "github" && canCopyShot());
   show("doneBox", true);
   $("send").hidden = true;
   $("cancel").textContent = "Close";
   $("cancel").disabled = false;
   $("cancel").focus();
+}
+
+// ── "Copy screenshot" (panel, GitHub) ──────────────────────────────────────
+// GitHub's API takes no files, so after Create the user can paste the
+// screenshot into a comment. The image is fetched from the worker before
+// Create (the request's files go when it ends) and lives only in this frame.
+// Written on a real click only; no new permission (the frame is allowed
+// clipboard-write). Hidden without a screenshot or a clipboard that takes images.
+
+function canCopyShot() {
+  return !!(EMBED && panel.shot && navigator.clipboard && typeof navigator.clipboard.write === "function" &&
+    typeof window.ClipboardItem === "function");
+}
+
+async function loadShot() {
+  if (!EMBED || !REQ_ATTACH.some((a) => /^image\//.test(a.type))) return;
+  const r = await send("tb:panel:screenshot", { id: ID, nonce: NONCE });
+  panel.shot = r && r.ok && typeof r.data === "string" ? { type: r.type, data: r.data } : null;
+}
+
+/** The clipboard takes PNG: re-encode JPEG/WebP through a canvas. */
+async function shotAsPng() {
+  const bin = atob(panel.shot.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: panel.shot.type });
+  if (panel.shot.type === "image/png") return blob;
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement("canvas");
+  c.width = bmp.width;
+  c.height = bmp.height;
+  c.getContext("2d").drawImage(bmp, 0, 0);
+  return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/png"));
+}
+
+async function copyShot(e) {
+  if (!e || !e.isTrusted || !canCopyShot()) return;
+  try {
+    const png = await shotAsPng();
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+    panelMsg("Screenshot copied. Paste it into a comment on the issue.");
+  } catch {
+    panelMsg("Couldn't copy the screenshot here. Download it from the ticket instead.", true);
+  }
 }
 
 /** Open the created issue — only an https URL on that tracker's own site. */
@@ -1051,6 +1164,7 @@ function loadEmbedded() {
     watchSize();
     watchVisibility();
     $("send").disabled = true;
+    loadShot();
     await startPanel(res.request.target);
     focusFirst(d.focus);
   };
@@ -1154,6 +1268,7 @@ $("cancel").addEventListener("click", () => {
   decide(false);
 });
 $("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
+if ($("copyShot")) $("copyShot").addEventListener("click", copyShot);
 if ($("toWindow")) $("toWindow").addEventListener("click", moveToWindow);
 
 document.addEventListener("keydown", (e) => {

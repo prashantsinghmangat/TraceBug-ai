@@ -74,7 +74,16 @@ export function openGitHubIssue(repo: string, report: BugReport, labels?: string
   }
 }
 
-export function generateGitHubIssue(report: BugReport): string {
+/**
+ * `filed`: the issue is created through GitHub's API on the reporter's behalf
+ * (the Create panel, or the SDK with a token). Nothing can be attached that
+ * way, so the body names what was captured and tells the reader to ask the
+ * reporter for it — it never says "attached" or "drag and drop here". Without
+ * it (copy as markdown / prefilled URL) the reporter pastes the body and
+ * drops the files in themselves.
+ */
+export function generateGitHubIssue(report: BugReport, opts: { filed?: boolean } = {}): string {
+  const filed = !!opts.filed;
   const env = report.environment;
 
   // Title carries the severity emoji prefix (🔴 Critical · …) so triagers see
@@ -227,7 +236,9 @@ export function generateGitHubIssue(report: BugReport): string {
     const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const filename = `tracebug-recording-${stamp}.${ext}`;
     md += `### Screen Recording\n\n`;
-    md += `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v)})\n\n`;
+    md += filed
+      ? `> A screen recording was captured (${formatVideoMeta(v)}). It isn't attached here — ask the reporter for it.\n\n`
+      : `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v)})\n\n`;
     if (v.comments.length > 0) {
       md += `**Timestamped comments:**\n\n`;
       for (const c of v.comments) {
@@ -238,7 +249,12 @@ export function generateGitHubIssue(report: BugReport): string {
   }
 
   // Screenshots — filenames listed, auto-downloaded for drag-and-drop
-  if (report.screenshots.length > 0) {
+  if (report.screenshots.length > 0 && filed) {
+    const n = report.screenshots.length;
+    md += `### Screenshots\n\n`;
+    md += `> ${n} screenshot${n === 1 ? " was" : "s were"} captured. ${n === 1 ? "It isn't" : "They aren't"} attached here — `;
+    md += `the reporter can paste ${n === 1 ? "it" : "one"} into a comment, or send ${n === 1 ? "it" : "them"} to you.\n\n`;
+  } else if (report.screenshots.length > 0) {
     md += `### Screenshots\n\n`;
     md += `> Drag and drop the downloaded screenshot files below:\n\n`;
     for (const ss of report.screenshots) {
@@ -263,8 +279,14 @@ export function generateGitHubIssue(report: BugReport): string {
   // so point the reporter at the zip export. Same pattern as the recording
   // and screenshot sections above.
   md += `### Full Repro Replay\n\n`;
-  md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug → More → Download .zip). `;
-  md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.\n\n`;
+  if (filed) {
+    md += `> Not attached. The reporter can export an offline replay of this session from TraceBug — `;
+    md += `a \`.html\` file, or a \`.zip\` holding it (session recording, console, network and timeline in one file). `;
+    md += `Ask them for it if you need more than what's above.\n\n`;
+  } else {
+    md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug → More → Download .zip). `;
+    md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.\n\n`;
+  }
 
   // Footer
   md += `---\n`;

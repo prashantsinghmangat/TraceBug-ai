@@ -2211,6 +2211,7 @@ async function runPanelCreate(api, id, req, choice, opts) {
       error: api.mapProviderError(err, run.providerLabel),
       reconnect: !!(err && err.name === "ReconnectNeededError"),
       unclear,
+      sso: ssoOf(api, err),
     };
   }
 }
@@ -2310,6 +2311,16 @@ async function handlePanelMessage(message, sender) {
         } catch { resolve(null); }
       });
       return res && res.ok === true ? { ok: true } : { ok: false, reason: (res && typeof res.reason === "string") ? res.reason : "gone" };
+    }
+    case "tb:panel:screenshot": {
+      // The bound frame, for "Copy screenshot": the ticket's first image, kept
+      // with the request (never sent anywhere). Asked for before Create, since
+      // the request's files are deleted when it ends.
+      const got = await panelRequestFor(message, sender, false);
+      if (got.error) return { ok: false };
+      const files = (await localGet([ATTACH_PREFIX + got.id], {}))[ATTACH_PREFIX + got.id];
+      const img = Array.isArray(files) ? files.find((f) => f && /^image\/(png|jpeg|webp)$/.test(f.type)) : null;
+      return img ? { ok: true, type: img.type, data: img.data } : { ok: false };
     }
     case "tb:panel:to-window": {
       // From the bound panel frame itself: "Open in a window".
@@ -2633,7 +2644,9 @@ async function createViaAdapter(api, adapter, req, integrations) {
         req.firstAttemptAt || Date.now(), AbortSignal.timeout(CREATE_TIMEOUT_MS));
       if (found) { found.found = true; return found; }
     }
-    let attachments = req.attachments && req.attachments.length ? await loadAttachments(req.id) : [];
+    // GitHub's API takes no files: its screenshot rides along only for the
+    // panel's "Copy screenshot".
+    let attachments = req.attachments && req.attachments.length && adapter.id !== "github" ? await loadAttachments(req.id) : [];
     // Linear's storage is an optional host, asked for on the first send with
     // files. Declined (or never granted): file the issue and name the files.
     let skipped = null;
@@ -2969,7 +2982,9 @@ async function disconnectTracker(api, adapter, alsoToken) {
   await forgetSitesFor(adapter.id);
   // GitHub's revoke endpoint needs the client secret we don't have (ADR 010 §6),
   // so the window links the user to where they can revoke it themselves.
-  return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/apps/authorizations" : null };
+  // The token is deleted here; GitHub's own record of the sign-in stays until
+  // the user removes TraceBug there (revoking needs the client secret we don't have).
+  return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/applications" : null };
 }
 
 // ── Create panel: "Use a token instead" ────────────────────────────────────
@@ -3003,15 +3018,23 @@ function maskedSecret(secret) {
 // repository list once it's gone.
 const INSTALL_KEY = "tb_install_page_v1";
 const INSTALL_POPUP = { type: "popup", width: 1000, height: 760 };
+// GitHub says "requested, waiting for an owner" only by sending the browser to
+// the app's Setup URL with ?setup_action=request. With the Setup URL set to the
+// app's own github.com page (no backend), the worker reads that one parameter
+// from the install window's address — github.com access was granted at Connect.
+// Nothing is injected into the page. Cleared once repositories show up.
+const INSTALL_PENDING_KEY = "tb_github_install_pending_v1";
 
-async function openInstallPage(url) {
+/** `anyGitHubPage`: an SSO authorisation link (already checked); else only the install page. */
+async function openInstallPage(url, anyGitHubPage) {
   let u;
   try { u = new URL(url); } catch { return null; }
-  if (u.protocol !== "https:" || u.hostname !== "github.com" || !/^\/apps\/[\w-]+\/installations\/new$/.test(u.pathname)) return null;
+  if (u.protocol !== "https:" || u.hostname !== "github.com") return null;
+  if (!anyGitHubPage && !/^\/apps\/[\w-]+\/installations\/new$/.test(u.pathname)) return null;
   let rec = null;
   try {
     const win = await chrome.windows.create(Object.assign({ url: u.toString(), focused: true }, INSTALL_POPUP));
-    if (win && win.id != null) rec = { windowId: win.id };
+    if (win && win.id != null) rec = { windowId: win.id, tabId: win.tabs && win.tabs[0] ? win.tabs[0].id : null };
   } catch {}
   if (!rec) {
     try {
@@ -3022,6 +3045,29 @@ async function openInstallPage(url) {
   if (!rec) return null;
   await sessionSet({ [INSTALL_KEY]: rec });
   return rec.windowId != null ? "popup" : "tab";
+}
+
+async function installPending() {
+  const p = (await localGet([INSTALL_PENDING_KEY], {}))[INSTALL_PENDING_KEY];
+  return !!(p && p.at && Date.now() - p.at < 30 * 24 * 3600 * 1000);
+}
+
+/** The install window landed on the app's Setup URL: read setup_action only. */
+async function onInstallTabUrl(tabId, url) {
+  const rec = await sessionGet(INSTALL_KEY, null);
+  if (!rec || rec.tabId == null || rec.tabId !== tabId) return;
+  let u;
+  try { u = new URL(url); } catch { return; }
+  if (u.protocol !== "https:" || u.hostname !== "github.com") return;
+  const action = u.searchParams.get("setup_action");
+  if (action === "request") await localSet({ [INSTALL_PENDING_KEY]: { at: Date.now() } });
+  else if (action === "install" || action === "update") await localRemove([INSTALL_PENDING_KEY]);
+}
+
+if (chrome.tabs && chrome.tabs.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
+    if (info && typeof info.url === "string") onInstallTabUrl(tabId, info.url).catch(() => {});
+  });
 }
 
 async function installPageOpen() {
@@ -3083,7 +3129,14 @@ async function handleTrackerUi(message, sender) {
       case "tb:tracker:containers": {
         if (!(await hasAllHosts(adapter.apiHosts))) return { needsAccess: adapter.apiHosts };
         const items = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => adapter.listContainers(auth));
-        return { items };
+        // Repositories now: any "waiting for approval" note is over.
+        if (adapter.id === "github" && items.length) await localRemove([INSTALL_PENDING_KEY]);
+        return {
+          items: items.slice(),
+          // SSO organisations that hid part of the list: "Authorise TraceBug for <org>".
+          ssoPartial: Array.isArray(items.ssoPartial) ? items.ssoPartial.filter((x) => api.isGitHubPageUrl(x.url)) : [],
+          installPending: adapter.id === "github" && !items.length ? await installPending() : false,
+        };
       }
       case "tb:tracker:fields": {
         const container = typeof message.container === "string" ? message.container.trim().slice(0, 300) : "";
@@ -3102,7 +3155,13 @@ async function handleTrackerUi(message, sender) {
         const how = await openInstallPage(adapter.manageUrl);
         return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
       }
-      case "tb:tracker:install-state": return { open: await installPageOpen() };
+      case "tb:tracker:install-state": return { open: await installPageOpen(), pending: await installPending() };
+      case "tb:tracker:open-sso": {
+        // Only a GitHub page, and only from the worker: the link came from a GitHub answer.
+        if (adapter.id !== "github" || !api.isGitHubPageUrl(message.url)) return { error: "That isn't a GitHub page." };
+        const how = await openInstallPage(message.url, true);
+        return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
+      }
       case "tb:tracker:check-container": {
         const container = typeof message.container === "string" ? message.container.trim().slice(0, 300) : "";
         if (!container) return { ok: false };
@@ -3126,8 +3185,14 @@ async function handleTrackerUi(message, sender) {
     return {
       error: api.mapProviderError(err, adapter.label),
       reconnect: !!(err && err.name === "ReconnectNeededError"),
+      sso: ssoOf(api, err),
     };
   }
+}
+
+/** { url, org } for a GitHub SSO error with a GitHub link, else undefined. */
+function ssoOf(api, err) {
+  return err && err.name === "GitHubSsoError" && api.isGitHubPageUrl(err.url) ? { url: err.url, org: err.org || "" } : undefined;
 }
 
 async function callLLMFromWorker(api, req) {

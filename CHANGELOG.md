@@ -4,7 +4,13 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+**Send bugs straight to GitHub.** This release's integration is GitHub, end to end, in Chrome: Connect GitHub with a short code on GitHub's own page (no token to create), install TraceBug's GitHub App on the repositories you choose, pick the repository, labels and assignee in a panel inside the ticket, and Create files the issue and opens it. Your choices are remembered per site, so the next bug is two clicks. Firefox and anyone who prefers it can use a GitHub token. Linear and Slack keep working as before; GitHub Enterprise Server isn't supported.
+
 ### Added
+
+- **GitHub, the awkward cases, in plain words.** Organisations with single sign-on: "Authorise TraceBug for <org>" with GitHub's own link, and repositories hidden until you do are called out instead of silently missing. An install that needs an organisation owner's approval says "Waiting for your organisation owner to approve TraceBug". Archived repositories and ones with Issues turned off are shown as unavailable. A rate limit says "GitHub rate limit: try again after HH:MM". None of these lose your ticket.
+- **Copy screenshot after Create.** GitHub's API can't attach files, so the panel's "Created #N" offers **Copy screenshot**: paste it into a comment on the issue.
+- **Disconnect says what it can and can't do.** It deletes TraceBug's GitHub sign-in from your browser; to fully revoke, remove TraceBug at github.com/settings/applications (linked).
 
 - **Integrations hub.** A plug icon in the popup's header (the default tracker's logo once you connect one, with a warning dot when a connection needs attention) opens **My connections** and **Add platform**; Each connection shows its account, default repository or team and status (Connected, Needs reconnect, Error), with Set default, Change default repo/team, Test connection and Disconnect (asks first). Add platform is a logo grid (GitLab, Azure DevOps and Jira marked Coming soon) whose dialogs offer the sign-in first and the token under Advanced, with the exact scopes. Fully keyboard-driven: arrow keys in the grid, Esc closes dialogs, focus returns where it was.
 - **Default tracker.** The ticket's main button sends to the default you pick (**Send to GitHub**, **Send to Linear** or **Send to Slack**); the others are under More ▾. In Chrome it's a split button: **Send to GitHub** opens the Create panel with **Create issue** focused, and **▾** (or Alt+↓) opens it on the tracker picker; the panel drops down from the button (up when there's no room below), Esc or tabbing out closes it and returns focus to the button, and **Manage integrations** inside it opens Settings → Integrations (the separate status icon in the ticket is gone). With nothing connected the button reads **Connect a tracker**. The page you test learns only which tracker is the default, never the repository or account.
@@ -28,6 +34,11 @@ All notable changes to TraceBug are documented here.
 - **A fine-grained GitHub token without Issues write** now gets a plain answer on the first Create: "This token can't create issues in owner/repo. Give it Issues: Read and write."
 
 - **Settings → Manage integrations.** One card per tracker — status (Connected / Needs reconnect / Error / Not connected, the same words as the popup and the ticket), how it's connected (signed in, or a masked token), default repository or team, sites with remembered choices and **Forget**, and **Connect**, **Use a token instead** (checked with GitHub/Linear before saving) or **Disconnect**. **Default tracker** and **Open the issue after creating** sit at the top. The settings page follows your light or dark system theme. The popup keeps its compact hub view.
+
+### Fixed
+
+- **Filed GitHub issues no longer promise attachments.** The body says what was captured (screenshots, recording, the offline replay) and asks the reader to get it from the reporter, instead of "drag and drop the files below".
+- **A GitHub sign-in renewal is saved the moment GitHub answers**, and two requests that need a renewal at once share one, so GitHub's single-use refresh token is never spent twice.
 
 ### Changed
 

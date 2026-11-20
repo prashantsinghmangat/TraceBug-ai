@@ -150,10 +150,12 @@ permission the manifest doesn't ask for.
 | `storage` | Keeps the user's settings (record options, chosen microphone, redaction rules), the integration tokens they enter, and a finished screen recording on their own device, plus the state of a running capture so it survives the service worker restarting. |
 | `unlimitedStorage` | TraceBug stores bug-capture sessions (screen recordings, DOM replay events and screenshots) locally in the user's browser until the user exports or deletes them. A single capture can be several megabytes, so the default storage quota would cut recordings off mid-session. The data stays on the user's device and is never sent to TraceBug; it leaves the device only when the user exports it or sends it to a service they chose. |
 | `scripting` | Injects TraceBug's capture script and its stylesheet into the current tab, only after the user starts a capture or a screenshot, and the packaged accessibility checker (axe-core, part of the extension package) only when the user runs a Site Audit. Nothing is injected automatically or in the background, and no code is loaded from outside the package. |
-| `alarms` | Closes an unanswered "Send this report to GitHub / Linear / Slack?" confirmation window after two minutes, so a send the user never approved can't be confirmed later. A Manifest V3 service worker can't hold a timer that long on its own. |
+| `alarms` | Closes an unanswered "Send this report to your AI provider?" confirmation window after two minutes, so a send the user never approved can't be confirmed later. A Manifest V3 service worker can't hold a timer that long on its own. (Issue-tracker sends have no timer: they wait for the user's Create or Cancel.) |
+| Optional `identity` (Chrome only) | Requested only when the user clicks **Connect** for an issue tracker that signs in through a browser window (Linear today), to open that tracker's own sign-in page with `chrome.identity.launchWebAuthFlow` and receive the sign-in on the extension's own redirect address. Never requested at install; GitHub's sign-in doesn't need it (GitHub uses a device code). The Firefox build doesn't declare it. |
 | `offscreen` | Hosts the MediaRecorder for the optional screen recording the user starts ("Events + Video"). A service worker has no media APIs, and the recording must keep running while the user navigates the recorded tab. The document is created when the recording starts and closed when it stops. |
 | `tabCapture` | Records the tab the user opened TraceBug on when they start a recording in Tab mode (the default), without Chrome's "Choose what to share" dialog. Used only after the user clicks Start, and only for that tab; nothing is recorded in the background. The recording stays on the user's device unless they export or share it. Desktop mode does not use this permission and still shows Chrome's share dialog. Required rather than optional because Chrome only issues a tab stream ID for a tab the extension was invoked on while it already held this permission, so a runtime grant could never record the tab it was granted on. |
 | Optional host permissions | Requested when the user saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration (one fixed address each, or `localhost`/`127.0.0.1` for Ollama), so TraceBug can send the report to that service. Declared optional so TraceBug can request access to one specific address you enter for a self-hosted AI provider, only at the moment you save it, and never for all sites. |
+| `https://api.github.com/*`, `https://github.com/*` (optional) | Requested when the user clicks **Connect GitHub** (or saves a GitHub token). `github.com` carries GitHub's device sign-in (the user types a short code on GitHub's own page; TraceBug never sees their password) and lets TraceBug read one parameter (`setup_action`) from the address of the GitHub App install window it opened, to tell the user an organisation owner still has to approve. `api.github.com` lists the user's repositories, labels and assignees and creates the issue they confirmed. Nothing is injected into github.com. |
 
 **Remote code:** No, I am not using remote code.
 
@@ -213,6 +215,16 @@ arguably wrong already.
 - A share-link upload to tracebug.dev exists in the code (`website/app/api/upload`, `PHASE2-CLOUD` in
   `src/ui/quick-bug.ts`) but is disabled in the shipped extension. If it ever ships, this listing, the
   data-use answers and the privacy policy must say so **before** that release.
+
+**Listing text for the GitHub release (draft — put it in the "New in" block when it ships):**
+```text
+New: send a bug straight to GitHub. Connect GitHub once — sign in on GitHub's own page with a short code, no token to create — pick the repository, labels and assignee in a panel inside the ticket, and Create files the issue and opens it. TraceBug remembers your choices per site, so the next bug is two clicks. Your GitHub sign-in stays in the extension on your device; the site you're testing never sees it. Prefer a token? Paste one instead. Linear and Slack keep working as before.
+```
+
+**Reviewer note for the GitHub release:**
+```text
+<x.y.z> adds GitHub issue creation. Connect GitHub uses GitHub's device flow (a public GitHub App, no client secret, no backend). It requests the optional hosts https://github.com/* and https://api.github.com/* only when the user clicks Connect GitHub; the optional `identity` permission is requested only for Linear's sign-in (Chrome). The GitHub sign-in token is kept in chrome.storage.local and used only by the service worker; web pages never see it. Test: Settings → Manage integrations → GitHub → "Use a token instead" works without an account on our side.
+```
 
 ### Note to the reviewer (when a release adds a permission)
 

@@ -254,3 +254,18 @@ describe('GitHub sign-in refresh: one at a time, never a loop', () => {
     expect(store.map.github?.needsReconnect).toBe(true);
   });
 });
+
+describe('a rotated refresh token is stored before anything else', () => {
+  it('the write is the first storage call after GitHub answers (no read in between)', async () => {
+    const log: string[] = [];
+    const base = memStore(fresh({ expiresAt: NOW - 1 }));
+    const store: AuthStorage = {
+      async read() { log.push('read'); return base.read(); },
+      async write(m) { log.push('write:' + (m.github?.tokens.refreshToken || '')); return base.write(m); },
+    };
+    const fetchFn = vi.fn(async () => { log.push('github'); return json({ access_token: 'ghu_new', refresh_token: 'ghr_new', expires_in: 28800 }); });
+    await resolveAuth(ctx(store, { fetchFn: fetchFn as unknown as typeof fetch }));
+    const after = log.slice(log.indexOf('github') + 1);
+    expect(after[0]).toBe('write:ghr_new');
+  });
+});

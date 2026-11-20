@@ -376,3 +376,14 @@ assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N"
 repository picker; **Disconnect** returns it to "Connect GitHub". Also: welcome page step 5 → Connect GitHub →
 pick a default repository. Repeat once 8+ hours later without
 reconnecting: the issue still files (the token renewed itself).
+
+## GitHub integration (first tracker release)
+
+| # | Check | Done |
+|---|---|---|
+| G1 | Production GitHub App "TraceBug" registered: public, Device Flow on, Issues read/write, Metadata read, no webhook, no client secret used, **Setup URL** `https://github.com/apps/tracebug` (so "waiting for approval" can be detected). Its client id in `tracebug-extension/build/github-apps.json` (`production.clientId`), `src/providers/oauth-clients.ts` comment, and ADR 010. `npm test` passes `tests/github-apps.test.ts` (no placeholder → Connect shown in the store build). | |
+| G2 | `npm run zip:ext` log says `[store: production GitHub App]` and no "placeholder" warning. | |
+| G3 | The manual pass `docs/audit/github-integration-manual-test.md` run in real Chrome, every GitHub row PASS (Linear rows stay "frozen"). | |
+| G4 | `npm run ext:firefox`: the Firefox rows of that sheet (token path, Create window, issue opens). | |
+| G5 | STORE-LISTINGS: GitHub listing text in "New in", reviewer note, permission rows for `identity` and the GitHub hosts. | |
+
