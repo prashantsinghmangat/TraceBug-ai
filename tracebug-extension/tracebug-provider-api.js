@@ -631,12 +631,15 @@ var TraceBugProviderAPI = (() => {
     map[tracker] = { ...cur, needsReconnect: true };
     await store.write(map);
   }
-  async function doRefresh(store, tracker, spec, now, fetchFn) {
+  async function doRefresh(store, tracker, spec, now, fetchFn, failed) {
     const running = inflight.get(tracker);
     if (running) return running;
     const p = (async () => {
       const map = await store.read();
       const cur = map[tracker];
+      if (cur && !cur.needsReconnect && cur.tokens.accessToken && cur.tokens.accessToken !== failed && (!cur.tokens.expiresAt || cur.tokens.expiresAt - now > REFRESH_SKEW_MS)) {
+        return cur.tokens;
+      }
       const rt = cur && cur.tokens.refreshToken;
       if (!cur || !rt || cur.tokens.refreshExpiresAt && cur.tokens.refreshExpiresAt <= now) {
         await markReconnect(store, tracker);
@@ -698,7 +701,7 @@ var TraceBugProviderAPI = (() => {
         throw new ReconnectNeededError(ctx.label);
       }
       const now = (ctx.now || Date.now)();
-      const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch);
+      const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch, auth.token);
       try {
         return await fn({ ...auth, token: t.accessToken });
       } catch (err2) {

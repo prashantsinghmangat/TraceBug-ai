@@ -80,9 +80,13 @@ export function legacyContainer(tracker: IssueTracker, i: LegacyIntegrations | n
   return "";
 }
 
-// One refresh in flight per tracker. Linear rotates refresh tokens, so two
-// parallel refreshes would spend the same token twice and the loser would
-// sign the user out.
+// One refresh in flight per tracker. GitHub and Linear both replace the
+// refresh token on every use, so two refreshes would spend the same token
+// twice (the loser signs the user out) or rotate it for nothing. The worker
+// is the only caller (every tab, the panel, settings and the popup go through
+// it), so this map is the one place a refresh can start. A caller that
+// arrives just after a refresh finished — it read the old token, or its call
+// failed with it — uses the stored fresh one instead of refreshing again.
 const inflight = new Map<IssueTracker, Promise<TokenSet>>();
 
 async function markReconnect(store: AuthStorage, tracker: IssueTracker): Promise<void> {
@@ -99,12 +103,19 @@ async function doRefresh(
   spec: OAuthSpec,
   now: number,
   fetchFn: typeof fetch,
+  /** The access token that just failed (a 401), if that's why we're here. */
+  failed?: string,
 ): Promise<TokenSet> {
   const running = inflight.get(tracker);
   if (running) return running;
   const p = (async () => {
     const map = await store.read();
     const cur = map[tracker];
+    // Someone else refreshed meanwhile: the stored token is new and not near expiry.
+    if (cur && !cur.needsReconnect && cur.tokens.accessToken && cur.tokens.accessToken !== failed &&
+        (!cur.tokens.expiresAt || cur.tokens.expiresAt - now > REFRESH_SKEW_MS)) {
+      return cur.tokens;
+    }
     const rt = cur && cur.tokens.refreshToken;
     if (!cur || !rt || (cur.tokens.refreshExpiresAt && cur.tokens.refreshExpiresAt <= now)) {
       await markReconnect(store, tracker);
@@ -186,7 +197,7 @@ export async function withTrackerAuth<T>(ctx: AuthContext, fn: (auth: ResolvedAu
       throw new ReconnectNeededError(ctx.label);
     }
     const now = (ctx.now || Date.now)();
-    const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch);
+    const t = await doRefresh(ctx.store, ctx.tracker, ctx.spec, now, ctx.fetchFn || fetch, auth.token);
     try {
       return await fn({ ...auth, token: t.accessToken });
     } catch (err2) {
