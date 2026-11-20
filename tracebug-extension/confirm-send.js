@@ -165,6 +165,7 @@ function syncCreateButton() {
   if (!panel.active || decided) return;
   const t = panel.current;
   $("send").disabled = panel.busy || !panel.armed || !(t && t.connected && selectedContainer());
+  if (EMBED) focusSendIfWanted();
   put("destination", selectedContainer() || "(choose below)");
   put("provider", t ? t.label : "");
 }
@@ -532,6 +533,11 @@ function wirePanel() {
     e.preventDefault();
     try { chrome.runtime.openOptionsPage(); } catch {}
   });
+  // The ticket's plug icon is gone: the Integrations hub is reached from here.
+  if ($("manageInt")) $("manageInt").addEventListener("click", (e) => {
+    e.preventDefault();
+    try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#integrations") }); } catch {}
+  });
   $("copyCode").addEventListener("click", async () => {
     if (await copyText($("userCode").textContent || "")) panelMsg("Code copied — press " + pasteKeys() + " on GitHub.");
   });
@@ -804,6 +810,37 @@ function startProbing() {
   tick();
 }
 
+// ── Keyboard: the panel is the split button's dropdown ─────────────────────
+// It opens with focus on the picker (▾ / Alt+Down) or on Create (the main
+// button). Not connected: Connect. Create is disabled until armed, so it takes
+// focus the moment it arms, unless the user has moved on. Tab past the last
+// control (or Shift+Tab before the first) closes the panel like Esc, and the
+// page gives focus back to the button.
+
+let focusWanted = "";
+
+function focusFirst(hint) {
+  if (hint === "picker") { $("tracker").focus(); return; }
+  if (!$("connectBox").hidden && !$("connect").hidden) { $("connect").focus(); return; }
+  focusWanted = "send";
+  focusSendIfWanted();
+}
+
+function focusSendIfWanted() {
+  if (focusWanted !== "send" || $("send").disabled) return;
+  // Never pull focus back from the ticket if the user went there meanwhile.
+  if (!document.hasFocus()) { focusWanted = ""; return; }
+  const a = document.activeElement;
+  if (a && a !== document.body) { focusWanted = ""; return; }
+  focusWanted = "";
+  $("send").focus();
+}
+
+function tabStops() {
+  return [...document.querySelectorAll("button, a[href], input, select, textarea, [tabindex]")].filter((el) =>
+    !el.disabled && el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest("[hidden]"));
+}
+
 /** "Open in a window": hand this request to the extension window. */
 async function moveToWindow() {
   if (panel.busy || decided) return;
@@ -822,10 +859,11 @@ function loadEmbedded() {
     // forged init fails at the worker and the real one still gets through.
     if (ID || embedStarting || e.source !== window.parent) return;
     const d = e.data;
-    if (!d || typeof d !== "object" || Array.isArray(d) || Object.keys(d).length !== 4) return;
+    if (!d || typeof d !== "object" || Array.isArray(d) || Object.keys(d).length !== 5) return;
     if (d.type !== "tb-panel-init" || typeof d.id !== "string" || !d.id || d.id.length > 200) return;
     if (typeof d.nonce !== "string" || !NONCE_RE.test(d.nonce)) return;
     if (d.theme !== "auto" && d.theme !== "light" && d.theme !== "dark") return;
+    if (d.focus !== "create" && d.focus !== "picker") return;
     embedStarting = true;
     const res = await send("tb:panel:hello", { id: d.id, nonce: d.nonce, parentOrigin: e.origin });
     embedStarting = false;
@@ -842,6 +880,7 @@ function loadEmbedded() {
     watchVisibility();
     $("send").disabled = true;
     await startPanel(res.request.target);
+    focusFirst(d.focus);
   };
   window.addEventListener("message", onInit);
 }
@@ -952,6 +991,15 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (!$("send").disabled) createIssue(e);
     return;
+  }
+  if (EMBED && e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey && !panel.busy) {
+    const stops = tabStops();
+    const a = document.activeElement;
+    if (stops.length && a === stops[e.shiftKey ? 0 : stops.length - 1]) {
+      e.preventDefault();
+      cancelEmbedded();
+      return;
+    }
   }
   if (e.key !== "Escape" || panel.busy) return;
   if (EMBED) { e.stopPropagation(); cancelEmbedded(); return; }

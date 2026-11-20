@@ -171,7 +171,11 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("A1. not connected: Send to GitHub opens the in-page panel (no window)", !!frame && !(await Promise.race([winP, sleep(500).then(() => null)])));
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
-    check('…offering "Connect GitHub" in the panel', (await frame.textContent("#connect")).trim() === "Connect GitHub");
+    check('…from a "Send to app" button (nothing connected yet)',
+      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "?")).trim().endsWith("Send to app"),
+      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "none")).trim());
+    check('…offering "Connect GitHub" in the panel, with focus on it', (await frame.textContent("#connect")).trim() === "Connect GitHub" &&
+      await frame.evaluate(() => document.activeElement && document.activeElement.id === "connect"));
     await watchPermissionRequests(frame);
     const opened = [];
     ctx.on("page", (p) => opened.push(p.url()));

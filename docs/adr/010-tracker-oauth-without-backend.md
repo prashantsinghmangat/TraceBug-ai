@@ -41,6 +41,11 @@ the extension is public.
      - `postMessage` carries layout only and is checked by source window, origin and exact shape;
      - Create arms after the frame has been fully visible for 500 ms (IntersectionObserver v2: not covered, faded
        or transformed) and takes only trusted clicks;
+     - **Updated 2026-11-19:** when v2 says hidden (any filter, e.g. a dark-mode extension), the content script gives
+       a second opinion (hit test at the Create row, click-through layers over it, ancestor opacity/transform/filter;
+       colour filters allowed); two clean checks arm, re-checked on the click. **Accepted gap, no fix planned:** a
+       click-through `::before`/`::after` whose host element's box lies outside the Create row isn't checked. Worst
+       case is an unwanted issue in the user's own repository;
      - a port from the frame ties the request to it, so closing the ticket or navigating away cancels it;
      - if the frame doesn't come up within 3.5 s, the extension window opens instead.
    - **Updated 2026-11-19 (Phase 13 Step 5, Integrations hub):** `popup.html` joins the extension pages allowed to

@@ -371,15 +371,14 @@ try {
   const r7e = await sendToGitHub(page);
   await r7e.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
   await page.evaluate(() => {
-    const slot = document.querySelector("[data-tb-create-panel]");
-    slot.scrollIntoView({ block: "center" });
-    slot.style.opacity = "0.05";
+    document.querySelector("[data-tb-create-panel]").scrollIntoView({ block: "center" });
+    document.querySelector("#tracebug-quick-bug-modal .tb-qb-footer").style.opacity = "0.05";
   });
   await r7e.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
   check("7d. a near-invisible panel stays paused", !(await armed(r7e.frame)));
   check("…and says why", /fades or hides/.test(await r7e.frame.textContent("#toWindowWhy")),
     (await r7e.frame.textContent("#toWindowWhy")).trim());
-  await page.evaluate(() => { document.querySelector("[data-tb-create-panel]").style.opacity = ""; });
+  await page.evaluate(() => { document.querySelector("#tracebug-quick-bug-modal .tb-qb-footer").style.opacity = ""; });
   check("…and arms once the page stops fading it",
     await r7e.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
   await r7e.frame.click("#cancel");
@@ -477,6 +476,100 @@ try {
   const light = await panelBg("light");
   check("8. the panel follows the ticket's dark and light themes", dark === "rgb(20, 24, 35)" && light === "rgb(245, 246, 249)", `${dark} / ${light}`);
 
+  // ══ 8b. The split button: "Send to GitHub" + ▾, the panel as its dropdown ═
+  const SPLIT = "#tracebug-quick-bug-modal [data-tb-send-split]";
+  const panelFrame = async () => {
+    for (let i = 0; i < 60; i++) {
+      const f = page.frames().find((fr) => fr.url().includes("/create-issue.html"));
+      if (f) { await f.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {}); return f; }
+      await sleep(100);
+    }
+    return null;
+  };
+  const expanded = () => page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-expanded")).join(","));
+  const pageFocus = () => page.evaluate(() => {
+    const a = document.activeElement;
+    return !a ? "none" : a.matches("[data-tb-create-panel] iframe") ? "frame" : a.hasAttribute("data-tb-split-main") ? "main"
+      : a.hasAttribute("data-tb-split-caret") ? "caret" : a.tagName;
+  });
+  check("8b. the ticket has a split button: Send to GitHub + ▾, and no plug icon",
+    /Send to GitHub/.test(await page.textContent(`${SPLIT} [data-tb-split-main]`)) && !!(await page.$(`${SPLIT} [data-tb-split-caret]`)) &&
+    !(await page.$('#tracebug-quick-bug-modal [data-action="tracker-status"]')));
+  check('…both parts say aria-haspopup="dialog", collapsed',
+    (await page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-haspopup")).join(","))) === "dialog,dialog" &&
+    (await expanded()) === "false,false");
+
+  // Keyboard: Enter on the main part → panel above it, focus inside, Create focused once armed → Enter files.
+  await page.focus(`${SPLIT} [data-tb-split-main]`);
+  await page.keyboard.press("Enter");
+  const fk = await panelFrame();
+  check("…Enter on the main part opens the panel", !!fk);
+  if (fk) {
+    await sleep(300);
+    const geo = await page.evaluate((sel) => {
+      const sl = document.querySelector("[data-tb-create-panel]");
+      const r = sl.getBoundingClientRect(), b = document.querySelector(sel).getBoundingClientRect();
+      return { place: sl.getAttribute("data-place"), above: r.bottom <= b.top + 1 };
+    }, SPLIT);
+    check("…as a dropdown that opens upward (no room below the footer)", geo.place === "up" && geo.above, JSON.stringify(geo));
+    check("…aria-expanded is true on both parts", (await expanded()) === "true,true");
+    check("…focus moved into the panel", (await pageFocus()) === "frame");
+    const onSend = await fk.waitForFunction(() => document.activeElement && document.activeElement.id === "send", null, { timeout: 5000 }).then(() => true, () => false);
+    check("…and lands on Create once it arms", onSend);
+    const before = posts.length;
+    await page.keyboard.press("Enter");
+    await fk.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+    check("…Enter files the issue", posts.length === before + 1);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+    check("…Esc closes it and focus returns to the button", (await pageFocus()) === "main", await pageFocus());
+    check("…aria-expanded back to false", (await expanded()) === "false,false");
+  }
+
+  // Alt+Down → the panel on the tracker picker; Esc → back to the button.
+  await page.keyboard.press("Escape").catch(() => {});
+  await sleep(300);
+  await openTicket(page, "#applyBtn", "Split ticket");
+  await page.focus(`${SPLIT} [data-tb-split-main]`);
+  await page.keyboard.press("Alt+ArrowDown");
+  const fa = await panelFrame();
+  const onPicker = fa ? await fa.waitForFunction(() => document.activeElement && document.activeElement.id === "tracker", null, { timeout: 5000 }).then(() => true, () => false) : false;
+  check("…Alt+Down opens it with focus on the tracker picker", !!fa && onPicker,
+    !fa ? "no panel" : `hint=${await page.getAttribute("#tracebug-quick-bug-modal", "data-tb-panel-focus")} page=${await pageFocus()} frame=${await fa.evaluate(() => (document.activeElement || {}).id || (document.activeElement || {}).tagName)}`);
+  if (fa) {
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+    check("…Esc closes it, focus back on the button", (await pageFocus()) === "main", await pageFocus());
+  }
+
+  // ▾ by mouse; Tab past the last control closes it and focus returns to ▾.
+  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  const fc = await panelFrame();
+  check("…clicking ▾ opens the same panel", !!fc);
+  if (fc) {
+    await fc.waitForFunction(() => document.activeElement && document.activeElement.id === "tracker", null, { timeout: 5000 }).catch(() => {});
+    await fc.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).catch(() => {});
+    await fc.focus("#send");
+    await page.keyboard.press("Tab");
+    await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+    check("…Tab past Create closes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
+    check("…and focus returns to ▾", (await pageFocus()) === "caret", await pageFocus());
+    check("…nothing was filed by closing it", (await pending()).length === 0);
+  }
+
+  // The Integrations hub is reached from inside the panel now.
+  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  const fm = await panelFrame();
+  if (fm) {
+    const tabP = ctx.waitForEvent("page", { predicate: (pg) => pg.url().includes("options.html#integrations"), timeout: 5000 }).catch(() => null);
+    await fm.click("#manageInt");
+    const opt = await tabP;
+    check("…'Manage integrations' in the panel opens Settings → Integrations", !!opt);
+    if (opt) await opt.close();
+    await fm.click("#cancel");
+    await sleep(400);
+  }
+
   // ══ 9. Small viewport ════════════════════════════════════════════════════
   await page.setViewportSize({ width: 360, height: 640 });
   await sleep(400);
@@ -487,7 +580,9 @@ try {
   if (f9) {
     await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
     await f9.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 5000 }).catch(() => {});
-    check("…and Create arms once it is scrolled fully into view", await armed(f9));
+    check("…and Create arms once it is scrolled fully into view", await armed(f9),
+      JSON.stringify(await page.evaluate(() => { const sl = document.querySelector("[data-tb-create-panel]"); const r = sl.querySelector("iframe").getBoundingClientRect(); const sh = document.querySelector("#tracebug-quick-bug-modal .tb-qb-shell").getBoundingClientRect(); return { place: sl.getAttribute("data-place"), top: r.top, bottom: r.bottom, h: r.height, shellTop: sh.top, shellBottom: sh.bottom, vh: innerHeight }; })) +
+      " " + (await f9.isVisible("#toWindowBox") ? await f9.textContent("#toWindowWhy") : ""));
   }
   await page.setViewportSize({ width: 1280, height: 800 });
 

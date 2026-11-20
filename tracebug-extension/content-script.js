@@ -199,6 +199,10 @@ safeRun(function () {
         TB_DEFAULT_TRACKERS.indexOf(workerAnswer.integrations.defaultTracker) !== -1)
         ? workerAnswer.integrations.defaultTracker : null,
       trackerAttention: !!(workerAnswer && workerAnswer.integrations && workerAnswer.integrations.attention),
+      // Something is really connected (the flags above also mean "can connect"):
+      // the ticket says "Send to app" until one is.
+      trackerConnected: !!((i.github && i.github.token) || o.github || (i.linear && i.linear.apiKey) || o.linear ||
+        (i.slack && i.slack.webhookUrl)),
       // Ollama is local and needs no key, so "configured" means a provider is
       // chosen and either it's ollama or a key is present.
       ai: !!(a && a.provider && (a.provider === "ollama" || a.apiKey)),
@@ -659,8 +663,47 @@ function unmountCreatePanel() {
   activePanel = null;
   clearTimeout(p.timer);
   window.removeEventListener("message", p.onMessage);
+  window.removeEventListener("resize", p.onResize);
   if (p.observer) p.observer.disconnect();
+  // Focus was in the panel (or nowhere): give it back to the button that opened it.
+  var a = document.activeElement;
+  var refocus = p.opener && p.opener.isConnected && (!a || a === document.body || a === p.frame);
   if (p.slot && p.slot.parentNode) p.slot.parentNode.removeChild(p.slot);
+  setSplitExpanded(p, false);
+  if (refocus) { try { p.opener.focus(); } catch (e) {} }
+}
+
+/** aria-expanded on the ticket's split button follows the panel. */
+function setSplitExpanded(p, open) {
+  if (!p.split) return;
+  var btns = p.split.querySelectorAll("[aria-haspopup]");
+  for (var i = 0; i < btns.length; i++) btns[i].setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+/**
+ * The panel as the split button's dropdown, inside the ticket: under the
+ * button when it fits, else above it (the usual case: the button is in the
+ * footer), pinned by its bottom edge so the Create row stays put as the panel
+ * grows; on a short window it's kept inside the ticket, over the button if it
+ * must be. Only styles change: moving an iframe in the DOM would reload it.
+ */
+function placeCreatePanel(p) {
+  if (!p.split || !p.split.isConnected) return;
+  var btn = p.split.getBoundingClientRect();
+  var shell = p.modal.querySelector(".tb-qb-shell");
+  var sr = shell ? shell.getBoundingClientRect() : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+  var top = Math.max(sr.top, 0) + 8, bottom = Math.min(sr.bottom, window.innerHeight) - 8;
+  var h = p.frame.getBoundingClientRect().height;
+  var fp = p.footer.getBoundingClientRect();
+  var width = Math.min(560, sr.right - sr.left - 24);
+  var left = Math.max(sr.left + 12, Math.min(btn.left, sr.right - 12 - width)) - fp.left;
+  var place, edge;
+  if (btn.bottom + 6 + h <= bottom) { place = "down"; edge = "top:" + Math.round(btn.bottom + 6 - fp.top) + "px;"; }
+  else if (btn.top - 6 - h >= top) { place = "up"; edge = "bottom:" + Math.round(fp.bottom - (btn.top - 6)) + "px;"; }
+  else { place = "over"; edge = "bottom:" + Math.round(fp.bottom - Math.min(bottom, top + h)) + "px;"; }
+  p.slot.setAttribute("data-place", place);
+  p.slot.style.cssText = "position:absolute;margin:0;z-index:30;left:" + Math.round(left) + "px;" + edge +
+    "width:" + Math.round(width) + "px;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,0.45);";
 }
 
 function panelFallback(id, nonce) {
@@ -673,6 +716,14 @@ function mountCreatePanel(id, nonce) {
   var modal = document.getElementById("tracebug-quick-bug-modal");
   var anchor = modal && modal.querySelector(".tb-qb-footer .tb-qb-actions");
   if (!anchor) { panelFallback(id, nonce); return; }
+  // The split button (if the ticket has one) anchors the panel as its
+  // dropdown and gets focus back when it closes. The page's hint picks what
+  // the frame focuses first; it can't do anything else.
+  var split = modal.querySelector("[data-tb-send-split]");
+  var focusHint = modal.getAttribute("data-tb-panel-focus") === "picker" ? "picker" : "create";
+  var active = document.activeElement;
+  var opener = split && active && split.contains(active) ? active
+    : split ? split.querySelector(focusHint === "picker" ? "[data-tb-split-caret]" : "[data-tb-split-main]") : null;
 
   // getURL gives the per-session dynamic URL (use_dynamic_url); the loaded
   // document's origin is the extension's own. Both are ours, nothing else is.
@@ -700,7 +751,11 @@ function mountCreatePanel(id, nonce) {
   slot.appendChild(frame);
   anchor.parentNode.insertBefore(slot, anchor);
 
-  var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null };
+  var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null,
+    modal: modal, footer: anchor.parentNode, split: split, opener: opener, onResize: null };
+  p.onResize = function () { if (activePanel === p) placeCreatePanel(p); };
+  window.addEventListener("resize", p.onResize);
+  setSplitExpanded(p, true);
   p.onMessage = function (e) {
     // Only our frame, from the extension's origin, in an exact shape.
     if (!activePanel || activePanel !== p || e.source !== frame.contentWindow || extOrigins.indexOf(e.origin) === -1) return;
@@ -709,9 +764,12 @@ function mountCreatePanel(id, nonce) {
     if (d.type === "tb-panel-ready" && Object.keys(d).length === 1) {
       p.ready = true;
       clearTimeout(p.timer);
+      // Keyboard users land in the panel (the frame focuses its own control).
+      try { frame.focus(); } catch (e) {}
     } else if (d.type === "tb-panel-size" && Object.keys(d).length === 2 &&
       typeof d.height === "number" && isFinite(d.height) && d.height >= 40 && d.height <= 1400) {
       frame.style.setProperty("height", Math.ceil(d.height) + "px", "important");
+      placeCreatePanel(p);
     } else if (d.type === "tb-panel-close" && Object.keys(d).length === 1) {
       unmountCreatePanel();
     }
@@ -723,7 +781,7 @@ function mountCreatePanel(id, nonce) {
       // Only our frame's window, and only if it is still our document.
       var doc = frame.contentWindow;
       extOrigins.forEach(function (o) {
-        try { doc.postMessage({ type: "tb-panel-init", id: id, nonce: nonce, theme: ticketTheme() }, o); } catch (e) {}
+        try { doc.postMessage({ type: "tb-panel-init", id: id, nonce: nonce, theme: ticketTheme(), focus: focusHint }, o); } catch (e) {}
       });
     } catch (e) { /* the timer falls back */ }
   });
@@ -735,6 +793,7 @@ function mountCreatePanel(id, nonce) {
   });
   p.observer.observe(document.documentElement, { childList: true, subtree: true });
   activePanel = p;
+  placeCreatePanel(p);
 }
 
 // ── Is the panel really what the user sees? (second opinion) ──────────────
@@ -853,11 +912,13 @@ function probePanel(rowRect) {
     var all = roots.pop().querySelectorAll("*");
     for (var j = 0; j < all.length; j++) {
       var n = all[j];
-      var sh = shadowOf(n);
-      if (sh) roots.push(sh);
       if (n === frame) continue;
       var r = n.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0 && rectsMeet(r, row))) continue;
+      // Shadow trees too, under the same rule (a host whose own box misses
+      // the row isn't opened — the accepted gap in ADR 010).
+      var sh = shadowOf(n);
+      if (sh) roots.push(sh);
       if (++near > PROBE_MAX_NODES) return { ok: false, reason: "large" };
       if (chain.indexOf(n) === -1) {
         var ncs = getComputedStyle(n);

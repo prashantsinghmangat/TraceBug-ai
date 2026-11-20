@@ -26385,7 +26385,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       ai: !!status.ai,
       // Only a known id survives: anything else is "no default".
       defaultTracker: DEFAULT_TRACKERS.includes(status.defaultTracker) ? status.defaultTracker : null,
-      trackerAttention: status.trackerAttention === true
+      trackerAttention: status.trackerAttention === true,
+      trackerConnected: status.trackerConnected === true
     };
   }
   function getIntegrationStatus() {
@@ -26424,7 +26425,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     "src/ext-transport.ts"() {
       "use strict";
       _mode2 = "page";
-      EMPTY = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false };
+      EMPTY = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false, trackerConnected: false };
       DEFAULT_TRACKERS = ["github", "linear", "slack"];
       _status = { ...EMPTY };
       _hostAccess = void 0;
@@ -33163,24 +33164,39 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const d = getIntegrationStatus().defaultTracker;
     return d && hasIntegration(d) ? d : "github";
   }
-  function _sendButtonHtml(target, primary) {
+  function _sendButtonHtml(target, primary, extra = {}) {
+    var _a2, _b, _c;
     const cls = primary ? `tb-qb-btn tb-qb-btn-primary` : `tb-qb-more-item`;
     const role = primary ? "" : ` role="menuitem"`;
+    const attrs = extra.attrs ? " " + extra.attrs : "";
     if (target === "github") {
       const action = _githubConfigured() ? "open-github" : "github";
       const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
-      return `<button data-action="${action}" class="${cls}"${role} title="${title}">${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}</button>`;
+      return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${(_a2 = extra.inner) != null ? _a2 : `${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}`}</button>`;
     }
-    if (target === "linear") return `<button data-action="linear" class="${cls}"${role}>${brandLogo("linear", 14)} ${_linearButtonLabel()}</button>`;
-    return `<button data-action="slack" class="${cls}"${role}>${brandLogo("slack", 14)} ${_slackButtonLabel()}</button>`;
+    if (target === "linear") return `<button data-action="linear" class="${cls}"${role}${attrs}>${(_b = extra.inner) != null ? _b : `${brandLogo("linear", 14)} ${_linearButtonLabel()}`}</button>`;
+    return `<button data-action="slack" class="${cls}"${role}${attrs}>${(_c = extra.inner) != null ? _c : `${brandLogo("slack", 14)} ${_slackButtonLabel()}`}</button>`;
   }
-  function _trackerStatusHtml() {
-    if (!isExtensionMode()) return "";
+  function _panelTarget(primary) {
+    if ((primary === "github" || primary === "linear") && hasIntegration(primary)) return primary;
+    if (hasIntegration("github")) return "github";
+    if (hasIntegration("linear")) return "linear";
+    return null;
+  }
+  function _primarySendHtml() {
+    const target = _primaryTarget();
+    const panel = isExtensionMode() ? _panelTarget(target) : null;
+    if (!panel) return _sendButtonHtml(target, true);
     const s2 = getIntegrationStatus();
-    const d = s2.defaultTracker && hasIntegration(s2.defaultTracker) ? s2.defaultTracker : null;
-    const tip = d ? `${TRACKER_LABELS[d]} \xB7 ${s2.trackerAttention ? "a connection needs attention" : "connected"}` : "No tracker connected \xB7 connect one";
-    const state = s2.trackerAttention ? "attention" : d ? "ok" : "none";
-    return `<button type="button" data-action="tracker-status" class="tb-qb-btn tb-qb-status" data-state="${state}" title="${escapeHtml(tip)}" aria-label="${escapeHtml("Integrations: " + tip)}">${d ? brandLogo(d, 15) : _ic("plug")}${s2.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : ""}</button>`;
+    const opens = target === "github" || target === "linear" ? ` aria-haspopup="dialog" aria-expanded="false"` : "";
+    const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` }) : _sendButtonHtml(panel, true, {
+      attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
+      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Send to app`
+    });
+    const tip = !s2.trackerConnected ? "No tracker connected \xB7 connect one" : `${TRACKER_LABELS[panel]} \xB7 ${s2.trackerAttention ? "a connection needs attention" : "connected"}`;
+    const dot = s2.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : "";
+    const caret = `<button type="button" data-action="send-menu" data-tb-split-caret data-target="${panel}" class="tb-qb-btn tb-qb-split-caret" aria-haspopup="dialog" aria-expanded="false" aria-keyshortcuts="Alt+ArrowDown" title="${escapeHtml(tip + " \u2014 choose where to send (Alt+\u2193)")}" aria-label="${escapeHtml("Choose where to send \xB7 " + tip)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>${dot}</button>`;
+    return `<div class="tb-qb-split" data-tb-send-split>${main}${caret}</div>`;
   }
   function setCloudEndpoint(_endpoint) {
   }
@@ -33631,8 +33647,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_s2 = data.currentSession) == null ? void 0 : _s2.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
           ${((_t = data.currentSession) == null ? void 0 : _t.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        ${_sendButtonHtml(_primaryTarget(), true)}
-        ${_trackerStatusHtml()}
+        ${_primarySendHtml()}
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
@@ -34010,6 +34025,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     };
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
+    _wireSendSplit(modal);
     const openGhBtn = modal.querySelector('[data-action="open-github"]');
     if (openGhBtn && _githubConfigured()) {
       openGhBtn.addEventListener("click", async () => {
@@ -34524,12 +34540,8 @@ ${report.steps}` : userDesc : void 0,
       } else if (action === "integrations-configure") {
         showIntegrationsConfigModal(root2, () => {
         });
-      } else if (action === "tracker-status") {
-        const d = getIntegrationStatus().defaultTracker;
-        const target = d && hasIntegration(d) ? modal.querySelector(d === "github" ? '[data-action="open-github"], [data-action="github"]' : `[data-action="${d}"]`) : null;
-        if (target) target.click();
-        else showIntegrationsConfigModal(root2, () => {
-        });
+      } else if (action === "send-menu") {
+        _openSendPanel(modal, "picker");
       }
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
@@ -35028,8 +35040,39 @@ ${report.steps}`;
     }
     return out;
   }
+  function _panelHintHost(modal) {
+    return modal.closest(`#${MODAL_ID}`) || document.getElementById(MODAL_ID) || modal;
+  }
+  function _wireSendSplit(modal) {
+    modal.addEventListener("click", (e2) => {
+      var _a2, _b;
+      const btn = (_b = (_a2 = e2.target).closest) == null ? void 0 : _b.call(_a2, '[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
+      if (btn && e2.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
+    }, true);
+    modal.querySelectorAll("[data-tb-split-main], [data-tb-split-caret]").forEach((b) => {
+      b.addEventListener("keydown", (e2) => {
+        if (e2.key === "ArrowDown" && e2.altKey) {
+          e2.preventDefault();
+          _openSendPanel(modal, "picker");
+        }
+      });
+    });
+  }
+  function _openSendPanel(modal, focus) {
+    var _a2;
+    const open = document.querySelector("[data-tb-create-panel] iframe");
+    if (open) {
+      open.focus();
+      return;
+    }
+    const target = (_a2 = modal.querySelector("[data-tb-split-caret]")) == null ? void 0 : _a2.dataset.target;
+    const btn = target === "github" ? modal.querySelector('[data-action="open-github"]') : target === "linear" ? modal.querySelector('[data-action="linear"]') : null;
+    if (!btn) return;
+    _panelHintHost(modal).dataset.tbPanelFocus = focus;
+    btn.click();
+  }
   async function _fileViaTracker(provider, report, root2, screenshots2, close) {
-    showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root2);
+    if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root2);
     try {
       const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots2) : void 0;
       const result2 = await createTrackerIssue(provider, report, void 0, attachments);
@@ -36329,8 +36372,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
-    #${MODAL_ID} .tb-qb-status { position:relative; padding:8px 10px; }
-    #${MODAL_ID} .tb-qb-status:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; }
+    #${MODAL_ID} .tb-qb-footer { position:relative; }
+    #${MODAL_ID} .tb-qb-split { display:inline-flex; align-items:stretch; }
+    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { border-top-right-radius:0; border-bottom-right-radius:0; }
+    #${MODAL_ID} .tb-qb-split-caret { position:relative; padding:8px 10px; border-top-left-radius:0; border-bottom-left-radius:0; background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; border-left:1px solid rgba(0,0,0,0.18); box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-split-caret:hover { filter:brightness(1.06); }
+    #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; z-index:1; }
+    #${MODAL_ID} .tb-qb-split-logos { display:inline-flex; gap:3px; }
     #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }

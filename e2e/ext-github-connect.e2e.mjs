@@ -199,7 +199,8 @@ try {
   await sleep(800);
 
   const primary = page.locator('#tracebug-quick-bug-modal [data-action="open-github"]').first();
-  check('with nothing set up, the ticket still offers "Send to GitHub"', (await primary.innerText()).trim() === "Send to GitHub");
+  check('with nothing connected, the ticket offers "Send to app ▾"', (await primary.innerText()).trim() === "Send to app" &&
+    !!(await page.$('#tracebug-quick-bug-modal [data-tb-split-caret]')), (await primary.innerText()).trim());
 
   const confirmP = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 10000 });
   await primary.click();

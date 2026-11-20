@@ -311,10 +311,11 @@ try {
     /Send to GitHub/.test(await page.textContent(`${M} .tb-qb-btn-primary`)) &&
     (await page.$$eval(`${M} .tb-qb-more-menu [data-action="linear"], ${M} .tb-qb-more-menu [data-action="slack"]`, (b) => b.length)) === 2 &&
     !(await page.$(`${M} .tb-qb-more-menu [data-action="open-github"]`)));
-  check('…status icon: GitHub logo, warning dot, tooltip without the repo',
-    (await page.getAttribute(`${M} [data-action="tracker-status"]`, "title")) === "GitHub · a connection needs attention" &&
-    !!(await page.$(`${M} [data-action="tracker-status"] .tb-qb-status-dot`)) &&
-    (await page.getAttribute(`${M} [data-action="tracker-status"] svg`, "aria-label")) === "GitHub");
+  const caretTitle = () => page.getAttribute(`${M} [data-tb-split-caret]`, "title");
+  check('…split button ▾: warning dot, tooltip without the repo; no separate plug icon',
+    /^GitHub · a connection needs attention/.test(await caretTitle()) &&
+    !!(await page.$(`${M} [data-tb-split-caret] .tb-qb-status-dot`)) &&
+    !(await page.$(`${M} [data-action="tracker-status"]`)), await caretTitle());
   check("…no repo, team or account name anywhere in the page's ticket",
     !/acme-private|octo|ana@acme/.test(await page.evaluate(() => document.getElementById("tracebug-quick-bug-modal").outerHTML)));
   await closeTicket();
@@ -334,12 +335,12 @@ try {
   await openTicket();
   await page.fill("#tb-qb-title", "Hub ticket");
   check("…no attention: no dot, tooltip GitHub · connected",
-    (await page.getAttribute(`${M} [data-action="tracker-status"]`, "title")) === "GitHub · connected" && !(await page.$(`${M} .tb-qb-status-dot`)),
-    (await page.getAttribute(`${M} [data-action="tracker-status"]`, "title")) + " | " + await page.evaluate(() => document.documentElement.getAttribute("data-tb-caps")));
-  await page.click(`${M} [data-action="tracker-status"]`);
+    /^GitHub · connected/.test(await caretTitle()) && !(await page.$(`${M} .tb-qb-status-dot`)),
+    (await caretTitle()) + " | " + await page.evaluate(() => document.documentElement.getAttribute("data-tb-caps")));
+  await page.click(`${M} [data-tb-split-caret]`);
   let frame = null;
   for (let i = 0; i < 60 && !frame; i++) { frame = page.frames().find((f) => f.url().includes("/create-issue.html")) || null; if (!frame) await sleep(100); }
-  check("…clicking the status icon opens the GitHub Create panel in the ticket", !!frame);
+  check("…clicking ▾ opens the GitHub Create panel in the ticket", !!frame);
   if (frame) {
     await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 10000 }).catch(() => {});
     await frame.focus("#container");

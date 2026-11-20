@@ -118,34 +118,55 @@ function _primaryTarget(): _SendTarget {
 
 /** One send action, as the main button or as a More ▾ item. Each data-action
  *  appears once in the footer, so the handlers below find it either way. */
-function _sendButtonHtml(target: _SendTarget, primary: boolean): string {
+function _sendButtonHtml(target: _SendTarget, primary: boolean, extra: { attrs?: string; inner?: string } = {}): string {
   const cls = primary ? `tb-qb-btn tb-qb-btn-primary` : `tb-qb-more-item`;
   const role = primary ? "" : ` role="menuitem"`;
+  const attrs = extra.attrs ? " " + extra.attrs : "";
   if (target === "github") {
     const action = _githubConfigured() ? "open-github" : "github";
     const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
-    return `<button data-action="${action}" class="${cls}"${role} title="${title}">${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}</button>`;
+    return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${extra.inner ?? `${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}`}</button>`;
   }
-  if (target === "linear") return `<button data-action="linear" class="${cls}"${role}>${brandLogo("linear", 14)} ${_linearButtonLabel()}</button>`;
-  return `<button data-action="slack" class="${cls}"${role}>${brandLogo("slack", 14)} ${_slackButtonLabel()}</button>`;
+  if (target === "linear") return `<button data-action="linear" class="${cls}"${role}${attrs}>${extra.inner ?? `${brandLogo("linear", 14)} ${_linearButtonLabel()}`}</button>`;
+  return `<button data-action="slack" class="${cls}"${role}${attrs}>${extra.inner ?? `${brandLogo("slack", 14)} ${_slackButtonLabel()}`}</button>`;
+}
+
+/** The tracker whose Create panel the split button's ▾ opens: the default
+ *  when it has a panel (GitHub, Linear), else the first that can send. */
+function _panelTarget(primary: _SendTarget): "github" | "linear" | null {
+  if ((primary === "github" || primary === "linear") && hasIntegration(primary)) return primary;
+  if (hasIntegration("github")) return "github";
+  if (hasIntegration("linear")) return "linear";
+  return null;
 }
 
 /**
- * Extension mode: the default tracker's logo, with a dot when a connection
- * needs attention. Click → that tracker's Create panel (or settings when
- * nothing is connected). The tooltip names the tracker only: the repo and
- * account would be readable by the site under test, so they stay in the
- * extension's own pages (popup header, settings).
+ * The footer's main send control. Extension mode with a tracker that has a
+ * Create panel: a split button — the main part sends to the default tracker
+ * (the panel opens with Create focused), ▾ or Alt+Down opens the same panel on
+ * the tracker picker. Nothing connected yet: "Send to app", which opens the
+ * panel to connect. The page learns only ids and booleans: the tooltip names
+ * the tracker, never the repository, team or account (those stay in the
+ * extension's frame and pages). Elsewhere: the plain main button.
  */
-function _trackerStatusHtml(): string {
-  if (!isExtensionMode()) return "";
+function _primarySendHtml(): string {
+  const target = _primaryTarget();
+  const panel = isExtensionMode() ? _panelTarget(target) : null;
+  if (!panel) return _sendButtonHtml(target, true);
   const s = getIntegrationStatus();
-  const d = s.defaultTracker && hasIntegration(s.defaultTracker) ? s.defaultTracker : null;
-  const tip = d
-    ? `${TRACKER_LABELS[d]} · ${s.trackerAttention ? "a connection needs attention" : "connected"}`
-    : "No tracker connected · connect one";
-  const state = s.trackerAttention ? "attention" : d ? "ok" : "none";
-  return `<button type="button" data-action="tracker-status" class="tb-qb-btn tb-qb-status" data-state="${state}" title="${escapeHtml(tip)}" aria-label="${escapeHtml("Integrations: " + tip)}">${d ? brandLogo(d, 15) : _ic("plug")}${s.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : ""}</button>`;
+  const opens = target === "github" || target === "linear" ? ` aria-haspopup="dialog" aria-expanded="false"` : "";
+  const main = s.trackerConnected
+    ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` })
+    : _sendButtonHtml(panel, true, {
+      attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
+      inner: `<span class="tb-qb-split-logos">${(["github", "linear"] as const).filter((t) => hasIntegration(t)).map((t) => brandLogo(t, 14)).join("")}</span> Send to app`,
+    });
+  const tip = !s.trackerConnected
+    ? "No tracker connected · connect one"
+    : `${TRACKER_LABELS[panel]} · ${s.trackerAttention ? "a connection needs attention" : "connected"}`;
+  const dot = s.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : "";
+  const caret = `<button type="button" data-action="send-menu" data-tb-split-caret data-target="${panel}" class="tb-qb-btn tb-qb-split-caret" aria-haspopup="dialog" aria-expanded="false" aria-keyshortcuts="Alt+ArrowDown" title="${escapeHtml(tip + " — choose where to send (Alt+↓)")}" aria-label="${escapeHtml("Choose where to send · " + tip)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>${dot}</button>`;
+  return `<div class="tb-qb-split" data-tb-send-split>${main}${caret}</div>`;
 }
 
 // Cloud endpoint for the Share link flow. Defaults to production; can be
@@ -795,8 +816,7 @@ function _openModal(
             ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`
             : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        ${_sendButtonHtml(_primaryTarget(), true)}
-        ${_trackerStatusHtml()}
+        ${_primarySendHtml()}
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
@@ -1209,6 +1229,8 @@ function _openModal(
   // detach it — otherwise every screenshot refresh leaked two document keydown
   // listeners pointing at the discarded overlay.
   (overlay as ModalOverlayElement).__tbEscKey = escHandler;
+
+  _wireSendSplit(modal);
 
   // Open in GitHub — real send when configured (BYO-token, page/SDK
   // localStorage or the extension's own settings), else the page/SDK-mode
@@ -1893,15 +1915,8 @@ ${report.steps}` : userDesc)
       void _runAIAnalysis(root, modal, data);
     } else if (action === "integrations-configure") {
       showIntegrationsConfigModal(root, () => {});
-    } else if (action === "tracker-status") {
-      // The default tracker's send button opens its Create panel; nothing
-      // connected yet → settings.
-      const d = getIntegrationStatus().defaultTracker;
-      const target = d && hasIntegration(d)
-        ? modal.querySelector<HTMLButtonElement>(d === "github" ? '[data-action="open-github"], [data-action="github"]' : `[data-action="${d}"]`)
-        : null;
-      if (target) target.click();
-      else showIntegrationsConfigModal(root, () => {});
+    } else if (action === "send-menu") {
+      _openSendPanel(modal, "picker");
     }
   });
 
@@ -2436,6 +2451,43 @@ async function _trackerAttachments(report: BugReport, screenshots: ScreenshotDat
 // File the report via a configured real integration (GitHub/Linear/Slack API).
 // Returns true if it ran the full success flow; false on error so the caller
 // can fall back to the URL-prefill / copy path.
+/**
+ * Split button wiring. The extension's content script reads
+ * `data-tb-panel-focus` when it mounts the Create panel: "create" (a real click
+ * on a send button: Create gets focus) or "picker" (▾ / Alt+Down: the tracker
+ * picker gets focus). A hint only — the page can't create anything with it.
+ */
+function _panelHintHost(modal: HTMLElement): HTMLElement {
+  return modal.closest<HTMLElement>(`#${MODAL_ID}`) || document.getElementById(MODAL_ID) || modal;
+}
+
+function _wireSendSplit(modal: HTMLElement): void {
+  modal.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest?.('[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
+    if (btn && e.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
+  }, true);
+  modal.querySelectorAll<HTMLElement>("[data-tb-split-main], [data-tb-split-caret]").forEach((b) => {
+    b.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" && e.altKey) {
+        e.preventDefault();
+        _openSendPanel(modal, "picker");
+      }
+    });
+  });
+}
+
+/** ▾: open the panel tracker's Create panel on the picker (or focus it if open). */
+function _openSendPanel(modal: HTMLElement, focus: "create" | "picker"): void {
+  const open = document.querySelector<HTMLIFrameElement>("[data-tb-create-panel] iframe");
+  if (open) { open.focus(); return; }
+  const target = modal.querySelector<HTMLElement>("[data-tb-split-caret]")?.dataset.target;
+  const btn = target === "github" ? modal.querySelector<HTMLButtonElement>('[data-action="open-github"]')
+    : target === "linear" ? modal.querySelector<HTMLButtonElement>('[data-action="linear"]') : null;
+  if (!btn) return;
+  _panelHintHost(modal).dataset.tbPanelFocus = focus;
+  btn.click();
+}
+
 async function _fileViaTracker(
   provider: TrackerProvider,
   report: BugReport,
@@ -2443,7 +2495,9 @@ async function _fileViaTracker(
   screenshots: ScreenshotData[],
   close: () => void,
 ): Promise<boolean> {
-  showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
+  // The extension shows its own progress (the Create panel or window); a toast
+  // here would sit over the panel's Create row on a short window.
+  if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
   try {
     const attachments = provider === "linear" && isExtensionMode() ? await _trackerAttachments(report, screenshots) : undefined;
     const result = await createTrackerIssue(provider, report, undefined, attachments);
@@ -3907,8 +3961,13 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
-    #${MODAL_ID} .tb-qb-status { position:relative; padding:8px 10px; }
-    #${MODAL_ID} .tb-qb-status:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; }
+    #${MODAL_ID} .tb-qb-footer { position:relative; }
+    #${MODAL_ID} .tb-qb-split { display:inline-flex; align-items:stretch; }
+    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { border-top-right-radius:0; border-bottom-right-radius:0; }
+    #${MODAL_ID} .tb-qb-split-caret { position:relative; padding:8px 10px; border-top-left-radius:0; border-bottom-left-radius:0; background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; border-left:1px solid rgba(0,0,0,0.18); box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-split-caret:hover { filter:brightness(1.06); }
+    #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; z-index:1; }
+    #${MODAL_ID} .tb-qb-split-logos { display:inline-flex; gap:3px; }
     #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }

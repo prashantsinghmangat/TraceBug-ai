@@ -48,9 +48,11 @@ export interface IntegrationStatus {
   defaultTracker: DefaultTracker | null;
   /** A connection needs reconnecting or has an error: the status icon's dot. */
   trackerAttention: boolean;
+  /** Any tracker actually connected (github/linear above also mean "can connect"). */
+  trackerConnected: boolean;
 }
 
-const EMPTY: IntegrationStatus = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false };
+const EMPTY: IntegrationStatus = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false, trackerConnected: false };
 const DEFAULT_TRACKERS: readonly DefaultTracker[] = ["github", "linear", "slack"];
 
 let _status: IntegrationStatus = { ...EMPTY };
@@ -74,6 +76,7 @@ export function setIntegrationStatus(status: Partial<IntegrationStatus> | null |
     defaultTracker: DEFAULT_TRACKERS.includes(status.defaultTracker as DefaultTracker)
       ? status.defaultTracker as DefaultTracker : null,
     trackerAttention: status.trackerAttention === true,
+    trackerConnected: status.trackerConnected === true,
   };
 }
 

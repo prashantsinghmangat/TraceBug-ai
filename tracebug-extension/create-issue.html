@@ -82,6 +82,7 @@
     .done { font-size: 14px; font-weight: 600; margin: 2px 0; }
     a { color: var(--accent); }
     .actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    #manageInt { font-size: 12px; }
     .countdown { font-size: 11px; color: var(--muted); }
     .fatal { padding: 10px 12px; color: var(--muted); font-size: 12px; }
   </style>
@@ -143,6 +144,7 @@
     </div>
 
     <div class="actions">
+      <a href="#" id="manageInt" class="small">Manage integrations</a>
       <span class="countdown" id="countdown"></span>
       <span class="grow"></span>
       <button type="button" class="ghost" id="cancel">Cancel</button>

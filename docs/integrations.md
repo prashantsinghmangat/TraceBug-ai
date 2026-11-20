@@ -22,10 +22,16 @@ One place to see and manage connections: the plug/logo icon in the popup's heade
 - From the popup, sign-in continues in settings: a popup closes as soon as a sign-in window takes focus.
 - **Default tracker:** the ticket's main button sends to it (**Send to GitHub**, **Send to Linear** or **Send to
   Slack**); the others are under **More ▾**. With no choice made, the first connection is the default.
-- **Status icon:** the default tracker's logo, with a dot when any connection needs attention. In the popup its
-  tooltip reads like "GitHub · owner/repo · connected" and opens the hub. In the ticket the tooltip names only the
-  tracker ("GitHub · connected"), because the site you're testing can read the ticket; clicking it opens the Create
-  panel.
+- **Status icon (popup):** the default tracker's logo, with a dot when any connection needs attention; its tooltip
+  reads like "GitHub · owner/repo · connected" and it opens the hub.
+- **Send button in the ticket (Chrome):** a split button, **Send to GitHub | ▾**. The main part opens the Create panel
+  with **Create issue** focused (it takes a click or Enter there: the site you're testing can never file an issue on
+  its own). **▾** (or Alt+↓) opens the same panel on the tracker picker. The panel drops down from the button — up
+  when there's no room below — and **Manage integrations** in it opens Settings → Integrations. Esc, or Tab past the
+  last control, closes it and puts focus back on the button. Nothing connected yet: the button reads **Send to app**
+  and the panel offers Connect. The ▾ tooltip names only the tracker ("GitHub · connected", with a dot when a
+  connection needs attention), because the site can read the ticket. Firefox: the same button, with the Create window
+  instead of the panel.
 - **Keyboard:** Tab reaches the grid, then arrow keys, Home/End (Ctrl+Home/End for the first/last tile) and Enter or
   Space. Dialogs keep focus inside, Esc closes them and returns you to the tile. In the Create panel,
   **Ctrl+Enter** (⌘+Enter on Mac) creates the issue and Esc closes it.
