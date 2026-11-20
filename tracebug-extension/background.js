@@ -1904,6 +1904,8 @@ async function handleProviderRequest(message, sender) {
     // Our content script (top frame) can show the in-page Create panel.
     panel: message.panel === true && sender.frameId === 0 && b.isIssueTracker(v.target),
     files: attachFiles,
+    // Nothing is remembered for a private window.
+    incognito: !!(sender.tab && sender.tab.incognito),
   });
 }
 
@@ -2007,6 +2009,7 @@ async function queueConfirmation(req) {
     windowId: null,
     // Random, made here, reused on every retry: nothing from the ticket.
     sendId: issueSend ? crypto.randomUUID() : undefined,
+    incognito: !!req.incognito,
     // In-page panel (Step 3) or the extension window. A panel request is
     // bound to one frame by a one-time nonce the content script hands to it.
     mode: req.panel && issueSend ? "panel" : "window",
@@ -2542,6 +2545,64 @@ function legacyFields(tracker, integrations) {
   return {};
 }
 
+// ── Remembered choices per site (redesign step 4) ──────────────────────────
+// What was last filed from each site, per tracker and account: the repo/team
+// and the field picks. Extension storage only; keyed by the page's ORIGIN
+// (never a path); nothing from private windows; the 200 most recently used
+// origins are kept. Disconnecting a tracker drops its entries; Settings →
+// Integrations can forget them all. The page never reads any of it.
+const SITES_KEY = "tb_tracker_sites_v1";
+const SITES_MAX = 200;
+const OPEN_AFTER_KEY = "tb_open_issue_after_create_v1";
+
+/** "oauth:octo" / "token:" — which credential a pick belongs to. */
+function accountKey(api, tracker, got, integrations) {
+  const v = api.describeAuth(tracker, got[TRACKER_AUTH_KEY] || {}, integrations || {});
+  return (v.via || "none") + ":" + (v.account || "");
+}
+
+function siteOrigin(origin) {
+  try {
+    const u = new URL(origin);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.origin : "";
+  } catch { return ""; }
+}
+
+async function rememberForSite(req, tracker, account, container, fields) {
+  const origin = siteOrigin(req && req.origin);
+  if (!origin || req.incognito) return;
+  const all = (await localGet([SITES_KEY], {}))[SITES_KEY] || {};
+  const site = all[origin] || { picks: {} };
+  site.at = Date.now();
+  site.picks = site.picks || {};
+  site.picks[tracker + "|" + account] = { container, fields: fields || {}, at: site.at };
+  all[origin] = site;
+  const origins = Object.keys(all);
+  if (origins.length > SITES_MAX) {
+    origins.sort((a, b) => (all[a].at || 0) - (all[b].at || 0));
+    for (const o of origins.slice(0, origins.length - SITES_MAX)) delete all[o];
+  }
+  await localSet({ [SITES_KEY]: all });
+}
+
+async function siteChoice(origin, tracker, account) {
+  const o = siteOrigin(origin);
+  if (!o) return null;
+  const site = ((await localGet([SITES_KEY], {}))[SITES_KEY] || {})[o];
+  const pick = site && site.picks && site.picks[tracker + "|" + account];
+  return pick && typeof pick.container === "string" ? pick : null;
+}
+
+async function forgetSitesFor(tracker) {
+  const all = (await localGet([SITES_KEY], {}))[SITES_KEY] || {};
+  for (const o of Object.keys(all)) {
+    const picks = (all[o] && all[o].picks) || {};
+    for (const k of Object.keys(picks)) if (k.indexOf(tracker + "|") === 0) delete picks[k];
+    if (!Object.keys(picks).length) delete all[o];
+  }
+  await localSet({ [SITES_KEY]: all });
+}
+
 async function rememberChoice(tracker, container, fields, containerLabel) {
   const got = await localGet([TRACKER_PREFS_KEY], {});
   const prefs = got[TRACKER_PREFS_KEY] || {};
@@ -2597,13 +2658,19 @@ async function createViaAdapter(api, adapter, req, integrations) {
       // Uploads ride on the same request: allow them their own time.
       AbortSignal.timeout(CREATE_TIMEOUT_MS + (attachments.length ? 90 * 1000 : 0)));
   });
-  if (choice) await rememberChoice(adapter.id, container, fields);
+  if (choice) {
+    await rememberChoice(adapter.id, container, fields);
+    await rememberForSite(req, adapter.id, accountKey(api, adapter.id, await localGet([TRACKER_AUTH_KEY], {}), integrations),
+      container, fields);
+  }
   result.label = adapter.label;
-  // The panel shows the result with its link; nothing opens unless the user
-  // clicks it. Only the older decide path (no panel) still opens the issue
-  // here: a page's window.open after an async round trip is a blocked popup.
+  // Like Jam: the filed issue opens in a new tab (Settings → Integrations
+  // "Open the issue after creating", default on); the panel still shows
+  // "Created #N". The older decide path (no panel) always opened it: a page's
+  // window.open after an async round trip is a blocked popup.
   // Only an https URL on the tracker's own host — the URL came over the network.
-  if (!req.fromPanel && api.isTrustedIssueUrl(adapter.id, result.url)) {
+  const openAfter = (await localGet([OPEN_AFTER_KEY], {}))[OPEN_AFTER_KEY] !== false;
+  if ((openAfter || !req.fromPanel) && api.isTrustedIssueUrl(adapter.id, result.url)) {
     try { await chrome.tabs.create({ url: result.url, active: true }); result.opened = true; } catch {}
   }
   return result;
@@ -2619,7 +2686,7 @@ async function linearUploadAccess(api) {
   };
 }
 
-async function trackerStatusList(api) {
+async function trackerStatusList(api, req) {
   const upload = await linearUploadAccess(api);
   const got = await localGet([INT_KEY, TRACKER_AUTH_KEY, TRACKER_PREFS_KEY], {});
   const integrations = got[INT_KEY] || {};
@@ -2646,6 +2713,9 @@ async function trackerStatusList(api) {
       last: p
         ? { container: p.container || "", containerLabel: p.containerLabel || "", fields: p.fields || {} }
         : { container: api.legacyContainer(id, integrations), fields: legacyFields(id, integrations) },
+      // What was last used on THIS request's site, with this account. The
+      // panel checks it against the fresh list and falls back to `last`.
+      site: req && !req.incognito ? await siteChoice(req.origin, id, accountKey(api, id, got, integrations)) : null,
       // false = the API host was granted once and has since been removed: the
       // hub shows Error. Asked only where there is a credential to use it.
       hostsGranted: map[id] || api.describeAuth(id, map, integrations).connected ? await hasAllHosts(a.apiHosts) : undefined,
@@ -2896,6 +2966,7 @@ async function disconnectTracker(api, adapter, alsoToken) {
   const prefs = got[TRACKER_PREFS_KEY] || {};
   delete prefs[adapter.id];
   await localSet({ [TRACKER_PREFS_KEY]: prefs });
+  await forgetSitesFor(adapter.id);
   // GitHub's revoke endpoint needs the client secret we don't have (ADR 010 §6),
   // so the window links the user to where they can revoke it themselves.
   return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/apps/authorizations" : null };
@@ -2964,6 +3035,17 @@ async function installPageOpen() {
   return false;
 }
 
+/** The pending request an extension page is working on — the bound panel
+ *  frame, or the window opened for it — or null. */
+async function requestForUi(message, sender) {
+  const id = typeof message.id === "string" ? message.id : "";
+  if (!id) return null;
+  const req = (await sessionGet(PENDING_KEY, {}))[id];
+  if (!req || req.kind !== "tracker") return null;
+  if (isPanelPage(sender)) return req.tabId === sender.tab.id && req.panelFrameId === sender.frameId ? req : null;
+  return sender && sender.tab && req.windowId != null && sender.tab.windowId === req.windowId ? req : null;
+}
+
 async function handleTrackerUi(message, sender) {
   const b = bridgeLib();
   const api = providerApi();
@@ -2976,7 +3058,9 @@ async function handleTrackerUi(message, sender) {
   if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base) && !(await boundPanelFor(sender))) return { error: "Rejected." };
 
   if (message.type === "tb:tracker:status") {
-    const trackers = await trackerStatusList(api);
+    // The panel or window names its request, so its site's picks come along.
+    const req = await requestForUi(message, sender);
+    const trackers = await trackerStatusList(api, req);
     const integrations = (await localGet([INT_KEY], {}))[INT_KEY] || {};
     return {
       trackers,

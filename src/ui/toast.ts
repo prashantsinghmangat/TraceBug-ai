@@ -144,7 +144,7 @@ export function showCaptureBlockedNotice(
   });
 }
 
-export function showToast(message: string, root: HTMLElement): void {
+export function showToast(message: string, root: HTMLElement, link?: { text: string; href: string }): void {
   const existing = root.querySelector(".bt-toast");
   // Action toasts (storage warnings etc.) carry a recovery path and an 8s
   // window — a routine "✓ done" transient must NOT evict one. Drop the
@@ -162,6 +162,19 @@ export function showToast(message: string, root: HTMLElement): void {
   toast.dataset.tracebug = "toast";
 
   toast.textContent = message;
+  // An https link (e.g. the issue just filed) opens in a new tab, without
+  // handing it this page as its opener.
+  let safeHref = "";
+  try { if (link && new URL(link.href).protocol === "https:") safeHref = link.href; } catch {}
+  if (link && safeHref) {
+    const a = document.createElement("a");
+    a.href = safeHref;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = link.text;
+    a.style.cssText = "color:inherit !important;text-decoration:underline !important;";
+    toast.append(" ", a);
+  }
   toast.setAttribute("role", "status");
   root.appendChild(toast);
 
@@ -172,5 +185,5 @@ export function showToast(message: string, root: HTMLElement): void {
   setTimeout(() => {
     toast.classList.add("bt-toast-dismissing");
     setTimeout(() => toast.remove(), 300);
-  }, 2800);
+  }, safeHref ? 6000 : 2800);
 }

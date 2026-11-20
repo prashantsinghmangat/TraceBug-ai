@@ -25,7 +25,7 @@
 // web-ext prints its counts in a "Validation Summary:" block and THEN dumps
 // every warning, so a floating /errors\s+(\d+)/ could match prose in a warning
 // description instead of the count.
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -71,8 +71,46 @@ if (existsSync(LOCK)) {
     process.exit(2);
   }
 }
+// A lock whose pid is dead (a run that was killed) is stale and is taken over.
 writeFileSync(LOCK, String(process.pid));
-process.on("exit", () => { try { unlinkSync(LOCK); } catch {} });
+
+// The running gate's whole process tree (npm → node → browsers) dies with
+// this run: on exit, on Ctrl+C, and on an error here. Windows has no process
+// groups for this, so taskkill /T walks the tree while its root is alive.
+let current = null;
+function killTree(child) {
+  if (!child || child.exitCode !== null || !child.pid) return;
+  try {
+    if (process.platform === "win32") spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
+    else process.kill(-child.pid, "SIGKILL");
+  } catch {}
+}
+/** After a failed gate: e2e browsers left on TraceBug's temp profiles (their
+ *  parents are gone, so no tree reaches them). Windows only; elsewhere the
+ *  process group above takes them. */
+function sweepE2eBrowsers() {
+  if (process.platform !== "win32") return;
+  const dir = tmpdir().replace(/'/g, "''");
+  const ps = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('--user-data-dir=${dir}\tb-') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+  try { spawnSync("powershell", ["-NoProfile", "-Command", ps], { stdio: "ignore", timeout: 30000 }); } catch {}
+}
+process.on("exit", () => { killTree(current); try { unlinkSync(LOCK); } catch {} });
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, () => { console.log(`
+${sig}: stopping`); process.exit(130); });
+process.on("uncaughtException", (e) => { console.error(e); process.exit(1); });
+
+/** Run one npm script; the child is tracked so it can be killed with us. */
+function runGate(gate) {
+  return new Promise((resolve) => {
+    const child = spawn("npm", ["run", "-s", gate], { shell: true, detached: process.platform !== "win32" });
+    current = child;
+    let out = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { out += d; });
+    child.on("close", (code) => { current = null; resolve({ status: code, out }); });
+    child.on("error", (e) => { current = null; resolve({ status: 1, out: out + String(e) }); });
+  });
+}
 // The full output of every failing gate, for the next time a flake shows up
 // (the 40-line tail below cut off what caused the vitest crash).
 const LOGS = join(tmpdir(), "tracebug-check-logs");
@@ -84,12 +122,8 @@ let failed = 0;
 
 for (const gate of gates) {
   const started = Date.now();
-  const r = spawnSync("npm", ["run", "-s", gate], {
-    encoding: "utf8",
-    shell: true,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const out = (r.stdout || "") + (r.stderr || "");
+  const r = await runGate(gate);
+  const out = r.out;
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   let ok = r.status === 0;
   let note = "";
@@ -157,6 +191,7 @@ for (const gate of gates) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${gate.padEnd(14)} ${secs.padStart(5)}s  ${note}`);
   if (!ok) {
     failed++;
+    if (gate.startsWith("e2e:")) sweepE2eBrowsers();
     console.log(tail(out, 40));
     try {
       mkdirSync(LOGS, { recursive: true });

@@ -186,6 +186,17 @@
       <h2 id="integrationsTitle">Integrations</h2>
       <p class="hint">Where the ticket's Send button files issues. The default connection is the ticket's main button; the others are under More ▾.</p>
       <div id="hubMount"></div>
+      <label class="inline-check" style="display:flex;gap:8px;align-items:center;margin-top:14px">
+        <input id="openAfterCreate" type="checkbox" checked />
+        Open the issue after creating
+      </label>
+      <p class="hint">TraceBug remembers the repository or team and labels you last used on each site (only the
+        site's address, e.g. https://app.example.com — never the page or path), so a repeat bug is Send, then Create.
+        Kept in this browser only; nothing from private windows.</p>
+      <div class="row">
+        <button class="ghost" id="forgetChoices" type="button">Forget remembered choices</button>
+      </div>
+      <div class="status" id="prefsStatus"></div>
     </section>
 
     <h2 class="section-title" id="trackerSettings">Tracker settings</h2>

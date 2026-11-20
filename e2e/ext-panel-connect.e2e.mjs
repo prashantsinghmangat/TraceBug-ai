@@ -52,6 +52,8 @@ const REPO = "octo/app";
 const PAT = "ghp_PANELgoodToken0123456789abcdefABCD";
 const PAT_NOSCOPE = "ghp_PANELnoScopeToken0123456789abcdefAB";
 const PAT_BAD = "ghp_PANELrevokedToken0123456789abcdefAB";
+const LIN_KEY = "lin_api_PANELgoodKey0123456789abcdefWXYZ";
+const LIN_BAD = "lin_api_PANELrevokedKey0123456789abcdefAB";
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 const server = createServer((req, res) => {
@@ -111,6 +113,15 @@ async function launch(ext, label) {
       return json(route, { html_url: `https://github.com/${REPO}/issues/7`, number: 7 });
     }
     return json(route, { message: "Not Found" }, 404);
+  });
+  // Linear (leg C): a personal API key is sent as-is; anything else is refused.
+  await ctx.route("https://api.linear.app/**", async (route) => {
+    const req = route.request();
+    if ((req.headers()["authorization"] || "") !== LIN_KEY) return json(route, { errors: [{ message: "Authentication required, not authenticated" }] }, 401);
+    const q = (JSON.parse(req.postData() || "{}").query) || "";
+    if (/viewer/.test(q)) return json(route, { data: { viewer: { name: "Ana", email: "ana@acme.test" } } });
+    if (/teams/.test(q)) return json(route, { data: { teams: { nodes: [{ id: "team-1", key: "ENG", name: "Engineering" }] } } });
+    return json(route, { data: {} });
   });
   let sw = ctx.serviceWorkers()[0];
   if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
@@ -326,6 +337,28 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
     const after = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
     check("C6. Disconnect removes the token", !after.token && await frame.isVisible("#tokenBox"));
+
+    // ── The same disclosure for Linear: an API key ──
+    await frame.selectOption("#tracker", "linear");
+    await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
+    check("C7. Linear: \"Use an API key instead\", open (no sign-in here)",
+      /Use an API key instead/.test(await frame.textContent("#tokenSummary")) && await frame.evaluate(() => document.getElementById("tokenBox").open) &&
+      /Linear API key/.test(await frame.textContent("#tokenLabel")));
+    const linBad = await tryToken(LIN_BAD);
+    check("…a rejected key: a clear error, nothing saved", /didn't accept this API key/.test(linBad) &&
+      !((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).linear?.apiKey, linBad);
+    await frame.fill("#tokenInput", LIN_KEY);
+    await frame.click("#tokenSave");
+    await frame.waitForFunction(() => /with a token/.test(document.getElementById("account").textContent), null, { timeout: 8000 }).catch(() => {});
+    check("…a working key: saved and shown masked", /with a token lin_…WXYZ/.test(await frame.textContent("#account")) &&
+      (((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).linear || {}).apiKey === LIN_KEY,
+      (await frame.textContent("#account")).trim());
+    await frame.waitForFunction(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "team-1"), null, { timeout: 8000 }).catch(() => {});
+    check("…and its teams load", await frame.evaluate(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "team-1")));
+    check("…the key never reached the page", !(await page.evaluate(() => document.documentElement.outerHTML + JSON.stringify(window.__pageMsgs) + JSON.stringify(localStorage))).includes("lin_api_"));
+    await frame.click("#disconnect");
+    await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
+    check("…Disconnect removes it", !((((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).linear || {}).apiKey));
     void state;
   } finally {
     await ctx.close();

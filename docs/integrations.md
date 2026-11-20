@@ -52,7 +52,8 @@ Connect once — from the welcome page (step 5), TraceBug settings (GitHub card)
      **Add repositories** link in the window.
 3. Pick the **Repository** (settings and the welcome page ask for a default right after you connect), tick
    **Labels** (**bug** starts ticked), choose an **Assignee** and **Milestone** if you want, and click
-   **Create issue**. The window shows **Created #123** with a link; nothing opens unless you click it.
+   **Create issue**. The panel shows **Created #123** with a link, and the issue opens in a new tab (turn that off
+   with **Open the issue after creating** in Settings → Integrations).
 
 You connect once. Next time it is pick → Create, with your last repository and fields preselected. **Disconnect**
 lives in TraceBug settings (GitHub card); to revoke the app entirely, use GitHub → Settings → Applications.
@@ -91,6 +92,21 @@ GitHub App (store builds until it's registered) this is the way in: Connect is h
 **Install TraceBug on GitHub**. It opens GitHub's install page in a small window; when you close it (or come back),
 the repository list refreshes by itself, and **Refresh** does it by hand. A repository you type that the app isn't
 on gets a **Configure repository access on GitHub** link.
+
+### Remembered choices, per site
+
+After you file an issue, TraceBug remembers the repository or team and the labels, assignee and other picks you used
+**on that site** — so the next bug from the same site is **Send**, then **Create** (Enter, Enter). Details:
+
+- Kept in the extension's own storage on this device (`chrome.storage.local`), keyed by the site's **origin** only
+  (`https://app.example.com`, never a path or query), the tracker, and the account you filed with.
+- Nothing is remembered from private (incognito) windows. At most 200 sites are kept; the least recently used go
+  first. Disconnecting a tracker deletes its remembered choices; **Forget remembered choices** in Settings →
+  Integrations deletes them all.
+- The site you're testing never sees them: the panel is TraceBug's own frame.
+- Each time, the remembered repository and labels are checked against the lists the tracker returns now. One that's
+  gone (removed, or no longer accessible) isn't selected: TraceBug falls back to your default repository and says so
+  in one line ("owner/repo is no longer available, using your default …").
 
 **In settings** (right-click the toolbar icon → Options; the only place on Firefox), open **Advanced: use a token**
 on the tracker's card:

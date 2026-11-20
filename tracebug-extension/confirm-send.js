@@ -190,7 +190,8 @@ function renderTrackerSelect(selectedId) {
 }
 
 async function loadStatus() {
-  const res = await send("tb:tracker:status", {});
+  // The request id brings this site's remembered picks (worker-side only).
+  const res = await send("tb:tracker:status", { id: ID });
   if (!res || !Array.isArray(res.trackers)) return false;
   panel.trackers = res.trackers;
   return true;
@@ -247,7 +248,11 @@ async function selectTracker(id) {
   $("manageLink").dataset.url = t.manageUrl || "";
   // After a reconnect, the user's own choices win over the remembered ones.
   const keep = panel.keep && panel.keep.tracker === t.id ? panel.keep : null;
-  $("container").value = (keep && keep.container) || (t.last && t.last.container) || "";
+  // This site's last pick first, else the default; checked once the list loads.
+  const fromSite = !!(t.site && t.site.container);
+  const pick = fromSite ? t.site : t.last;
+  panel.prefill = keep ? null : { from: fromSite ? "site" : "default", container: (pick && pick.container) || "" };
+  $("container").value = (keep && keep.container) || (pick && pick.container) || "";
   syncCreateButton();
   await loadContainers();
   await loadFields(true);
@@ -293,9 +298,33 @@ async function loadContainers() {
   if (noInstall) panel.installWatch = true;
   panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
   checkRepoAllowed();
+  checkPrefill(t);
   // Linear's container id is opaque; show the team the remembered id is.
   if (!selectedContainer() && panel.items.length === 1) $("container").value = panel.items[0].id;
   syncCreateButton();
+}
+
+/**
+ * A remembered repository/team the fresh list no longer has (removed, access
+ * revoked, app uninstalled) is never selected: fall back to the default if it
+ * is still there, else leave it empty, and say so in one line. A list that hit
+ * the cap may just be cut short, so it isn't used to judge.
+ */
+const LIST_CAP = 500;
+function checkPrefill(t) {
+  const pf = panel.prefill;
+  panel.prefill = null;
+  if (!pf || !pf.container || !panel.items.length || panel.items.length >= LIST_CAP) return;
+  if (selectedContainer() !== pf.container) return;
+  const has = (c) => panel.items.some((it) => String(it.id).toLowerCase() === String(c).toLowerCase());
+  if (has(pf.container)) return;
+  const def = t.last && t.last.container;
+  const useDef = pf.from === "site" && def && def !== pf.container && has(def);
+  $("container").value = useDef ? def : "";
+  // Linear team ids are opaque: name GitHub repos, describe Linear teams.
+  const gone = t.id === "github" ? pf.container : "The team you used last";
+  const now = t.id === "github" ? "your default " + def : "your default team";
+  panelMsg(gone + " is no longer available" + (useDef ? ", using " + now + "." : ". Pick one below."));
 }
 
 async function loadFields(useRemembered) {
@@ -315,6 +344,7 @@ async function loadFields(useRemembered) {
   panel.fieldSpecs = Array.isArray(res.fields) ? res.fields : [];
   const keep = panel.keep && panel.keep.tracker === t.id && panel.keep.container === container ? panel.keep : null;
   const remembered = keep ? keep.fields
+    : useRemembered && t.site && t.site.container === container ? (t.site.fields || {})
     : useRemembered && t.last && t.last.container === container ? (t.last.fields || {}) : null;
   panel.keep = null;
   panel.fieldSpecs.forEach((f) => $("fields").appendChild(renderField(f, remembered ? remembered[f.key] : undefined)));

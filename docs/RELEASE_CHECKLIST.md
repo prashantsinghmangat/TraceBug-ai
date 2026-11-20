@@ -371,8 +371,8 @@ installed on your account for at least one repository. Capture a bug → **Send 
 **Pass:** GitHub's device page opens in a small popup window with the code on your clipboard (Ctrl+V works);
 after Continue + Authorize the popup closes itself and the window comes back saying "as <your login>" (closing
 the popup before Authorize shows "Reopen GitHub", and the same code still works), lists exactly the repos the app is installed on, loads labels,
-assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N" — no tab opens until you click
-the link, which opens the issue with them set. Settings → GitHub then reads "Connected as <login>" with a Default
+assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N" and opens the issue in a new tab
+(Settings → Integrations "Open the issue after creating", default on), with them set. Settings → GitHub then reads "Connected as <login>" with a Default
 repository picker; **Disconnect** returns it to "Connect GitHub". Also: welcome page step 5 → Connect GitHub →
 pick a default repository. Repeat once 8+ hours later without
 reconnecting: the issue still files (the token renewed itself).

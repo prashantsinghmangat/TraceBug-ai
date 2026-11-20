@@ -2509,7 +2509,9 @@ async function _fileViaTracker(
       // worker opened it (ADR 010); opening it here too would be an unasked-for
       // tab, a duplicate, or a blocked popup.
       if (!result.opened && !result.shown) window.open(result.url, "_blank", "noopener,noreferrer");
-      showToast(`✓ ${where} issue created${ref}`, root);
+      // The number is a real link to the issue (new tab, no opener).
+      if (ref) showToast(`✓ ${where} issue created`, root, { text: ref.trim(), href: result.url });
+      else showToast(`✓ ${where} issue created`, root, { text: "Open", href: result.url });
     } else {
       showToast(`✓ Sent to ${where}`, root);
     }

@@ -22076,7 +22076,7 @@ var TraceBugExtensionModule = (() => {
       autoDismissMs: null
     });
   }
-  function showToast(message, root2) {
+  function showToast(message, root2, link) {
     const existing = root2.querySelector(".bt-toast");
     if (existing == null ? void 0 : existing.classList.contains("bt-toast-action")) return;
     if (existing) existing.remove();
@@ -22085,6 +22085,20 @@ var TraceBugExtensionModule = (() => {
     toast.className = "bt-toast";
     toast.dataset.tracebug = "toast";
     toast.textContent = message;
+    let safeHref = "";
+    try {
+      if (link && new URL(link.href).protocol === "https:") safeHref = link.href;
+    } catch (e2) {
+    }
+    if (link && safeHref) {
+      const a2 = document.createElement("a");
+      a2.href = safeHref;
+      a2.target = "_blank";
+      a2.rel = "noopener noreferrer";
+      a2.textContent = link.text;
+      a2.style.cssText = "color:inherit !important;text-decoration:underline !important;";
+      toast.append(" ", a2);
+    }
     toast.setAttribute("role", "status");
     root2.appendChild(toast);
     const liveRegion = document.getElementById("tracebug-live");
@@ -22092,7 +22106,7 @@ var TraceBugExtensionModule = (() => {
     setTimeout(() => {
       toast.classList.add("bt-toast-dismissing");
       setTimeout(() => toast.remove(), 300);
-    }, 2800);
+    }, safeHref ? 6e3 : 2800);
   }
   var init_toast = __esm({
     "src/ui/toast.ts"() {
@@ -32325,6 +32339,9 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
+    if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
+      throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+    }
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
     return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
   }
@@ -35080,7 +35097,8 @@ ${report.steps}`;
       const where = result2.label || TRACKER_LABELS[provider];
       if (result2.url) {
         if (!result2.opened && !result2.shown) window.open(result2.url, "_blank", "noopener,noreferrer");
-        showToast(`\u2713 ${where} issue created${ref}`, root2);
+        if (ref) showToast(`\u2713 ${where} issue created`, root2, { text: ref.trim(), href: result2.url });
+        else showToast(`\u2713 ${where} issue created`, root2, { text: "Open", href: result2.url });
       } else {
         showToast(`\u2713 Sent to ${where}`, root2);
       }

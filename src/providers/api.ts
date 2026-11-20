@@ -471,6 +471,12 @@ export async function postGitHubIssue(
       milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : undefined,
     }),
   });
+  // A fine-grained token (or an app) that can see the repository but not
+  // write issues: the check at save time can't tell, so say it here, plainly.
+  // A 403 with no requests left is a rate limit, not this.
+  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
+    throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+  }
   const data = await parseJsonOrThrow(res, "GitHub", "tracker");
   return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : undefined };
 }

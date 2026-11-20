@@ -253,6 +253,9 @@ var TraceBugProviderAPI = (() => {
         milestone: typeof config.milestone === "number" && config.milestone > 0 ? config.milestone : void 0
       })
     });
+    if (res.status === 403 && res.headers.get("x-ratelimit-remaining") !== "0") {
+      throw new ProviderHttpError(`This token can't create issues in ${config.repo}. Give it Issues: Read and write.`, 403);
+    }
     const data = await parseJsonOrThrow(res, "GitHub", "tracker");
     return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
   }

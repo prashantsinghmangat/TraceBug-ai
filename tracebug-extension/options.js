@@ -878,3 +878,22 @@ renderLlmSites();
     }
   });
 })();
+
+// ── Integrations preferences ────────────────────────────────────────────────
+// Open the filed issue in a new tab (default on), and forget the per-site
+// remembered repositories/labels (tb_tracker_sites_v1, written by the worker).
+const OPEN_AFTER_KEY = "tb_open_issue_after_create_v1";
+const SITES_KEY = "tb_tracker_sites_v1";
+get([OPEN_AFTER_KEY]).then((r) => { $("openAfterCreate").checked = r[OPEN_AFTER_KEY] !== false; });
+$("openAfterCreate").addEventListener("change", async () => {
+  await set({ [OPEN_AFTER_KEY]: $("openAfterCreate").checked });
+  say($("prefsStatus"), $("openAfterCreate").checked ? "Issues open in a new tab after you create them." : "Issues won't open by themselves; the panel shows the link.", "ok");
+});
+$("forgetChoices").addEventListener("click", async () => {
+  try {
+    await new Promise((resolve) => chrome.storage.local.remove(SITES_KEY, () => { void chrome.runtime.lastError; resolve(); }));
+    say($("prefsStatus"), "Forgot the remembered choices for every site.", "ok");
+  } catch (e) {
+    say($("prefsStatus"), "Couldn't forget them: " + ((e && e.message) || "storage error"), "err");
+  }
+});

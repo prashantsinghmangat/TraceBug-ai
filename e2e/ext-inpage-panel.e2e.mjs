@@ -61,6 +61,7 @@ const ctx = await chromium.launchPersistentContext(
 // ── GitHub stub ────────────────────────────────────────────────────────────
 const posts = [];
 let nextNumber = 100;
+let dropApiRepo = false; // leg 6b: acme/api is gone from the account
 await ctx.route("https://api.github.com/**", async (route) => {
   const req = route.request();
   const url = new URL(req.url());
@@ -73,8 +74,10 @@ await ctx.route("https://api.github.com/**", async (route) => {
   }
   const p = url.pathname;
   if (p === "/user") return ok({ login: "tester" });
-  if (p === "/user/repos") return ok([{ full_name: REPO }, { full_name: "acme/web" }]);
+  if (p === "/user/repos") return ok(dropApiRepo ? [{ full_name: "acme/web" }] : [{ full_name: REPO }, { full_name: "acme/web" }]);
   if (p === `/repos/${REPO}/labels`) return ok([{ name: "bug" }, { name: "ui" }]);
+  if (p === "/repos/acme/web/labels" || p === "/repos/acme/web/assignees" || p === "/repos/acme/web/milestones") return ok([]);
+  if (p === "/repos/acme/web") return ok({ permissions: { push: true } });
   if (p === `/repos/${REPO}/assignees`) return ok([{ login: "tester" }, { login: "octo" }]);
   if (p === `/repos/${REPO}/milestones`) return ok([{ number: 4, title: "v4" }]);
   if (p === `/repos/${REPO}`) return ok({ permissions: { push: true } });
@@ -256,9 +259,20 @@ try {
   check('5. a real click creates: "Created #100" in the panel', (await frame.textContent("#issueLink")).trim() === "#100");
   check("…exactly one issue, with the picks", posts.length === 1 && JSON.stringify(posts[0].labels) === '["bug"]' &&
     JSON.stringify(posts[0].assignees) === '["octo"]' && posts[0].milestone === 4, JSON.stringify(posts));
-  await sleep(600);
-  check("…no tab opened, and the ticket stays open to show it",
-    ctx.pages().length === tabsBefore && await page.locator("#tracebug-quick-bug-modal").isVisible());
+  await sleep(800);
+  const issueTabs = () => sw.evaluate(async () => (await chrome.tabs.query({})).map((t) => t.pendingUrl || t.url)
+    .filter((u) => /github\.com\/.*\/issues\/\d+/.test(u)));
+  const opened5 = await issueTabs();
+  check("…like Jam, the issue opens in a new tab (Open the issue after creating: on by default)",
+    opened5.some((u) => u.endsWith(`/${REPO}/issues/100`)), JSON.stringify(opened5));
+  check("…and the ticket stays where it is, showing \"Created #100\"", ctx.pages().length >= tabsBefore &&
+    await page.locator("#tracebug-quick-bug-modal").isVisible());
+  // Close it and come back to the ticket (a background tab stops drawing, and
+  // the panel's visibility check with it).
+  await sw.evaluate(async () => { for (const t of await chrome.tabs.query({})) if (/\/issues\/\d+/.test(t.pendingUrl || t.url || "")) await chrome.tabs.remove(t.id); });
+  await page.bringToFront();
+  // The rest of this suite files with the setting off.
+  await sw.evaluate(() => chrome.storage.local.set({ tb_open_issue_after_create_v1: false }));
   await page.waitForFunction(() => window.__tbResults.length > 0, null, { timeout: 5000 }).catch(() => {});
   const results = await page.evaluate(() => window.__tbResults);
   check("…the page heard only the result (link and number), no token", results.some((r) => r.includes("issues/100")) &&
@@ -287,7 +301,74 @@ try {
   await f6.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
   check('…one click on Create → "Created #101"', (await f6.textContent("#issueLink")).trim() === "#101" && posts.length === 2,
     JSON.stringify(posts.map((p) => p.n)));
+  await sleep(600);
+  check("…with \"Open the issue after creating\" off, no tab opens", (await issueTabs()).length === 0, JSON.stringify(await issueTabs()));
   await f6.click("#cancel");
+
+  // ══ 6b. Remembered per site ════════════════════════════════════════════════
+  const SITE_ORIGIN = `http://localhost:${PORT}`;
+  const sites = () => sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {});
+  const s6 = await sites();
+  const pick6 = s6[SITE_ORIGIN] && s6[SITE_ORIGIN].picks && s6[SITE_ORIGIN].picks["github|token:"];
+  check("6b. filing remembers the repo and fields for this site's origin (extension storage)",
+    !!pick6 && pick6.container === REPO && JSON.stringify(pick6.fields.labels) === '["bug"]' &&
+    Object.keys(s6).every((o) => /^https?:\/\/[^/]+$/.test(o)), JSON.stringify(s6).slice(0, 200));
+  // The global default now points elsewhere: the site's own pick still wins.
+  await sw.evaluate(async () => {
+    const g = (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1 || {};
+    g.github = Object.assign({}, g.github, { container: "acme/web", fields: {} });
+    await chrome.storage.local.set({ tb_tracker_prefs_v1: g });
+  });
+  const r6b = await sendToGitHub(page);
+  await r6b.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+  check("…reopening on this site prefills that repo and labels (not the global default)",
+    (await r6b.frame.inputValue("#container")) === REPO && (await r6b.frame.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true");
+  const armed6b = await r6b.frame.waitForFunction(() => document.activeElement && document.activeElement.id === "send" && !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false);
+  check("…with Create focused: a repeat bug is Send, then Enter", armed6b);
+  await r6b.frame.click("#cancel");
+  await sleep(400);
+  // The repo is gone from the account: fall back to the default, say so in one line.
+  dropApiRepo = true;
+  const r6c = await sendToGitHub(page);
+  await r6c.frame.waitForFunction(() => /no longer available/.test(document.getElementById("panelMsg").textContent), null, { timeout: 8000 }).catch(() => {});
+  check("…a remembered repo that's gone isn't selected: default instead, with a note",
+    (await r6c.frame.inputValue("#container")) === "acme/web" &&
+    (await r6c.frame.textContent("#panelMsg")).trim() === `${REPO} is no longer available, using your default acme/web.`,
+    `${await r6c.frame.inputValue("#container")} | ${(await r6c.frame.textContent("#panelMsg")).trim()}`);
+  await r6c.frame.click("#cancel");
+  await sleep(400);
+  dropApiRepo = false;
+  await sw.evaluate(async (repo) => {
+    const g = (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1 || {};
+    g.github = Object.assign({}, g.github, { container: repo });
+    await chrome.storage.local.set({ tb_tracker_prefs_v1: g });
+  }, REPO);
+  const pageSide = await page.evaluate(() => document.documentElement.outerHTML.replace(/https:\/\/github\.com\/[^"' <]+/g, "") +
+    JSON.stringify(localStorage) + (document.documentElement.getAttribute("data-tb-caps") || ""));
+  check("…nothing remembered reaches the page (no repo, no picks, no store)",
+    !pageSide.includes("acme/") && !pageSide.includes("tb_tracker_sites"));
+  // The worker's rules, run in the worker itself.
+  const rules = await sw.evaluate(async (origin) => {
+    const prefsBefore = (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1;
+    const before = JSON.stringify((await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {});
+    await rememberForSite({ origin: "https://private.example", incognito: true }, "github", "token:", "acme/secret", {});
+    const afterPrivate = JSON.stringify((await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {});
+    await rememberForSite({ origin: "https://app.example/some/path?q=1", incognito: false }, "github", "token:", "acme/api", {});
+    for (let i = 0; i < 205; i++) await rememberForSite({ origin: `https://s${i}.example`, incognito: false }, "github", "token:", "acme/api", {});
+    const all = (await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {};
+    const capped = Object.keys(all).length;
+    const keptNewest = !!all["https://s204.example"] && !all["https://s0.example"];
+    await disconnectTracker(providerApi(), providerApi().trackerAdapter("github"), false);
+    const afterDisconnect = (await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {};
+    // Disconnect also cleared the default repo; the next legs need it back.
+    await chrome.storage.local.set({ tb_tracker_prefs_v1: prefsBefore });
+    return { privateUnchanged: before === afterPrivate, originOnly: !JSON.stringify(all).includes("/some/path"), capped, keptNewest,
+      cleared: !Object.keys(afterDisconnect).length, ownSiteBack: origin };
+  }, SITE_ORIGIN);
+  check("…private windows store nothing", rules.privateUnchanged);
+  check("…only the origin is kept, never the path", rules.originOnly);
+  check("…at most 200 origins, the least recently used dropped", rules.capped === 200 && rules.keptNewest, JSON.stringify(rules));
+  check("…disconnecting a tracker deletes its remembered picks", rules.cleared);
 
   // ══ 7. Keyboard only, and Escape cancels ═════════════════════════════════
   await page.keyboard.press("Escape");
@@ -708,9 +789,24 @@ try {
   const tabP13 = ctx.waitForEvent("page", { timeout: 8000 }).catch(() => null);
   await sdkPage.locator('#tracebug-quick-bug-modal [data-action="open-github"], #tracebug-quick-bug-modal [data-action="github"]').first().click();
   const tab13 = await tabP13;
-  await sdkPage.waitForSelector("text=/GitHub issue created #\d+/", { timeout: 8000 }).catch(() => {});
-  check("…filing shows the toast with the issue number", posts.length === before13 + 1 &&
-    await sdkPage.locator(`text=/GitHub issue created #${nextNumber - 1}/`).first().isVisible().catch(() => false));
+  // The toast lives in the SDK's shadow root: look for it there.
+  const toast13 = () => sdkPage.evaluate(() => {
+    let hit = null;
+    const walk = (r) => r.querySelectorAll("*").forEach((e) => {
+      if (!hit && e.dataset && e.dataset.tracebug === "toast") hit = e;
+      if (e.shadowRoot) walk(e.shadowRoot);
+    });
+    walk(document);
+    const a = hit && hit.querySelector("a");
+    return hit ? { text: hit.textContent, href: a && a.href, target: a && a.target, rel: a && a.rel, link: a && a.textContent } : null;
+  });
+  let t13 = null;
+  for (let i = 0; i < 20 && !(t13 && /issue created/.test(t13.text)); i++) { await sleep(200); t13 = await toast13(); }
+  check("…filing shows the toast with the issue number", posts.length === before13 + 1 && !!t13 &&
+    t13.text === `✓ GitHub issue created #${nextNumber - 1}`, JSON.stringify(t13));
+  const link13 = t13 && t13.href ? { href: t13.href, target: t13.target, rel: t13.rel, text: t13.link } : null;
+  check("…and the number is a real link (new tab, no opener)", !!link13 && link13.href.endsWith(`/acme/api/issues/${nextNumber - 1}`) &&
+    link13.target === "_blank" && /noopener/.test(link13.rel) && link13.text === `#${nextNumber - 1}`, JSON.stringify(link13));
   check("…and opens the issue in a new tab", !!tab13 && tab13.url().includes(`/acme/api/issues/${nextNumber - 1}`), tab13 ? tab13.url() : "no tab");
   check("…and no panel frame appeared", !sdkPage.frames().some((f) => f.url().includes("/create-issue.html")));
   if (tab13) await tab13.close().catch(() => {});

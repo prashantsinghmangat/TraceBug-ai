@@ -244,7 +244,10 @@ try {
   check("…with the picked label", JSON.stringify(issuePost && issuePost.labels) === '["bug"]', JSON.stringify(issuePost && issuePost.labels));
   check("…and a title from the ticket", !!(issuePost && issuePost.title));
   await sleep(800);
-  check("no tab opened by itself", ctx.pages().length === tabsBefore, `${tabsBefore} → ${ctx.pages().length}`);
+  // Like Jam (owner decision 2026-11-20): the worker opens the filed issue in
+  // a new tab — "Open the issue after creating", on by default.
+  const issueTabs = await sw.evaluate(async (u) => (await chrome.tabs.query({})).filter((t) => (t.pendingUrl || t.url || "").startsWith(u)).length, ISSUE_URL);
+  check("the issue opened once, in a new tab", issueTabs === 1, `${issueTabs} tab(s); ${tabsBefore} → ${ctx.pages().length} pages`);
 
   await page.waitForFunction(() => window.__tbResults.length > 0, null, { timeout: 8000 }).catch(() => {});
   const results = await page.evaluate(() => window.__tbResults);
@@ -252,7 +255,8 @@ try {
   check("no token in anything the page received", !results.some((r) => r.includes(TOKEN) || /ghp_|ghu_|ghr_/.test(r)));
   const toast = await page.locator("text=/GitHub issue created #42/").first().isVisible().catch(() => false);
   check('the page says "GitHub issue created #42"', toast);
-  check("the page did not open the issue either", !ctx.pages().some((p) => p.url().startsWith(ISSUE_URL)));
+  check("the page did not open it a second time",
+    (await sw.evaluate(async (u) => (await chrome.tabs.query({})).filter((t) => (t.pendingUrl || t.url || "").startsWith(u)).length, ISSUE_URL)) === 1);
 
   // The link opens it — only when clicked.
   const issueTabP = ctx.waitForEvent("page", { predicate: (p) => p.url().startsWith(ISSUE_URL), timeout: 8000 });

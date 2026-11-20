@@ -137,6 +137,9 @@ await ctx.route(`${STORE}/**`, async (route) => {
 let sw = ctx.serviceWorkers()[0];
 if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
 const extId = new URL(sw.url()).host;
+// Filed issues would open in a new tab and take focus from the Create window
+// this suite keeps using; that behaviour is covered in ext-inpage-panel.
+await sw.evaluate(() => chrome.storage.local.set({ tb_open_issue_after_create_v1: false }));
 // Linear's sign-in page runs in launchWebAuthFlow's own window, which routes
 // can't reach: answer it here the way Linear would — redirect back with a
 // code and the same state.

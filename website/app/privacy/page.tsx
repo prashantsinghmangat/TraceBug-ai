@@ -139,6 +139,17 @@ export default function PrivacyPage() {
                 to. They are never stored on the websites you test, and never
                 reach TraceBug.
               </li>
+              <li>
+                After you file an issue, the extension remembers which
+                repository or team and labels you used on that site, keyed by
+                the site&apos;s origin only (for example{" "}
+                <code className="text-accent">https://app.example.com</code>,
+                never the page or path), in{" "}
+                <code className="text-accent">chrome.storage.local</code>.
+                Nothing is remembered from private windows; at most 200 sites
+                are kept; Settings → Integrations → &ldquo;Forget remembered
+                choices&rdquo; deletes them.
+              </li>
             </ul>
           </section>
 
