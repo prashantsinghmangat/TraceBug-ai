@@ -123,8 +123,7 @@ export async function cutVideo(blob: Blob, mimeType: string, startS: number, end
       await _once(v, "seeked", opts.signal);
     }
     const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 2_500_000 });
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    const stopped = new Promise<void>((res) => { rec.onstop = () => res(); });
+    const stopped = collectUntilFinal(rec, chunks);
     rec.start(1000);
     await v.play();
 
@@ -151,6 +150,35 @@ export async function cutVideo(blob: Blob, mimeType: string, startS: number, end
   } finally {
     cleanup();
   }
+}
+
+/**
+ * Collect a MediaRecorder's chunks until it has really finished. Firefox
+ * sometimes delivers the final chunk AFTER "stop" (seen: an empty
+ * dataavailable, then stop, then the last second of video); building the file
+ * at "stop" then silently dropped that second. Done once stop has fired AND
+ * the first non-empty chunk after stop() has arrived — or 500 ms after stop, as
+ * a stop on a chunk boundary can legitimately bring no final data. Wraps
+ * rec.stop so callers keep calling it as before.
+ */
+export function collectUntilFinal(
+  rec: Pick<MediaRecorder, "stop"> & { ondataavailable: ((e: BlobEvent) => void) | null; onstop: ((e: Event) => void) | null },
+  chunks: Blob[],
+  graceMs = 500,
+): Promise<void> {
+  let stopCalled = false, stopFired = false, finalChunk = false;
+  return new Promise<void>((finish) => {
+    const settle = () => { if (stopFired && finalChunk) finish(); };
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) {
+        chunks.push(e.data);
+        if (stopCalled) { finalChunk = true; settle(); }
+      }
+    };
+    rec.onstop = () => { stopFired = true; settle(); setTimeout(finish, graceMs); };
+    const realStop = rec.stop.bind(rec);
+    rec.stop = () => { stopCalled = true; realStop(); };
+  });
 }
 
 function _abortError(): Error {

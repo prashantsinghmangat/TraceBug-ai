@@ -30460,12 +30460,7 @@ ${issueSignatureSlack()}`;
         await _once(v2, "seeked", opts.signal);
       }
       const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 25e5 });
-      rec.ondataavailable = (e2) => {
-        if (e2.data && e2.data.size) chunks.push(e2.data);
-      };
-      const stopped = new Promise((res) => {
-        rec.onstop = () => res();
-      });
+      const stopped = collectUntilFinal(rec, chunks);
       rec.start(1e3);
       await v2.play();
       await new Promise((resolve, reject) => {
@@ -30504,6 +30499,33 @@ ${issueSignatureSlack()}`;
     } finally {
       cleanup();
     }
+  }
+  function collectUntilFinal(rec, chunks, graceMs = 500) {
+    let stopCalled = false, stopFired = false, finalChunk = false;
+    return new Promise((finish) => {
+      const settle = () => {
+        if (stopFired && finalChunk) finish();
+      };
+      rec.ondataavailable = (e2) => {
+        if (e2.data && e2.data.size) {
+          chunks.push(e2.data);
+          if (stopCalled) {
+            finalChunk = true;
+            settle();
+          }
+        }
+      };
+      rec.onstop = () => {
+        stopFired = true;
+        settle();
+        setTimeout(finish, graceMs);
+      };
+      const realStop = rec.stop.bind(rec);
+      rec.stop = () => {
+        stopCalled = true;
+        realStop();
+      };
+    });
   }
   function _abortError() {
     const e2 = new Error("Cancelled");

@@ -102,7 +102,7 @@ try {
   check("axe is not in the page before an audit", await page.evaluate(() => typeof window.axe === "undefined"));
 
   const runAuditAction = () => sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+    const [tab] = (await chrome.tabs.query({ url: glob })).sort((a, b) => b.id - a.id); // newest on the site, not "active" (welcome.html can be)
     // eslint-disable-next-line no-undef
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id }, {});
     return true;
@@ -202,7 +202,7 @@ try {
   check("popup: Capture Bug is the first card, then Screenshot, then Audit", popupHtml.indexOf('id="btnCaptureBug"') > 0 && popupHtml.indexOf('id="btnCaptureBug"') < popupHtml.indexOf('id="btnScreenshot"') && popupHtml.indexOf('id="btnScreenshot"') < popupHtml.indexOf('id="btnAuditRun"'));
   check("popup: every scan has an icon", (popupHtml.match(/class="audit-ic"/g) || []).length === 4);
   await sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+    const [tab] = (await chrome.tabs.query({ url: glob })).sort((a, b) => b.id - a.id); // newest on the site, not "active" (welcome.html can be)
     // eslint-disable-next-line no-undef
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id, scan: "accessibility" }, {});
   }, GLOB);
@@ -220,7 +220,7 @@ try {
   await page.reload({ waitUntil: "load" });
   await sleep(1500);
   await sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+    const [tab] = (await chrome.tabs.query({ url: glob })).sort((a, b) => b.id - a.id); // newest on the site, not "active" (welcome.html can be)
     // eslint-disable-next-line no-undef
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id, scan: "performance-seo" }, {});
   }, GLOB);

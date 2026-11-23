@@ -69,7 +69,7 @@ try {
 
   // Audit 1 — from the popup action.
   await sw.evaluate(async (glob) => {
-    const [tab] = await chrome.tabs.query({ url: glob, active: true });
+    const [tab] = (await chrome.tabs.query({ url: glob })).sort((a, b) => b.id - a.id); // newest on the site, not "active" (welcome.html can be)
     // eslint-disable-next-line no-undef
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id }, {});
   }, GLOB);
