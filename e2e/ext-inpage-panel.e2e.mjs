@@ -38,6 +38,12 @@ const server = createServer((req, res) => {
     res.end(STRICT_HTML);
     return;
   }
+  // The demo page from a site that blocks clipboard writes in every frame.
+  if (path === "/noclip.html") {
+    res.writeHead(200, { "content-type": "text/html", "permissions-policy": "clipboard-write=()" });
+    res.end(readFileSync(join(PUBLIC_DIR, "try.html")));
+    return;
+  }
   const p = join(PUBLIC_DIR, path);
   if (!existsSync(p)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { "content-type": MIME[extname(p)] || "application/octet-stream" });
@@ -827,6 +833,37 @@ try {
   } else if (win12) {
     await win12.close();
   }
+
+  // ══ 12b. A site that blocks the clipboard (Permissions-Policy) ═══════════
+  const noclip = await ctx.newPage();
+  await noclip.goto(`http://localhost:${PORT}/noclip.html`, { waitUntil: "load" });
+  await sleep(300);
+  await inject(noclip, GLOB.replace("/*", "/noclip.html"));
+  await noclip.fill("#coupon", "SAVE20");
+  await openTicket(noclip, "#orderBtn", "No-clipboard site ticket");
+  await noclip.click('#tracebug-quick-bug-modal [data-action="add-screenshot"]').catch(() => {});
+  await sleep(600);
+  await noclip.mouse.move(120, 120);
+  await noclip.mouse.down();
+  await noclip.mouse.move(420, 320, { steps: 8 });
+  await noclip.mouse.up();
+  await noclip.waitForSelector("#tracebug-quick-bug-modal [data-delete-screenshot]", { state: "attached", timeout: 10000 }).catch(() => {});
+  await noclip.waitForSelector('#tracebug-quick-bug-modal [data-action="open-github"]', { state: "visible", timeout: 10000 }).catch(() => {});
+  const f12b = (await sendToGitHub(noclip)).frame;
+  check("12b. a site with Permissions-Policy clipboard-write=() still gets the panel", !!f12b);
+  if (f12b) {
+    await f12b.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).catch(() => {});
+    await f12b.click("#send");
+    await f12b.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
+    const blocked = await f12b.evaluate(() => document.featurePolicy ? !document.featurePolicy.allowsFeature("clipboard-write") : null);
+    check("…the site's policy reaches our frame (clipboard-write blocked there)", blocked === true, String(blocked));
+    await f12b.click("#copyShot"); // the real clipboard, not a stub
+    await f12b.waitForFunction(() => document.getElementById("panelMsg").textContent.trim() !== "", null, { timeout: 5000 }).catch(() => {});
+    const msg12b = (await f12b.textContent("#panelMsg")).trim();
+    check("…Copy screenshot says it couldn't copy on this site (not silent)",
+      msg12b.startsWith("Couldn't copy the screenshot on this site"), msg12b);
+  }
+  await noclip.close();
 
   // ══ 13. Script-tag SDK (no extension, no panel): toast + the issue in a new tab ══
   const sdkPage = await ctx.newPage();

@@ -102,7 +102,8 @@ the extension is public.
     → the list is kept with a link per org (`/organizations/{id}` → `https://github.com/orgs/<login>/sso`). Only
     `https://github.com/…` links are opened, by the worker (`tb:tracker:open-sso`).
   - Owner approval: GitHub reports a pending request only by sending the install window to the app's **Setup URL**
-    with `?setup_action=request`. The production app's Setup URL is its own github.com page; with github.com access
+    with `?setup_action=request`, and only while "Request user authorization (OAuth) during installation" is
+    unchecked. Both apps (production and Dev) set their Setup URL to their own github.com page; with github.com access
     (granted at Connect) the worker reads only `setup_action` from that window's address (`tabs.onUpdated`) and
     shows "Waiting for your organisation owner to approve TraceBug". Unlike the device flow (whose window is never
     read), this is a hint, never an auth signal; nothing is injected into github.com.

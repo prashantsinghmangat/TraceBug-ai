@@ -936,7 +936,9 @@ async function copyShot(e) {
     await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
     panelMsg("Screenshot copied. Paste it into a comment on the issue.");
   } catch {
-    panelMsg("Couldn't copy the screenshot here. Download it from the ticket instead.", true);
+    // Also a site whose Permissions-Policy blocks clipboard-write: the policy
+    // reaches this frame and write() rejects; nothing tells us before the click.
+    panelMsg("Couldn't copy the screenshot on this site. Download it from the ticket instead.", true);
   }
 }
 
