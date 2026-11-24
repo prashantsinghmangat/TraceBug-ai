@@ -62,7 +62,7 @@
       "matches": ["<all_urls>"]
     },
     {
-      "resources": ["create-issue.html", "confirm-send.js"],
+      "resources": ["create-issue.html", "confirm-send.js", "panel-fields.js"],
       "matches": ["<all_urls>"],
       "use_dynamic_url": true
     }

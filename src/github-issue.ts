@@ -5,7 +5,7 @@
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
 import { formatStyleSummary } from "./style-evidence";
-import { formatRootCauseLine, severityTitlePrefix } from "./report-builder";
+import { formatRootCauseLine, severityTitlePrefix, severityBadge } from "./report-builder";
 
 // GitHub URL prefill has a ~8KB practical limit (some browsers/proxies cap at 6-8KB)
 const GITHUB_URL_BODY_LIMIT = 6000;
@@ -30,12 +30,8 @@ export function generateGitHubIssueUrl(
     throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
   }
 
-  // Carry the severity emoji into the URL-prefill title so the issue lands
-  // pre-triaged. Skip if the caller already added a leading emoji.
-  const rawTitle = report.title || "Bug report";
-  const title = rawTitle.match(/^[🔴🟠🟡🟢]/u)
-    ? rawTitle
-    : `${severityTitlePrefix(report.severity)}${rawTitle}`;
+  // The title is the bug; its severity is a line in the body (U6).
+  const title = report.title || "Bug report";
   let body = generateGitHubIssue(report);
 
   // Strip the leading "## title" since GitHub already shows the title separately
@@ -82,16 +78,26 @@ export function openGitHubIssue(repo: string, report: BugReport, labels?: string
  * it (copy as markdown / prefilled URL) the reporter pastes the body and
  * drops the files in themselves.
  */
-export function generateGitHubIssue(report: BugReport, opts: { filed?: boolean } = {}): string {
+/**
+ * `footer: false`: no closing line — the caller adds the one footer (the filed
+ * path: session id + the optional credit, so there is never a second footer).
+ * `legacyText`: the 1.13 wording, kept for Linear while it is frozen (severity
+ * prefix in the heading, the generic TL;DR, the raw "User clicked" line).
+ */
+export function generateGitHubIssue(
+  report: BugReport,
+  opts: { filed?: boolean; footer?: boolean; legacyText?: boolean } = {},
+): string {
   const filed = !!opts.filed;
+  const legacy = !!opts.legacyText;
   const env = report.environment;
 
-  // Title carries the severity emoji prefix (🔴 Critical · …) so triagers see
-  // priority at a glance in the issue list.
-  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/u)
+  // U6: the title is the bug; severity is a line below. (Linear keeps the
+  // emoji prefix — 🔴 Critical · … — while frozen.)
+  const heading = !legacy || report.title.match(/^[🔴🟠🟡🟢]/u)
     ? report.title
     : `${severityTitlePrefix(report.severity)}${report.title}`;
-  let md = `## ${titleWithSeverity}\n\n`;
+  let md = `## ${heading}\n\n`;
 
   // Root-cause hint — what a dev should check first
   const rc = formatRootCauseLine(report.rootCause);
@@ -99,24 +105,29 @@ export function generateGitHubIssue(report: BugReport, opts: { filed?: boolean }
     md += `> ${rc}\n\n`;
   }
 
-  // Smart one-line summary — tells a dev what went wrong at a glance
-  if (report.summary) {
+  // Smart one-line summary — tells a dev what went wrong at a glance. Not the
+  // bare fallback ("Bug report captured on /"): it says nothing (U6).
+  if (report.summary && (legacy || !/^Bug report captured\b/.test(report.summary))) {
     md += `> **TL;DR:** ${report.summary}\n\n`;
   }
 
   // Compact environment line
   md += `**Environment:** ${env.browser} ${env.browserVersion} · ${env.os} · ${env.viewport} · ${env.deviceType}\n`;
   md += `**URL:** ${env.url}\n`;
+  if (!legacy && report.severity) md += `**Severity:** ${severityBadge(report.severity)}\n`;
   if (report.priority) md += `**Priority:** ${report.priority}\n`;
   md += `\n`;
 
-  // What the user did — derived from last clicked element
-  if (report.clickedElement) {
+  // What the user did — derived from last clicked element. U6: the Recent
+  // Actions list already says it in words; alone, it's a sentence, not a tag.
+  if (report.clickedElement && legacy) {
     const ce = report.clickedElement;
     const label = ce.text || ce.ariaLabel || ce.id || ce.tag;
     md += `**User clicked:** \`<${ce.tag}>\` "${label}"`;
     if (ce.selector) md += ` — \`${ce.selector}\``;
     md += `\n\n`;
+  } else if (report.clickedElement && !(report.sessionSteps && report.sessionSteps.length)) {
+    md += `**Last click:** ${describeClick(report.clickedElement)}\n\n`;
   }
 
   // Recent user actions — plain-English, at-a-glance flow
@@ -289,10 +300,19 @@ export function generateGitHubIssue(report: BugReport, opts: { filed?: boolean }
   }
 
   // Footer
-  md += `---\n`;
-  md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) — free, local-first bug reports · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
+  if (opts.footer !== false) {
+    md += `---\n`;
+    md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) — free, local-first bug reports · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
+  }
 
   return md;
+}
+
+/** A click in words: `"Place order" button`, `the "a" link`. */
+function describeClick(ce: NonNullable<BugReport["clickedElement"]>): string {
+  const label = String(ce.text || ce.ariaLabel || ce.id || "").trim().split("\n")[0].slice(0, 60);
+  const kind = ce.tag === "a" ? "link" : ce.tag === "button" ? "button" : ce.tag === "input" ? "field" : "element";
+  return label ? `"${label}" ${kind}` : `a ${kind}`;
 }
 
 function formatVideoMeta(v: { durationMs: number; sizeBytes: number }): string {

@@ -53,17 +53,29 @@
       padding: 6px 8px; font: inherit; min-width: 0;
     }
     #container { width: 100%; }
+    #containerSuggest {
+      list-style: none; margin: 4px 0 0; padding: 4px; max-height: 168px; overflow-y: auto; overscroll-behavior: contain;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+    }
+    #containerSuggest li { padding: 5px 8px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+    #containerSuggest li .muted { margin-left: 6px; }
+    #containerSuggest li[aria-selected="true"], #containerSuggest li:hover { background: var(--panel); outline: 1px solid var(--line); }
+    #containerSuggest li[aria-disabled="true"] { color: var(--muted); }
+    #manageLink { display: inline-block; margin-top: 6px; }
+    .attach-line { margin: 6px 0 0; }
     button {
       padding: 7px 14px; border: 0; border-radius: 8px; cursor: pointer;
       font: 600 13px "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
       background: var(--accent); color: var(--on-accent);
     }
-    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
-    button.small { padding: 5px 10px; font-size: 12px; }
+    button.ghost, a.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    button.small, a.btn.small { padding: 5px 10px; font-size: 12px; }
+    a.btn { border-radius: 8px; font-weight: 600; text-decoration: none; display: inline-block; }
     button:disabled { opacity: .5; cursor: default; }
     .code {
       font: 600 26px/1.2 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em;
-      background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; user-select: all;
+      background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px;
+      user-select: all; -webkit-user-select: all; cursor: text;
     }
     fieldset { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
     legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
@@ -102,6 +114,16 @@
       <span class="grow"></span>
       <button type="button" class="ghost small" id="disconnect" hidden>Disconnect</button>
     </div>
+    <!-- One GitHub connection (B11): in token mode, sign-in is a quiet link
+         (only where this build can sign in), behind a "This replaces…" confirm. -->
+    <a href="#" class="muted" id="switchSignIn" hidden>Switch to GitHub sign-in (recommended)</a>
+    <div class="pblock" id="replaceBox" hidden>
+      <p class="muted" id="replaceText"></p>
+      <div class="prow">
+        <button type="button" class="small" id="replaceYes">Replace</button>
+        <button type="button" class="ghost small" id="replaceNo">Cancel</button>
+      </div>
+    </div>
 
     <div class="pblock" id="connectBox" hidden>
       <p class="muted" id="connectText"></p>
@@ -136,10 +158,19 @@
     </div>
 
     <div class="pblock" id="pickBox" hidden>
-      <label class="plabel" for="container" id="containerLabel">Repository</label>
-      <input type="text" id="container" list="containerList" autocomplete="off" spellcheck="false" />
-      <datalist id="containerList"></datalist>
-      <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
+      <!-- U4: shown once there is something to pick from (not while the app is
+           installed nowhere). U7/U10: the suggestions are our own list, in the
+           panel's flow under the field — inside its width, scrolling past a
+           max height, never over "Don't see it?". The datalist is only the
+           data (not attached to the field). -->
+      <div id="repoField">
+        <label class="plabel" for="container" id="containerLabel">Repository</label>
+        <input type="text" id="container" autocomplete="off" spellcheck="false" role="combobox"
+          aria-autocomplete="list" aria-expanded="false" aria-controls="containerSuggest" />
+        <ul id="containerSuggest" role="listbox" aria-labelledby="containerLabel" hidden></ul>
+        <datalist id="containerList"></datalist>
+        <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
+      </div>
       <p class="muted" id="repoNote" hidden>TraceBug isn't allowed on <strong id="repoNoteName"></strong> yet.
         <a href="#" id="configureRepo">Configure repository access on GitHub</a></p>
       <!-- SAML single sign-on: an organisation hides repositories (or refused a
@@ -158,19 +189,23 @@
         </div>
       </div>
       <div id="fields"></div>
-      <p class="muted" id="attachNote" hidden></p>
     </div>
 
-    <p class="muted" id="revokeNote" hidden>Disconnected — TraceBug deleted its GitHub sign-in from this browser.
-      It can't revoke it at GitHub (that needs a server secret TraceBug doesn't have): to fully revoke, remove TraceBug
-      at <a href="#" id="revokeLink">github.com/settings/applications</a>.</p>
+    <!-- After Disconnect: exactly what was removed, and where to finish on GitHub
+         (revoking needs a server secret TraceBug doesn't have). -->
+    <p class="muted" id="revokeNote" hidden><span id="revokeText"></span> <a href="#" id="revokeLink"></a></p>
 
     <div class="pblock" id="doneBox" hidden>
       <p class="done">✓ Created <a href="#" id="issueLink"></a></p>
       <p class="muted" id="doneNote"></p>
       <!-- GitHub can't take files through its API: copy the ticket's screenshot
-           and paste it into a comment. Shown only with a screenshot and a clipboard. -->
-      <button type="button" class="small" id="copyShot" hidden>Copy screenshot</button>
+           and paste it into a comment, or download it and the recording
+           (blob: URLs of this frame; no downloads permission). -->
+      <div class="prow">
+        <button type="button" class="small" id="copyShot" hidden>Copy screenshot</button>
+        <a class="btn ghost small" id="downloadShot" hidden>Download screenshot</a>
+        <a class="btn ghost small" id="downloadVideo" hidden>Download recording</a>
+      </div>
     </div>
 
     <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
@@ -189,8 +224,11 @@
       <button type="button" class="ghost" id="cancel">Cancel</button>
       <button type="button" id="send" disabled aria-keyshortcuts="Control+Enter Meta+Enter" title="Create (Ctrl/⌘+Enter)">Create issue</button>
     </div>
+    <!-- U4: one short line under Create about the files. -->
+    <p class="muted attach-line" id="attachNote" hidden></p>
   </section>
 
+  <script src="panel-fields.js"></script>
   <script src="confirm-send.js"></script>
 </body>
 </html>

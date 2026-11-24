@@ -54,12 +54,14 @@ var TraceBugProviderAPI = (() => {
     describeAuth: () => describeAuth,
     describeOAuthError: () => describeOAuthError,
     exchangeCode: () => exchangeCode,
+    extraGitHubConnection: () => extraGitHubConnection,
     findFiledIssueWithRetry: () => findFiledIssueWithRetry,
     forgetOAuth: () => forgetOAuth,
     friendlyStatus: () => friendlyStatus,
     github: () => github,
     githubSpecialError: () => githubSpecialError,
     hasOAuthClient: () => hasOAuthClient,
+    isFineGrainedToken: () => isFineGrainedToken,
     isGitHubPageUrl: () => isGitHubPageUrl,
     isSendId: () => isSendId,
     isTrustedIssueUrl: () => isTrustedIssueUrl,
@@ -811,6 +813,11 @@ var TraceBugProviderAPI = (() => {
     await store.write(map);
     return cur;
   }
+  function extraGitHubConnection(map, integrations) {
+    const o = map.github;
+    if (!o || !legacyToken("github", integrations)) return null;
+    return o.needsReconnect ? "signin" : "token";
+  }
   function describeAuth(tracker, map, integrations) {
     const o = map[tracker];
     const pasted = !!legacyToken(tracker, integrations);
@@ -1255,6 +1262,9 @@ var TraceBugProviderAPI = (() => {
       return false;
     }
   }
+  function isFineGrainedToken(secret) {
+    return /^github_pat_/.test(secret);
+  }
   function plausibleSecret(secret) {
     return typeof secret === "string" && /^[A-Za-z0-9_\-.:]{16,400}$/.test(secret);
   }
@@ -1275,7 +1285,7 @@ var TraceBugProviderAPI = (() => {
         }
         const me = await parseJsonOrThrow(res, "GitHub", "tracker");
         const scopes = res.headers.get("x-oauth-scopes");
-        if (scopes !== null) {
+        if (scopes !== null && !isFineGrainedToken(secret)) {
           const list = scopes.split(",").map((x) => x.trim());
           if (!list.includes("repo") && !list.includes("public_repo")) {
             return { ok: false, code: "missing_scope", error: `This token can't create issues: it needs the "repo" scope (or "public_repo" for public repositories only).` };

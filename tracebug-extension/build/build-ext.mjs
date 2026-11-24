@@ -87,6 +87,7 @@ const SHARED_FILES = [
   "integrations-hub.css",
   "welcome.js",
   "welcome.html",
+  "panel-fields.js",
   "confirm-send.js",
   "confirm-send.html",
   "create-issue.html",

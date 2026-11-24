@@ -585,6 +585,11 @@ export type SecretCheck =
   | { ok: true; account: string }
   | { ok: false; code: "invalid" | "bad_token" | "missing_scope" | "no_access" | "network" | "error"; error: string };
 
+/** A fine-grained personal access token: repository permissions, no scopes. */
+export function isFineGrainedToken(secret: string): boolean {
+  return /^github_pat_/.test(secret);
+}
+
 /** Plausible shape only (the API decides): one line, no spaces, sane length. */
 export function plausibleSecret(secret: unknown): secret is string {
   return typeof secret === "string" && /^[A-Za-z0-9_\-.:]{16,400}$/.test(secret);
@@ -612,10 +617,12 @@ export async function checkTrackerSecret(
         return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
       }
       const me = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { login?: string };
-      // Classic tokens list their scopes; fine-grained tokens send no header
-      // (their repository permissions show up on the repository check below).
+      // Classic tokens list their scopes. Fine-grained ones (github_pat_…) have
+      // none — GitHub may still send an empty header — so the scope rule is for
+      // classic tokens only; their repository permissions show up on the
+      // repository check below, or as a clear error at Create.
       const scopes = res.headers.get("x-oauth-scopes");
-      if (scopes !== null) {
+      if (scopes !== null && !isFineGrainedToken(secret)) {
         const list = scopes.split(",").map((x) => x.trim());
         if (!list.includes("repo") && !list.includes("public_repo")) {
           return { ok: false, code: "missing_scope", error: "This token can't create issues: it needs the \"repo\" scope (or \"public_repo\" for public repositories only)." };

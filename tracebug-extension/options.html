@@ -58,8 +58,6 @@
     /* Marks the card a #hash deep link (e.g. #mic) landed on, so it's
        unmistakable which one matters on a page that otherwise shows every
        setting at once. */
-    .acct-sites { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .acct-sites[hidden] { display: none; }
     button.small { padding: 4px 10px; font-size: 12px; }
     .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 92, 108, 0.25); }
     .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
@@ -155,7 +153,71 @@
     .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
     .advanced { margin-top: 10px; }
     .advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-    .section-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 24px 0 10px; }
+    /* Integrations: tracker cards, then Preferences. 8 px grid; the hub's look
+       (integrations-hub.css): sentence-case pills, logo + name + status. */
+    .int-head { margin: 32px 0 16px; }
+    .int-head h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+    .int-head p { margin: 0; color: var(--muted); font-size: 13px; }
+    .int-card, .prefs { padding: 16px; }
+    .int-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .int-card-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+    .int-card-head .pill { margin-left: auto; }
+    .int-logo { flex: none; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: var(--text); }
+    .int-card .pill { font-size: 11px; text-transform: none; letter-spacing: 0; padding: 2px 8px; white-space: nowrap; }
+    .int-card .pill.on { color: var(--ok); border-color: var(--ok); }
+    .int-card .pill.warn { color: var(--warn); border-color: var(--warn); }
+    .int-card .acct-line { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+    .acct-primary { margin: 0 0 8px; }
+    .acct-switch { display: inline-block; font-size: 13px; color: var(--link); margin: 0 0 8px; }
+    .acct-confirm { margin: 8px 0; padding: 8px 16px 16px; border: 1px solid var(--line); border-radius: 8px; }
+    .acct-confirm p { margin: 8px 0; font-size: 13px; }
+    .acct-confirm[hidden] { display: none; }
+    .acct-secondary {
+      display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
+      margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line);
+    }
+    .acct-secondary .acct-default-wrap { flex: 1 1 240px; min-width: 0; margin: 0; }
+    .acct-secondary .acct-default-wrap select { margin-top: 8px; }
+    .acct-disconnect { margin-left: auto; }
+    .int-card .advanced { margin-top: 8px; }
+    .int-card .advanced summary { display: inline-block; list-style: none; color: var(--link); font-size: 13px; margin-bottom: 8px; }
+    .int-card .advanced summary::-webkit-details-marker { display: none; }
+    .int-card .advanced summary:hover { text-decoration: underline; }
+    .int-card .status:empty, .prefs .status:empty { min-height: 0; margin: 0; }
+    .prefs { padding-top: 8px; padding-bottom: 0; }
+    .prefs h3 { margin: 8px 0 8px; font-size: 14px; font-weight: 600; }
+    .pref-row {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px;
+      padding: 16px 0; border-top: 1px solid var(--line);
+    }
+    .pref-text { flex: 1 1 200px; min-width: 0; }
+    .prefs .pref-label { display: block; margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+    .pref-help { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    .pref-control { flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+    .pref-control select { width: 200px; max-width: 100%; margin: 0; }
+    .pref-control select[hidden], .prefs [hidden] { display: none; }
+    .pref-empty, .pref-value { font-size: 12px; color: var(--muted); }
+    .pref-value { white-space: nowrap; }
+    .prefs button:disabled { opacity: .5; cursor: default; }
+    /* "Saved": next to the control that changed, fades after ~2 s. Takes no
+       room while empty, so a wrapped row doesn't shift. */
+    .saved { font-size: 12px; font-weight: 400; color: var(--ok); opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    .saved:empty { display: none; }
+    .saved.show { opacity: 1; }
+    .saved.err { color: var(--warn); opacity: 1; }
+    /* A switch, not a loose checkbox: the input itself, so it stays one
+       focusable, label-clickable checkbox (role="switch"). */
+    input.switch {
+      -webkit-appearance: none; appearance: none; flex: none; width: 36px; height: 20px; margin: 0; padding: 0;
+      border: 1px solid var(--field-line); border-radius: 999px; cursor: pointer;
+      background: radial-gradient(circle 7px at 9px 50%, var(--muted) 96%, transparent 100%), var(--line);
+    }
+    input.switch:checked {
+      border-color: var(--accent);
+      background: radial-gradient(circle 7px at calc(100% - 9px) 50%, var(--on-accent) 96%, transparent 100%), var(--accent);
+    }
+    input.switch:focus-visible { border-radius: 999px; }
+    @media (prefers-reduced-motion: reduce) { .saved { transition: none; } }
     .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; font-size: 26px; user-select: all; }
   </style>
 </head>
@@ -200,41 +262,39 @@
       <div class="status" id="aiStatus"></div>
     </div>
 
-    <!-- Manage integrations (redesign step 5): one card per tracker. The popup
-         keeps the hub view (My connections / Add platform); settings is where
-         each connection is managed. Status words match the hub and the ticket's
-         ▾ tooltip: Connected / Needs reconnect / Error / Not connected. -->
-    <h2 class="section-title" id="integrations">Manage integrations</h2>
-    <section class="card" id="intGlobal" aria-labelledby="intGlobalTitle">
-      <h2 id="intGlobalTitle">Sending</h2>
-      <label>Default tracker — the ticket's main send button
-        <select id="defaultTracker"></select>
-      </label>
-      <label class="inline-check" style="display:flex;gap:8px;align-items:center;margin-top:10px">
-        <input id="openAfterCreate" type="checkbox" checked />
-        Open the issue after creating
-      </label>
-      <p class="hint">TraceBug remembers the repository or team and labels you last used on each site (only the
-        site's address, e.g. https://app.example.com — never the page or path), so a repeat bug is Send, then Create.
-        Kept in this browser only; nothing from private windows.</p>
-      <div class="row">
-        <button class="ghost" id="forgetChoices" type="button">Forget remembered choices</button>
-      </div>
-      <div class="status" id="prefsStatus" role="status" aria-live="polite"></div>
-    </section>
+    <!-- Integrations (redesign step 5): one card per tracker, GitHub first, then
+         Preferences. The popup keeps the hub view (My connections / Add
+         platform); settings is where each connection is managed. Status words
+         match the hub and the ticket's ▾ tooltip: Connected / Needs reconnect /
+         Error / Not connected. -->
+    <div class="int-head">
+      <h2 id="integrations">Integrations</h2>
+      <p>Send bugs straight to your issue tracker.</p>
+    </div>
 
-    <div class="card">
-      <h2>GitHub <span class="pill" id="ghPill">Not connected</span></h2>
+    <div class="card int-card">
+      <div class="int-card-head">
+        <span class="int-logo" data-logo="github"></span>
+        <h3>GitHub</h3>
+        <span class="pill" id="ghPill">Not connected</span>
+      </div>
       <!-- ADR 010: sign-in first (shown only where this build supports it),
            the pasted token as the advanced fallback. -->
       <div class="tracker-acct" data-tracker="github">
-        <p class="hint acct-line"></p>
-        <div class="row">
+        <p class="acct-line"></p>
+        <div class="row acct-primary">
           <button class="acct-connect" type="button" hidden>Connect GitHub</button>
-          <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
-        <p class="hint acct-sites" hidden><span class="acct-sites-text"></span>
-          <button class="ghost small acct-forget" type="button">Forget</button></p>
+        <!-- One GitHub connection (B11): in token mode, sign-in is a quiet link,
+             behind a "This replaces…" confirm. -->
+        <a href="#" class="acct-switch" hidden>Switch to GitHub sign-in (recommended)</a>
+        <div class="acct-confirm" hidden>
+          <p class="acct-confirm-text"></p>
+          <div class="row">
+            <button class="small acct-confirm-yes" type="button">Replace</button>
+            <button class="ghost small acct-confirm-no" type="button">Cancel</button>
+          </div>
+        </div>
         <div class="device" hidden>
           <p class="hint">Your code: <b class="device-code"></b></p>
           <div class="row">
@@ -243,9 +303,12 @@
           </div>
         </div>
         <!-- Connected (signed in or token): where the Create panel starts. -->
-        <label class="acct-default-wrap" hidden>Default repository
-          <select class="acct-default"></select>
-        </label>
+        <div class="acct-secondary">
+          <label class="acct-default-wrap" hidden><span>Default repository <span class="saved" aria-live="polite"></span></span>
+            <select class="acct-default"></select>
+          </label>
+          <button class="ghost small acct-disconnect" type="button" hidden>Disconnect</button>
+        </div>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="ghAdvanced">
@@ -259,23 +322,34 @@
         <div class="row">
           <button id="ghSave" type="button">Save</button>
         </div>
+        <div class="acct-confirm" id="ghReplace" hidden>
+          <p class="acct-confirm-text"></p>
+          <div class="row">
+            <button class="small acct-confirm-yes" type="button">Replace</button>
+            <button class="ghost small acct-confirm-no" type="button">Cancel</button>
+          </div>
+        </div>
         <div class="status" id="ghStatus"></div>
       </details>
     </div>
 
-    <div class="card">
-      <h2>Linear <span class="pill" id="lnPill">Not connected</span></h2>
+    <div class="card int-card">
+      <div class="int-card-head">
+        <span class="int-logo" data-logo="linear"></span>
+        <h3>Linear</h3>
+        <span class="pill" id="lnPill">Not connected</span>
+      </div>
       <div class="tracker-acct" data-tracker="linear">
-        <p class="hint acct-line"></p>
-        <div class="row">
+        <p class="acct-line"></p>
+        <div class="row acct-primary">
           <button class="acct-connect" type="button" hidden>Connect Linear</button>
-          <button class="ghost acct-disconnect" type="button" hidden>Disconnect</button>
         </div>
-        <p class="hint acct-sites" hidden><span class="acct-sites-text"></span>
-          <button class="ghost small acct-forget" type="button">Forget</button></p>
-        <label class="acct-default-wrap" hidden>Default team
-          <select class="acct-default"></select>
-        </label>
+        <div class="acct-secondary">
+          <label class="acct-default-wrap" hidden><span>Default team <span class="saved" aria-live="polite"></span></span>
+            <select class="acct-default"></select>
+          </label>
+          <button class="ghost small acct-disconnect" type="button" hidden>Disconnect</button>
+        </div>
         <div class="status acct-status"></div>
       </div>
       <details class="advanced" id="lnAdvanced">
@@ -292,9 +366,13 @@
       </details>
     </div>
 
-    <div class="card">
-      <h2>Slack <span class="pill" id="slPill">Not connected</span></h2>
-      <p class="hint">Incoming-webhook URL for the channel reports should post to.</p>
+    <div class="card int-card">
+      <div class="int-card-head">
+        <span class="int-logo" data-logo="slack"></span>
+        <h3>Slack</h3>
+        <span class="pill" id="slPill">Not connected</span>
+      </div>
+      <p class="acct-line">Incoming-webhook URL for the channel reports should post to.</p>
       <label>Webhook URL
         <input id="slHook" type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" />
       </label>
@@ -304,6 +382,46 @@
       </div>
       <div class="status" id="slStatus"></div>
     </div>
+
+    <!-- One row pattern: label + help on the left, the control on the right.
+         A change shows a small "Saved" beside its control, then fades. -->
+    <section class="card prefs" id="intGlobal" aria-labelledby="intGlobalTitle">
+      <h3 id="intGlobalTitle">Preferences</h3>
+      <div class="pref-row">
+        <div class="pref-text">
+          <label class="pref-label" for="defaultTracker" id="defaultTrackerLabel">Default tracker</label>
+          <p class="pref-help" id="defaultTrackerHelp">Used by the Send button on a bug ticket.</p>
+        </div>
+        <div class="pref-control">
+          <span class="saved" aria-live="polite"></span>
+          <select id="defaultTracker" aria-describedby="defaultTrackerHelp" hidden></select>
+          <span class="pref-empty" id="defaultTrackerEmpty" hidden>Connect a tracker above to choose a default</span>
+        </div>
+      </div>
+      <div class="pref-row">
+        <div class="pref-text">
+          <label class="pref-label" for="openAfterCreate">Open the issue after creating</label>
+          <p class="pref-help" id="openAfterCreateHelp">Opens the new issue in a new tab.</p>
+        </div>
+        <div class="pref-control">
+          <span class="saved" aria-live="polite"></span>
+          <input class="switch" id="openAfterCreate" type="checkbox" role="switch" aria-describedby="openAfterCreateHelp" checked />
+        </div>
+      </div>
+      <div class="pref-row">
+        <div class="pref-text">
+          <span class="pref-label" id="rememberedLabel">Remembered choices</span>
+          <p class="pref-help" id="rememberedHelp">TraceBug remembers the repository and labels you last used on each
+            site. Stored only in this browser, site address only, never from private windows.</p>
+        </div>
+        <div class="pref-control">
+          <span class="saved" aria-live="polite"></span>
+          <span class="pref-value" id="rememberedCount">On 0 sites</span>
+          <button class="ghost small" id="forgetChoices" type="button" aria-labelledby="forgetChoices rememberedLabel"
+            aria-describedby="rememberedHelp" disabled>Forget</button>
+        </div>
+      </div>
+    </section>
 
     <section class="card" id="micCard">
       <h2>Microphone <span class="pill" id="micPill">Not granted</span></h2>
@@ -418,6 +536,8 @@
   </div>
   <script src="diagnostics.js"></script>
   <script src="tracker-connect.js"></script>
+  <!-- For the tracker logos only (TraceBugIntegrationsHub.logo); nothing mounts here. -->
+  <script src="integrations-hub.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

@@ -354,7 +354,8 @@ try {
   await f3.waitForSelector('button.chip[value="l-ui"]', { timeout: 10000 }).catch(() => {});
   check("after reconnecting, the team and the user's changed choices are kept",
     (await f3.inputValue("#container")) === TEAM && (await f3.getAttribute('button.chip[value="l-ui"]', "aria-pressed")) === "true" &&
-    (await f3.inputValue('select[data-field="priority"]')) === "1");
+    (await f3.inputValue('select[data-field="priority"]')) === "1",
+    `${await f3.inputValue("#container")} | l-ui ${await f3.getAttribute('button.chip[value="l-ui"]', "aria-pressed")} | priority ${await f3.inputValue('select[data-field="priority"]').catch(() => "?")}`);
   await armed(f3);
   await f3.click("#send");
   await f3.waitForSelector("#doneBox:not([hidden])", { timeout: 20000 }).catch(() => {});

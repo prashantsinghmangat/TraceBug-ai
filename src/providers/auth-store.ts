@@ -238,6 +238,20 @@ export async function forgetOAuth(store: AuthStorage, tracker: IssueTracker): Pr
   return cur;
 }
 
+/**
+ * GitHub has exactly one connection: a sign-in or a pasted token (B11). Older
+ * storage can hold both; this says which one to drop. The sign-in stays —
+ * unless it needs reconnecting, when the token is the one that still works.
+ */
+export function extraGitHubConnection(
+  map: AuthMap,
+  integrations: LegacyIntegrations | null | undefined,
+): "token" | "signin" | null {
+  const o = map.github;
+  if (!o || !legacyToken("github", integrations)) return null;
+  return o.needsReconnect ? "signin" : "token";
+}
+
 /** What a settings screen may know. No token, no refresh token, no expiry. */
 export interface AuthView {
   connected: boolean;

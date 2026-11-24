@@ -277,7 +277,8 @@ try {
   const tabsBefore = ctx.pages().length;
   await frame.click("#send");
   await frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
-  check('5. a real click creates: "Created #100" in the panel', (await frame.textContent("#issueLink")).trim() === "#100");
+  check('5. a real click creates: "Created #100" in the panel', (await frame.textContent("#issueLink")).trim() === "#100",
+    await frame.evaluate(() => `msg="${document.getElementById("panelMsg").textContent}" send=${document.getElementById("send").disabled ? "off" : "on"} toWindow=${!document.getElementById("toWindowBox").hidden}`));
   check("…exactly one issue, with the picks", posts.length === 1 && JSON.stringify(posts[0].labels) === '["bug"]' &&
     JSON.stringify(posts[0].assignees) === '["octo"]' && posts[0].milestone === 4, JSON.stringify(posts));
   await sleep(800);
@@ -301,6 +302,13 @@ try {
   // Copy screenshot (GitHub can't take files): on a real click only.
   const shots5 = await page.$$eval("#tracebug-quick-bug-modal [data-delete-screenshot]", (b) => b.length);
   check("5b. with a screenshot in the ticket, \"Copy screenshot\" is offered after Create", shots5 > 0 && await frame.isVisible("#copyShot"), `${shots5} screenshot(s)`);
+  // B1/B5: the frame's allow="clipboard-write" must match the document that
+  // loads (the extension origin, not the dynamic src URL) or every write fails.
+  check("…the clipboard is really allowed in the frame on an ordinary site",
+    await frame.evaluate(() => document.featurePolicy.allowsFeature("clipboard-write")));
+  check("…\"Download screenshot\" sits next to it: a blob: link with a file name (U5)",
+    await frame.isVisible("#downloadShot") && /^blob:/.test(await frame.getAttribute("#downloadShot", "href")) &&
+    /\.(png|jpg|webp)$/.test(await frame.getAttribute("#downloadShot", "download")));
   await frame.evaluate(() => {
     window.__clip = [];
     navigator.clipboard.write = async (items) => { window.__clip.push({ types: items.map((i) => i.types.join()).join("|"), active: navigator.userActivation.isActive }); };
@@ -316,9 +324,8 @@ try {
   check("…the screenshot never reached GitHub", !JSON.stringify(posts[0]).includes("base64") && !("attachments" in posts[0]));
   await frame.click("#issueLink");
   check("…the link opens the issue when clicked", (await frame.evaluate(() => window.__opened[0])) === `https://github.com/${REPO}/issues/100`);
-  check('…and the ticket says "GitHub issue created #100" (no "Creating…" toast before it)',
-    await page.locator("text=/GitHub issue created #100/").first().isVisible().catch(() => false) &&
-    !(await page.locator("text=/Creating GitHub/").count()));
+  check('…and no toast repeats it over the button bar: only the panel\'s "Created #100" (U11), no "Creating…" either',
+    !(await page.locator("text=/GitHub issue created/").count()) && !(await page.locator("text=/Creating GitHub/").count()));
   await frame.click("#cancel"); // "Close"
   await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
   check("…Close removes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
@@ -341,10 +348,14 @@ try {
     (await f6.inputValue("#container")) === REPO && (await f6.getAttribute('button.chip[value="bug"]', "aria-pressed")) === "true" &&
     (await f6.inputValue('select[data-field="assignee"]')) === "octo" && (await f6.inputValue('select[data-field="milestone"]')) === "4");
   await f6.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 5000 }).catch(() => {});
+  const shown6 = await f6.$$eval('button.chip[aria-pressed="true"]', (b) => b.map((x) => x.value));
+  const sets6 = await f6.$$eval('fieldset[data-field="labels"]', (f) => f.length);
   await f6.click("#send");
   await f6.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
   check('…one click on Create → "Created #101"', (await f6.textContent("#issueLink")).trim() === "#101" && posts.length === 2,
     JSON.stringify(posts.map((p) => p.n)));
+  check("…prefilled labels: exactly the ones shown are sent (B6)", sets6 === 1 && !!posts[1] &&
+    JSON.stringify(posts[1].labels) === JSON.stringify(shown6), `${sets6} fieldset(s), shown ${JSON.stringify(shown6)}, sent ${JSON.stringify(posts[1] && posts[1].labels)}`);
   check("…no screenshot in the ticket: no \"Copy screenshot\"",
     (await page.$$eval("#tracebug-quick-bug-modal [data-delete-screenshot]", (b) => b.length)) === 0 && !(await f6.isVisible("#copyShot")));
   await sleep(600);
@@ -391,6 +402,27 @@ try {
   check("6c. list at the 500 cap: the remembered repo is checked directly and kept",
     (await r6d.frame.inputValue("#container")) === REPO && !/no longer available/.test(await r6d.frame.textContent("#panelMsg")),
     `${await r6d.frame.inputValue("#container")} | ${(await r6d.frame.textContent("#panelMsg")).trim()}`);
+  // U7/U10: the suggestions are the panel's own list — under the field, inside
+  // the panel's width, a max height with scroll — not the browser's popup.
+  await r6d.frame.fill("#container", "acme/r1");
+  await r6d.frame.press("#container", "ArrowDown");
+  await r6d.frame.waitForSelector("#containerSuggest:not([hidden])", { timeout: 5000 }).catch(() => {});
+  const sg = await r6d.frame.evaluate(() => {
+    const ul = document.getElementById("containerSuggest"), input = document.getElementById("container");
+    const p = document.getElementById("panel").getBoundingClientRect(), r = ul.getBoundingClientRect(), i = input.getBoundingClientRect();
+    return { open: !ul.hidden, n: ul.children.length, below: r.top >= i.bottom - 1, inside: r.left >= p.left && r.right <= p.right + 0.5,
+      capped: ul.clientHeight <= 170 && ul.scrollHeight > ul.clientHeight, noDatalist: !input.hasAttribute("list"),
+      expanded: input.getAttribute("aria-expanded"), active: input.getAttribute("aria-activedescendant") };
+  });
+  check("…repository suggestions: the panel's own list, below the field, inside the panel, scrolling past a max height (U7/U10)",
+    sg.open && sg.n > 5 && sg.below && sg.inside && sg.capped && sg.noDatalist && sg.expanded === "true" && sg.active === "sg_0", JSON.stringify(sg));
+  await r6d.frame.press("#container", "Enter");
+  check("…Enter picks the highlighted one and closes the list",
+    (await r6d.frame.inputValue("#container")) === "acme/r1" && !(await r6d.frame.isVisible("#containerSuggest")),
+    `${await r6d.frame.inputValue("#container")} | list open: ${await r6d.frame.isVisible("#containerSuggest")}`);
+  await r6d.frame.press("#container", "ArrowDown");
+  await r6d.frame.press("#container", "Escape");
+  check("…Esc closes the list, not the panel", !(await r6d.frame.isVisible("#containerSuggest")) && await r6d.frame.isVisible("#panel"));
   await r6d.frame.click("#cancel");
   await sleep(400);
   dropApiRepo = true;
@@ -416,6 +448,7 @@ try {
   // The worker's rules, run in the worker itself.
   const rules = await sw.evaluate(async (origin) => {
     const prefsBefore = (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1;
+    const intsBefore = (await chrome.storage.local.get("tb_integrations_v1")).tb_integrations_v1;
     const before = JSON.stringify((await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {});
     await rememberForSite({ origin: "https://private.example", incognito: true }, "github", "token:", "acme/secret", {});
     const afterPrivate = JSON.stringify((await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {});
@@ -426,8 +459,9 @@ try {
     const keptNewest = !!all["https://s204.example"] && !all["https://s0.example"];
     await disconnectTracker(providerApi(), providerApi().trackerAdapter("github"), false);
     const afterDisconnect = (await chrome.storage.local.get("tb_tracker_sites_v1")).tb_tracker_sites_v1 || {};
-    // Disconnect also cleared the default repo; the next legs need it back.
-    await chrome.storage.local.set({ tb_tracker_prefs_v1: prefsBefore });
+    // Disconnect also cleared the default repo and (GitHub's one connection)
+    // the token; the next legs need both back.
+    await chrome.storage.local.set({ tb_tracker_prefs_v1: prefsBefore, tb_integrations_v1: intsBefore });
     return { privateUnchanged: before === afterPrivate, originOnly: !JSON.stringify(all).includes("/some/path"), capped, keptNewest,
       cleared: !Object.keys(afterDisconnect).length, ownSiteBack: origin };
   }, SITE_ORIGIN);
@@ -629,7 +663,7 @@ try {
   const light = await panelBg("light");
   check("8. the panel follows the ticket's dark and light themes", dark === "rgb(20, 24, 35)" && light === "rgb(245, 246, 249)", `${dark} / ${light}`);
 
-  // ══ 8b. The split button: "Send to GitHub" + ▾, the panel as its dropdown ═
+  // ══ 8b. One "Send to GitHub" button (U1/U2), the panel as its dropdown ═══
   const SPLIT = "#tracebug-quick-bug-modal [data-tb-send-split]";
   const panelFrame = async () => {
     for (let i = 0; i < 60; i++) {
@@ -642,15 +676,15 @@ try {
   const expanded = () => page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-expanded")).join(","));
   const pageFocus = () => page.evaluate(() => {
     const a = document.activeElement;
-    return !a ? "none" : a.matches("[data-tb-create-panel] iframe") ? "frame" : a.hasAttribute("data-tb-split-main") ? "main"
-      : a.hasAttribute("data-tb-split-caret") ? "caret" : a.tagName;
+    return !a ? "none" : a.matches("[data-tb-create-panel] iframe") ? "frame" : a.hasAttribute("data-tb-split-main") ? "main" : a.tagName;
   });
-  check("8b. the ticket has a split button: Send to GitHub + ▾, and no plug icon",
-    /Send to GitHub/.test(await page.textContent(`${SPLIT} [data-tb-split-main]`)) && !!(await page.$(`${SPLIT} [data-tb-split-caret]`)) &&
-    !(await page.$('#tracebug-quick-bug-modal [data-action="tracker-status"]')));
-  check('…both parts say aria-haspopup="dialog", collapsed',
-    (await page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-haspopup")).join(","))) === "dialog,dialog" &&
-    (await expanded()) === "false,false");
+  check("8b. the ticket has ONE Send to GitHub button — no ▾ half, no plug icon (U1/U2)",
+    /Send to GitHub/.test(await page.textContent(`${SPLIT} [data-tb-split-main]`)) && !(await page.$(`${SPLIT} [data-tb-split-caret]`)) &&
+    (await page.$$(`${SPLIT} button`)).length === 1 && !(await page.$('#tracebug-quick-bug-modal [data-action="tracker-status"]')));
+  check('…it says aria-haspopup="dialog", collapsed, Alt+Down in its shortcuts and tooltip',
+    (await page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-haspopup")).join(","))) === "dialog" &&
+    (await expanded()) === "false" && (await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "aria-keyshortcuts")) === "Alt+ArrowDown" &&
+    /GitHub · connected \(Alt\+↓: choose where to send\)/.test(await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "title")));
 
   // Keyboard: Enter on the main part → panel above it, focus inside, Create focused once armed → Enter files.
   await page.focus(`${SPLIT} [data-tb-split-main]`);
@@ -665,7 +699,7 @@ try {
       return { place: sl.getAttribute("data-place"), above: r.bottom <= b.top + 1 };
     }, SPLIT);
     check("…as a dropdown that opens upward (no room below the footer)", geo.place === "up" && geo.above, JSON.stringify(geo));
-    check("…aria-expanded is true on both parts", (await expanded()) === "true,true");
+    check("…aria-expanded is true", (await expanded()) === "true");
     check("…focus moved into the panel", (await pageFocus()) === "frame");
     const onSend = await fk.waitForFunction(() => document.activeElement && document.activeElement.id === "send", null, { timeout: 5000 }).then(() => true, () => false);
     check("…and lands on Create once it arms", onSend);
@@ -676,7 +710,7 @@ try {
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
     check("…Esc closes it and focus returns to the button", (await pageFocus()) === "main", await pageFocus());
-    check("…aria-expanded back to false", (await expanded()) === "false,false");
+    check("…aria-expanded back to false", (await expanded()) === "false");
   }
 
   // Alt+Down → the panel on the tracker picker; Esc → back to the button.
@@ -695,23 +729,34 @@ try {
     check("…Esc closes it, focus back on the button", (await pageFocus()) === "main", await pageFocus());
   }
 
-  // ▾ by mouse; Tab past the last control closes it and focus returns to ▾.
-  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  // The button by mouse; Tab past the last control closes it and focus returns to the button.
+  await page.click(`${SPLIT} [data-tb-split-main]`);
   const fc = await panelFrame();
-  check("…clicking ▾ opens the same panel", !!fc);
+  check("…clicking the button opens the panel, the tracker choice inside it", !!fc && (await fc.inputValue("#tracker")) === "github");
   if (fc) {
-    await fc.waitForFunction(() => document.activeElement && document.activeElement.id === "tracker", null, { timeout: 5000 }).catch(() => {});
     await fc.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).catch(() => {});
     await fc.focus("#send");
     await page.keyboard.press("Tab");
     await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
     check("…Tab past Create closes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
-    check("…and focus returns to ▾", (await pageFocus()) === "caret", await pageFocus());
+    check("…and focus returns to the button", (await pageFocus()) === "main", await pageFocus());
     check("…nothing was filed by closing it", (await pending()).length === 0);
   }
 
+  // B4: closing the ticket closes the panel first — never over the confirm.
+  await page.click(`${SPLIT} [data-tb-split-main]`);
+  const fb4 = await panelFrame();
+  if (fb4) {
+    await page.click('#tracebug-quick-bug-modal [data-action="close"]');
+    await page.waitForSelector("#tb-qb-close-confirm", { timeout: 5000 }).catch(() => {});
+    check("…closing the ticket (✕) closes the panel first; the confirm stands alone (B4)",
+      await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")) && await page.isVisible("#tb-qb-close-confirm"));
+    check("…and the panel's request is cancelled, nothing filed", await (async () => { await sleep(500); return (await pending()).length === 0; })());
+    await page.click('#tb-qb-close-confirm [data-cc="keep"]');
+  } else check("…closing the ticket (✕) closes the panel first (B4)", false, "no panel");
+
   // The Integrations hub is reached from inside the panel now.
-  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  await page.click(`${SPLIT} [data-tb-split-main]`);
   const fm = await panelFrame();
   if (fm) {
     const tabP = ctx.waitForEvent("page", { predicate: (pg) => pg.url().includes("options.html#integrations"), timeout: 5000 }).catch(() => null);
@@ -726,7 +771,7 @@ try {
   // ══ 8c. Room below the button → the panel drops down ══════════════════════
   await page.addStyleTag({ content: "#tracebug-quick-bug-modal .tb-qb-footer { order: -1 !important; }" }).then((h) => h.evaluate((el) => { el.id = "__footerTop"; }));
   await sleep(300);
-  await page.click(`${SPLIT} [data-tb-split-caret]`);
+  await page.click(`${SPLIT} [data-tb-split-main]`);
   const fd = await panelFrame();
   if (fd) {
     await sleep(400);
@@ -861,7 +906,9 @@ try {
     await f12b.waitForFunction(() => document.getElementById("panelMsg").textContent.trim() !== "", null, { timeout: 5000 }).catch(() => {});
     const msg12b = (await f12b.textContent("#panelMsg")).trim();
     check("…Copy screenshot says it couldn't copy on this site (not silent)",
-      msg12b.startsWith("Couldn't copy the screenshot on this site"), msg12b);
+      msg12b === "This site blocks copying. Use Download screenshot instead.", msg12b);
+    check("…and Download screenshot is right there", await f12b.isVisible("#downloadShot") &&
+      /^blob:/.test(await f12b.getAttribute("#downloadShot", "href")));
   }
   await noclip.close();
 

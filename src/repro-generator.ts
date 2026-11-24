@@ -48,7 +48,9 @@ export function collapseTyping(events: TraceBugEvent[]): TraceBugEvent[] {
 export function generateReproSteps(
   events: TraceBugEvent[],
   errorMessage: string,
-  errorStack?: string
+  errorStack?: string,
+  // false when errorMessage is only a stand-in ("Issue reported by tester").
+  hadError = !!errorMessage,
 ): ReproResult {
   const steps: string[] = [];
   let stepNum = 1;
@@ -164,9 +166,10 @@ export function generateReproSteps(
     }
   }
 
-  // If no steps were generated, add a generic one
+  // If no steps were generated, add a generic one — "before the error" only
+  // when there was one (U6).
   if (steps.length === 0) {
-    steps.push("1. (No user interactions recorded before the error)");
+    steps.push(hadError ? "1. (No user interactions recorded before the error)" : "1. (No user interactions recorded)");
   }
 
   // Build error summary

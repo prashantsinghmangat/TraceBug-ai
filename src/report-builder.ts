@@ -162,7 +162,7 @@ export function buildReport(
   let steps = "";
   if (events.length > 0) {
     const errorMsg = session.errorMessage || "Issue reported by tester";
-    const result = generateReproSteps(events, errorMsg, session.errorStack || undefined);
+    const result = generateReproSteps(events, errorMsg, session.errorStack || undefined, !!session.errorMessage);
     steps = result.reproSteps;
   }
   if (!steps) steps = session.reproSteps || "";
@@ -503,9 +503,15 @@ const SESSION_STEPS_LIMIT = 10;
 /** Produce up to 10 readable user-action strings, newest last. */
 export function generateSessionSteps(events: TraceBugEvent[]): string[] {
   const steps: string[] = [];
+  let last: { line: string; at: number } | null = null;
   for (const ev of events) {
     const line = describeStep(ev);
-    if (line) steps.push(line);
+    if (!line) continue;
+    // One click can arrive as two events (a link and its inner element): the
+    // same line again within a moment is that click, not a second one (U6).
+    if (last && last.line === line && ev.type === "click" && Math.abs((ev.timestamp || 0) - last.at) < 1000) continue;
+    steps.push(line);
+    last = { line, at: ev.timestamp || 0 };
   }
   // Keep only the last N (FIFO)
   return steps.slice(-SESSION_STEPS_LIMIT);

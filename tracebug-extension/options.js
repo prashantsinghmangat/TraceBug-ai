@@ -153,6 +153,8 @@ async function refreshPills() {
   pill($("ghPill"), !!(i.github && i.github.token), TRACKER_WORDS);
   pill($("lnPill"), !!(i.linear && i.linear.apiKey), TRACKER_WORDS);
   pill($("slPill"), !!(i.slack && i.slack.webhookUrl), TRACKER_WORDS);
+  // U8: Disconnect only when there is something to disconnect.
+  $("slClear").hidden = !(i.slack && i.slack.webhookUrl);
   pill($("aiPill"), !!(a && a.provider && (a.provider === "ollama" || a.apiKey)));
 
   // Show the provider/model that is set, which is not secret, so the user can
@@ -351,27 +353,44 @@ async function keptSecret(name, field) {
 async function saveTrackerSecret(id, field, statusEl, granted, hostLabel) {
   const typed = $(field).value.trim();
   if (!typed) { say(statusEl, id === "linear" ? "Enter a Linear API key." : "Enter a personal access token.", "err"); return; }
-  if (granted !== false) {
-    say(statusEl, "Checking with " + (id === "linear" ? "Linear" : "GitHub") + "…");
-    const res = await trackerMsg("tb:tracker:save-token", { tracker: id, secret: typed });
-    if (!res || res.error || !res.ok) {
-      say(statusEl, (res && res.error) || "Could not check it.", "err");
-      return;
-    }
-    $(field).value = "";
-    await refreshPills();
-    say(statusEl, "Saved" + (res.account ? " — connected as " + res.account : "") + ".", "ok");
-    await renderTrackerAccounts();
+  // A GitHub token is never saved unchecked: the same check as the panel (the
+  // worker's tb:tracker:save-token), which needs access to the API host.
+  // (Linear is frozen for this release and keeps its old path.)
+  if (granted === false && id === "github") {
+    say(statusEl, "TraceBug needs access to " + hostLabel + " to check the token before saving it. " +
+      "Click Save again and choose Allow.", "err");
     return;
   }
-  const cfg = (await get([INT_KEY]))[INT_KEY] || {};
-  const prev = cfg[id] || {};
-  const value = Object.assign({}, prev, id === "linear" ? { apiKey: typed } : { token: typed });
-  if (await saveProvider(id, value, statusEl, accessNote(granted, hostLabel))) $(field).value = "";
+  if (granted === false) {
+    const cfg = (await get([INT_KEY]))[INT_KEY] || {};
+    const value = Object.assign({}, cfg[id] || {}, { apiKey: typed });
+    if (await saveProvider(id, value, statusEl, accessNote(granted, hostLabel))) $(field).value = "";
+    return;
+  }
+  say(statusEl, "Checking with " + (id === "linear" ? "Linear" : "GitHub") + "…");
+  const res = await trackerMsg("tb:tracker:save-token", { tracker: id, secret: typed });
+  if (!res || res.error || !res.ok) {
+    say(statusEl, (res && res.error) || "Could not check it.", "err");
+    return;
+  }
+  $(field).value = "";
+  await refreshPills();
+  say(statusEl, "Saved" + (res.account ? " — connected as " + res.account : "") + ".", "ok");
+  await renderTrackerAccounts();
 }
 
-$("ghSave").addEventListener("click", withHostAccess(() => HOSTS.github,
-  (granted) => saveTrackerSecret("github", "ghToken", $("ghStatus"), granted, "api.github.com")));
+const saveGitHubToken = withHostAccess(() => HOSTS.github,
+  (granted) => saveTrackerSecret("github", "ghToken", $("ghStatus"), granted, "api.github.com"));
+$("ghSave").addEventListener("click", () => {
+  // One GitHub connection: a token replaces the sign-in — ask first.
+  const gh = trackerRows.github;
+  if (gh && (gh.via === "oauth" || gh.needsReconnect) && $("ghToken").value.trim()) {
+    askReplace($("ghReplace"), "This replaces your GitHub sign-in" + (gh.account ? " (" + gh.account + ")" : "") + " with this token.",
+      saveGitHubToken);
+    return;
+  }
+  saveGitHubToken();
+});
 $("ghToken").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("ghSave").click(); } });
 
 $("lnSave").addEventListener("click", withHostAccess(() => HOSTS.linear,
@@ -489,82 +508,118 @@ function trackerMsg(type, extra) {
 const PILL_IDS = { github: "ghPill", linear: "lnPill" };
 const ADVANCED_IDS = { github: "ghAdvanced", linear: "lnAdvanced" };
 const STATE_PILL = { connected: ["Connected", " on"], reconnect: ["Needs reconnect", " warn"], error: ["Error", " warn"] };
-const SITES_COUNT_KEY = "tb_tracker_sites_v1";
+const SITES_KEY = "tb_tracker_sites_v1";
+// The last status row per tracker, for the "This replaces…" questions.
+const trackerRows = {};
 
-/** Sites with remembered choices for this tracker (any account). */
-function sitesFor(all, id) {
-  return Object.keys(all || {}).filter((o) => Object.keys((all[o] && all[o].picks) || {}).some((k) => k.indexOf(id + "|") === 0));
+/**
+ * One GitHub connection (B11): ask in place before a sign-in replaces a token
+ * or a token a sign-in. onYes runs inside the Replace click, so it can still
+ * ask the browser for permissions.
+ */
+function askReplace(box, text, onYes) {
+  if (!box) { onYes(); return; }
+  box.querySelector(".acct-confirm-text").textContent = text;
+  box.hidden = false;
+  box.querySelector(".acct-confirm-yes").onclick = () => { box.hidden = true; onYes(); };
+  box.querySelector(".acct-confirm-no").onclick = () => { box.hidden = true; };
+  box.querySelector(".acct-confirm-yes").focus();
 }
 
-async function forgetSitesFor(id) {
-  const all = (await get([SITES_COUNT_KEY]))[SITES_COUNT_KEY] || {};
-  for (const o of Object.keys(all)) {
-    const picks = (all[o] && all[o].picks) || {};
-    for (const k of Object.keys(picks)) if (k.indexOf(id + "|") === 0) delete picks[k];
-    if (!Object.keys(picks).length) delete all[o];
-  }
-  await set({ [SITES_COUNT_KEY]: all });
+/**
+ * The small "Saved" beside the control that changed (its row's `.saved`):
+ * fades after ~2 s. An error stays until the next change.
+ */
+function flashSaved(control, ok, text) {
+  const el = control && control.closest(".pref-row, .acct-default-wrap");
+  const s = el && el.querySelector(".saved");
+  if (!s) return;
+  clearTimeout(s._fade);
+  s.textContent = text || (ok ? "Saved" : "Couldn't save");
+  s.classList.toggle("err", !ok);
+  s.classList.add("show");
+  if (!ok) return;
+  s._fade = setTimeout(() => {
+    s.classList.remove("show");
+    s._fade = setTimeout(() => { s.textContent = ""; }, 300);
+  }, 2000);
 }
+
+/** Preferences → Remembered choices: "On N sites", Forget off at 0. */
+function renderRemembered(all) {
+  const n = Object.keys(all || {}).filter((o) => Object.keys((all[o] && all[o].picks) || {}).length).length;
+  $("rememberedCount").textContent = "On " + n + " site" + (n === 1 ? "" : "s");
+  $("forgetChoices").disabled = n === 0;
+}
+
+/** Each card's logo, from the hub's marks (integrations-hub.js). */
+document.querySelectorAll(".int-logo[data-logo]").forEach((el) => {
+  const hub = window.TraceBugIntegrationsHub;
+  if (hub && !el.firstChild) el.append(hub.logo(el.dataset.logo, 22));
+});
 
 /**
  * One card per tracker, from the worker's status (tb:tracker:status): the
  * state in the hub's words, how it's connected (signed in, or a token shown
- * masked), the default repository/team, the sites with remembered choices,
- * and Connect / Use a token / Disconnect as they apply. Connect only where the
- * build can sign in (feature detection: Firefox and store builds without the
- * GitHub App get the token path, open, never a dead button).
+ * masked), the default repository/team, and Connect / Use a token /
+ * Disconnect as they apply. Connect only where the build can sign in (feature
+ * detection: Firefox and store builds without the GitHub App get the token
+ * path, open, never a dead button).
  */
 async function renderTrackerAccounts() {
   const res = await trackerMsg("tb:tracker:status");
+  renderRemembered((await get([SITES_KEY]))[SITES_KEY]);
   if (!res || !Array.isArray(res.trackers)) return;
   const conns = (res.summary && res.summary.connections) || [];
-  const sites = (await get([SITES_COUNT_KEY]))[SITES_COUNT_KEY] || {};
   res.trackers.forEach((t) => {
     const box = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"]');
     if (!box) return;
     const conn = conns.find((c) => c.id === t.id) || null;
     const state = conn ? conn.state : null;
+    trackerRows[t.id] = t;
     const line = box.querySelector(".acct-line");
+    const gh = t.id === "github";
     let text = "";
-    if (t.via === "oauth") text = "Signed in" + (t.account ? " as " + t.account : "") + ".";
-    else if (t.via === "token") text = "Using " + (t.id === "linear" ? "an API key" : "a token") + (t.tokenHint ? " " + t.tokenHint : "") + "." +
+    // GitHub names its one connection's mode (B11); Linear keeps its words.
+    if (t.via === "oauth") text = "Signed in" + (t.account ? " as " + t.account : "") + (gh ? " · GitHub App" : ".");
+    else if (t.via === "token" && gh) text = "Using a personal token" + (t.tokenHint ? " " + t.tokenHint : "");
+    else if (t.via === "token") text = "Using an API key" + (t.tokenHint ? " " + t.tokenHint : "") + "." +
       (t.needsReconnect ? " Your " + t.label + " sign-in expired." : "");
     else if (t.needsReconnect) text = "Your " + t.label + " sign-in expired. Reconnect to keep filing issues.";
-    else if (t.canConnect) text = "Connect " + t.label + " to pick repositories and fields when you file.";
-    else text = "Paste " + (t.id === "linear" ? "an API key" : "a token") + " below to connect " + t.label + ".";
+    // Not connected: the Connect button, or the open token form, says it (U8).
+    else text = "";
     if (state === "error" && conn.detail) text += " " + conn.detail;
     line.textContent = text;
     line.hidden = !text;
     const connect = box.querySelector(".acct-connect");
-    connect.hidden = !t.canConnect || t.via === "oauth";
+    // GitHub in token mode: sign-in is the quiet "Switch" link, not a button.
+    connect.hidden = !t.canConnect || t.via === "oauth" || (gh && t.via === "token");
     connect.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
     connect.onclick = () => connectFromOptions(t, box);
+    const switchLink = box.querySelector(".acct-switch");
+    if (switchLink) {
+      switchLink.hidden = !(gh && t.via === "token" && t.canConnect);
+      switchLink.onclick = (e) => {
+        e.preventDefault();
+        askReplace(box.querySelector(".acct-confirm"),
+          "This replaces your token" + (t.tokenHint ? " " + t.tokenHint : "") + ". TraceBug signs in with GitHub instead.",
+          () => connectFromOptions(t, box));
+      };
+    }
     const disconnect = box.querySelector(".acct-disconnect");
     disconnect.hidden = !t.connected && !t.needsReconnect;
     // No button to show → no empty row under the account line.
-    connect.parentElement.hidden = connect.hidden && disconnect.hidden;
+    connect.parentElement.hidden = connect.hidden;
     disconnect.onclick = () => disconnectFromOptions(t, box);
-    // Connected (either way): pick the default repo/team here.
+    // Connected (either way): pick the default repo/team here. Its "Saved"
+    // sits beside it; errors go to the card's status line.
     const pickWrap = box.querySelector(".acct-default-wrap");
-    if (pickWrap) {
-      pickWrap.hidden = !t.connected;
-      if (t.connected) {
-        TraceBugTrackerConnect.fillDefaultPicker(t, pickWrap.querySelector("select"),
-          (msg, isErr) => say(box.querySelector(".acct-status"), msg, isErr ? "err" : "ok", isErr ? " " : ""));
-      }
-    }
-    // Sites with remembered choices, and Forget.
-    const sitesEl = box.querySelector(".acct-sites");
-    if (sitesEl) {
-      const n = sitesFor(sites, t.id).length;
-      sitesEl.hidden = n === 0;
-      sitesEl.querySelector(".acct-sites-text").textContent =
-        "Remembered choices on " + n + " site" + (n === 1 ? "" : "s") + ".";
-      sitesEl.querySelector(".acct-forget").onclick = async () => {
-        await forgetSitesFor(t.id);
-        say(box.querySelector(".acct-status"), "Forgot " + t.label + "'s remembered choices.", "ok");
-        await renderTrackerAccounts();
-      };
+    pickWrap.hidden = !t.connected;
+    pickWrap.parentElement.hidden = pickWrap.hidden && disconnect.hidden;
+    if (t.connected) {
+      const pick = pickWrap.querySelector("select");
+      TraceBugTrackerConnect.fillDefaultPicker(t, pick,
+        (msg, isErr) => isErr ? say(box.querySelector(".acct-status"), msg, "err", " ") : flashSaved(pick, true));
     }
     const pillEl = $(PILL_IDS[t.id]);
     if (pillEl) {
@@ -573,8 +628,15 @@ async function renderTrackerAccounts() {
       pillEl.className = "pill" + w[1];
     }
     // The token form is the main path wherever sign-in isn't offered.
+    // Once connected it's folded away entirely (Disconnect first to swap tokens).
+    // U8: where it's the only way in, it's open and says so — not "instead".
     const adv = $(ADVANCED_IDS[t.id]);
+    if (adv) {
+      const noun = t.id === "linear" ? "an API key" : "a token";
+      adv.querySelector("summary").textContent = t.canConnect ? "Use " + noun + " instead" : "Connect with " + noun;
+    }
     if (adv && !t.canConnect) adv.open = true;
+    if (adv) adv.hidden = t.connected && !adv.open;
   });
   renderDefaultTracker(res.summary);
 }
@@ -585,14 +647,10 @@ function renderDefaultTracker(summary) {
   if (!sel || !summary) return;
   const conns = summary.connections || [];
   sel.textContent = "";
-  if (!conns.length) {
-    const o = document.createElement("option");
-    o.textContent = "Connect a tracker first";
-    sel.appendChild(o);
-    sel.disabled = true;
-    return;
-  }
-  sel.disabled = false;
+  // Nothing connected: a muted line, not a dead select.
+  sel.hidden = !conns.length;
+  $("defaultTrackerEmpty").hidden = !!conns.length;
+  if (!conns.length) return;
   conns.forEach((c) => {
     const o = document.createElement("option");
     o.value = c.id;
@@ -604,7 +662,7 @@ function renderDefaultTracker(summary) {
 
 $("defaultTracker").addEventListener("change", async () => {
   const res = await trackerMsg("tb:tracker:set-primary", { tracker: $("defaultTracker").value });
-  say($("prefsStatus"), res && res.ok ? "The ticket's main button now sends to " + $("defaultTracker").selectedOptions[0].textContent + "." : "Couldn't change it.", res && res.ok ? "ok" : "err");
+  flashSaved($("defaultTracker"), !!(res && res.ok));
 });
 
 function connectFromOptions(t, box) {
@@ -646,17 +704,23 @@ async function disconnectFromOptions(t, box) {
   // A token connection: Disconnect removes the token too.
   const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id, token: t.via === "token" });
   if (!res || res.error) { say(status, (res && res.error) || "Could not disconnect.", "err"); return; }
-  if (res.revokeUrl) {
-    // GitHub can't be told to revoke without a client secret: the sign-in is
-    // deleted here, and the user removes TraceBug at GitHub to fully revoke.
-    say(status, "Disconnected — TraceBug deleted its " + t.label + " sign-in from this browser. To fully revoke, remove TraceBug at ", "ok", " ");
+  // GitHub: exactly what was removed, and where to finish on GitHub (B7, B11)
+  // — revoking needs a client secret TraceBug doesn't have.
+  const what = res.removed === "signin" && res.revokeUrl
+    ? { text: "Signed out. TraceBug deleted its GitHub sign-in from this browser. To remove its access on GitHub too: ", link: "Authorized GitHub Apps", url: res.revokeUrl }
+    : res.removed === "token" && res.tokenUrl
+      ? { text: "Token removed from this browser. You can delete it on GitHub: ", link: "Personal access tokens", url: res.tokenUrl }
+      : null;
+  if (what) {
+    say(status, what.text, "ok", " ");
     const a = document.createElement("a");
-    a.href = res.revokeUrl;
+    a.href = what.url;
     a.target = "_blank";
     a.rel = "noopener noreferrer";
     a.className = "revoke-link";
-    a.textContent = "github.com/settings/applications";
-    status.append(a, ".");
+    a.textContent = what.link;
+    status.textContent = what.text;
+    status.append(a);
   } else {
     say(status, "Disconnected.", "ok");
   }
@@ -692,7 +756,7 @@ function highlight(card) {
 function showTokenForm(id) {
   const f = TOKEN_FORMS[id];
   if (!f) return;
-  if (f.details && $(f.details)) $(f.details).open = true;
+  if (f.details && $(f.details)) { $(f.details).hidden = false; $(f.details).open = true; }
   const field = $(f.field);
   if (!field) return;
   highlight(field.closest(".card"));
@@ -990,17 +1054,25 @@ renderLlmSites();
 // Open the filed issue in a new tab (default on), and forget the per-site
 // remembered repositories/labels (tb_tracker_sites_v1, written by the worker).
 const OPEN_AFTER_KEY = "tb_open_issue_after_create_v1";
-const SITES_KEY = "tb_tracker_sites_v1";
 get([OPEN_AFTER_KEY]).then((r) => { $("openAfterCreate").checked = r[OPEN_AFTER_KEY] !== false; });
 $("openAfterCreate").addEventListener("change", async () => {
-  await set({ [OPEN_AFTER_KEY]: $("openAfterCreate").checked });
-  say($("prefsStatus"), $("openAfterCreate").checked ? "Issues open in a new tab after you create them." : "Issues won't open by themselves; the panel shows the link.", "ok");
+  try {
+    await set({ [OPEN_AFTER_KEY]: $("openAfterCreate").checked });
+    flashSaved($("openAfterCreate"), true);
+  } catch {
+    flashSaved($("openAfterCreate"), false);
+  }
 });
 $("forgetChoices").addEventListener("click", async () => {
+  const btn = $("forgetChoices");
   try {
-    await new Promise((resolve) => chrome.storage.local.remove(SITES_KEY, () => { void chrome.runtime.lastError; resolve(); }));
-    say($("prefsStatus"), "Forgot the remembered choices for every site.", "ok");
-  } catch (e) {
-    say($("prefsStatus"), "Couldn't forget them: " + ((e && e.message) || "storage error"), "err");
+    await new Promise((resolve, reject) => chrome.storage.local.remove(SITES_KEY, () => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message)); else resolve();
+    }));
+    renderRemembered({});
+    flashSaved(btn, true, "Forgotten");
+  } catch {
+    flashSaved(btn, false, "Couldn't forget");
   }
 });

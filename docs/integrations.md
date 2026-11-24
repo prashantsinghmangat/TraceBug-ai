@@ -4,22 +4,28 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 
 ## In the extension
 
-### Settings → Manage integrations
+### Settings → Integrations
 
-Where each connection is managed: **Settings → Manage integrations** (the Create panel's **Manage integrations**
-link opens it). At the top, **Sending**: the **Default tracker** (the ticket's main button) and **Open the issue
-after creating**, plus **Forget remembered choices** for every site. Then one card per tracker:
+Where each connection is managed: **Settings → Integrations** (the Create panel's **Manage integrations**
+link opens it). One card per tracker, GitHub first:
 
-- **Status**, in the same words as the popup and the ticket's ▾ tooltip: **Connected**, **Needs reconnect**,
+- **Status**, in the same words as the popup and the ticket's tooltip: **Connected**, **Needs reconnect**,
   **Error** or **Not connected**.
-- **How it's connected:** "Signed in as octo", or "Using a token ghp_…abcd" (masked; the token itself is never shown).
-- **Default repository / team** (a picker), and **Remembered choices on N sites** with **Forget** for that tracker.
-- **Connect** (where this build can sign in), **Use a token instead** (GitHub) / **Use an API key instead** (Linear)
-  — checked with the tracker before it's saved — and **Disconnect**, which signs out or removes the token and that
-  tracker's remembered choices. Slack: the webhook URL, **Save** and **Disconnect**.
-- Builds without TraceBug's GitHub App (store builds until it's registered) and Firefox show the token path, open —
-  never a Connect button that can't work.
+- **How it's connected:** GitHub "Signed in as octo · GitHub App" or "Using a personal token ghp_…abcd" (masked; the
+  token itself is never shown) — one connection at a time; Linear "Signed in as …" or "Using an API key …".
+- **Connect** (where this build can sign in) or **Reconnect**; while not connected, **Use a token instead** (GitHub) /
+  **Use an API key instead** (Linear) — checked with the tracker before it's saved, never saved unchecked. In GitHub's
+  token mode, sign-in is the quiet link **Switch to GitHub sign-in (recommended)**.
+- Once connected: **Default repository / team** (a picker) and **Disconnect**, which removes the connection and that
+  tracker's remembered choices, and says what it removed. Slack: the webhook URL, **Save**, and **Disconnect** once
+  connected.
+- Builds without TraceBug's GitHub App (store builds until it's registered) and Firefox show the token path, open
+  (**Connect with a token**) — never a Connect button that can't work.
 - Keyboard-only, light and dark, no sideways scroll at 360 px.
+
+Then **Preferences**: **Default tracker** (used by the Send button on a bug ticket), **Open the issue after
+creating** (a switch), and **Remembered choices** — "On N sites" with **Forget**, which clears them for every site.
+A change shows a small **Saved** beside its control.
 
 ### The popup's hub
 
@@ -40,14 +46,19 @@ The plug/logo icon in the popup's header opens the same connections as a compact
   Slack**); the others are under **More ▾**. With no choice made, the first connection is the default.
 - **Status icon (popup):** the default tracker's logo, with a dot when any connection needs attention; its tooltip
   reads like "GitHub · owner/repo · connected" and it opens the hub.
-- **Send button in the ticket (Chrome):** a split button, **Send to GitHub | ▾**. The main part opens the Create panel
-  with **Create issue** focused (it takes a click or Enter there: the site you're testing can never file an issue on
-  its own). **▾** (or Alt+↓) opens the same panel on the tracker picker. The panel drops down from the button — up
-  when there's no room below — and **Manage integrations** in it opens Settings → Integrations. Esc, or Tab past the
-  last control, closes it and puts focus back on the button. Nothing connected yet: the button reads **Connect a tracker**
-  and the panel offers Connect. The ▾ tooltip names only the tracker ("GitHub · connected", with a dot when a
+- **Send button in the ticket (Chrome):** one button, **Send to GitHub**. It opens the Create panel with **Create
+  issue** focused (it takes a click or Enter there: the site you're testing can never file an issue on its own); the
+  tracker is chosen in the panel's **Create a [GitHub ▾] issue** select, and Alt+↓ on the button opens the panel on
+  that select. The panel drops down from the button — up when there's no room below — and **Manage integrations** in
+  it opens Settings → Integrations. Esc, or Tab past the last control, closes it and puts focus back on the button;
+  closing the ticket closes the panel first. Nothing connected yet: the button reads **Connect a tracker** and the
+  panel offers Connect. The button's tooltip names only the tracker ("GitHub · connected", with a dot when a
   connection needs attention), because the site can read the ticket. Firefox: the same button, with the Create window
   instead of the panel.
+- **The panel shows what the moment needs:** the app installed nowhere → **Install TraceBug on GitHub** and
+  **Refresh** only (the list refreshes by itself once GitHub reports the install, and that window closes); then the
+  repository, then its labels and assignee. The repository suggestions are the panel's own list under the field.
+  After **Create**: "Created #N" with **Copy screenshot**, **Download screenshot** and **Download recording**.
 - **Keyboard:** Tab reaches the grid, then arrow keys, Home/End (Ctrl+Home/End for the first/last tile) and Enter or
   Space. Dialogs keep focus inside, Esc closes them and returns you to the tile. In the Create panel,
   **Ctrl+Enter** (⌘+Enter on Mac) creates the issue and Esc closes it.
@@ -76,7 +87,7 @@ GitHub is the integration TraceBug supports end to end. **GitHub Enterprise Serv
    ticked), choose an **Assignee** and **Milestone** if you want. Archived repositories and ones with Issues turned
    off are listed as unavailable and can't be picked to file into.
 4. **Create.** **Create issue** (or Enter / Ctrl+Enter) files it. The panel shows **Created #123** and the issue opens
-   in a new tab (turn that off in Settings → Manage integrations → **Open the issue after creating**). A failure
+   in a new tab (turn that off in Settings → Integrations → Preferences → **Open the issue after creating**). A failure
    keeps your ticket and your choices; **Retry** checks first, so it's never filed twice. A GitHub rate limit says
    **GitHub rate limit: try again after HH:MM**.
 5. **Screenshots.** GitHub's API can't attach files, so the issue says what was captured and asks the reader to get
@@ -86,10 +97,15 @@ GitHub is the integration TraceBug supports end to end. **GitHub Enterprise Serv
    write (and Metadata: Read), or a classic token with `repo`. It's checked with GitHub before it's saved; a
    rejected token, a missing scope or no access to the repository are named plainly. Store builds released before
    TraceBug's production GitHub App is registered offer only this path.
-7. **Disconnect.** **Disconnect** (panel or settings) deletes TraceBug's GitHub sign-in from this browser.
-   TraceBug can't revoke it at GitHub — that needs a server secret it doesn't have — so to fully revoke, remove
-   TraceBug at [github.com/settings/applications](https://github.com/settings/applications) (Authorized GitHub
-   Apps).
+7. **One connection.** GitHub is connected one way at a time: signed in ("Signed in as octo · GitHub App") or with a
+   token ("Using a personal token ghp_…abcd"). Signing in replaces a saved token, and saving a token replaces the
+   sign-in — both ask first ("This replaces your token ghp_…abcd"). In token mode, sign-in is the quiet link
+   **Switch to GitHub sign-in (recommended)** (Chrome).
+8. **Disconnect.** **Disconnect** (panel or settings) removes that one connection and says which. A sign-in:
+   "Signed out. TraceBug deleted its GitHub sign-in from this browser" — TraceBug can't revoke it at GitHub (that
+   needs a server secret it doesn't have), so remove its access at
+   [Authorized GitHub Apps](https://github.com/settings/apps/authorizations). A token: "Token removed from this
+   browser", with a link to GitHub's personal access tokens page to delete it there.
 
 The sign-in renews itself (GitHub's sign-ins last 8 hours; renewal is automatic). If GitHub refuses the renewal —
 revoked, or unused for 6 months — the panel shows **Reconnect GitHub** and keeps your choices.
@@ -141,8 +157,8 @@ After you file an issue, TraceBug remembers the repository or team and the label
 - Kept in the extension's own storage on this device (`chrome.storage.local`), keyed by the site's **origin** only
   (`https://app.example.com`, never a path or query), the tracker, and the account you filed with.
 - Nothing is remembered from private (incognito) windows. At most 200 sites are kept; the least recently used go
-  first. Disconnecting a tracker deletes its remembered choices; **Forget remembered choices** in Settings →
-  Integrations deletes them all.
+  first. Disconnecting a tracker deletes its remembered choices; **Forget** (Settings → Integrations →
+  Preferences → Remembered choices) deletes them all.
 - The site you're testing never sees them: the panel is TraceBug's own frame.
 - Each time, the remembered repository and labels are checked against the lists the tracker returns now. One that's
   gone (removed, or no longer accessible) isn't selected: TraceBug falls back to your default repository and says so

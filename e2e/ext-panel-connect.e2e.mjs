@@ -327,8 +327,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("C3. a token without the repo scope: says which scope it needs", /needs the "repo" scope/.test(noScope), noScope);
     await frame.fill("#tokenInput", PAT);
     await frame.press("#tokenInput", "Enter");
-    await frame.waitForFunction(() => /with a token/.test(document.getElementById("account").textContent), null, { timeout: 8000 }).catch(() => {});
-    check("C4. a working token: checked, saved, shown masked", /with a token ghp_…ABCD/.test(await frame.textContent("#account")),
+    await frame.waitForFunction(() => /Using a personal token/.test(document.getElementById("account").textContent), null, { timeout: 8000 }).catch(() => {});
+    check("C4. a working token: checked, saved, shown masked (\"Using a personal token\")", /Using a personal token ghp_…ABCD/.test(await frame.textContent("#account")),
       (await frame.textContent("#account")).trim());
     check("…the field is cleared", (await frame.inputValue("#tokenInput").catch(() => "")) === "");
     const stored = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
@@ -345,6 +345,9 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
     const after = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
     check("C6. Disconnect removes the token", !after.token && await frame.isVisible("#tokenBox"));
+    check("…and says exactly that, with where to delete it on GitHub (B11)",
+      /^Token removed from this browser\. You can delete it on GitHub:/.test((await frame.textContent("#revokeText")).trim()) &&
+      (await frame.textContent("#revokeLink")).trim() === "Personal access tokens" && !/sign-in/.test(await frame.textContent("#revokeNote")));
 
     // ── The same disclosure for Linear: an API key ──
     await frame.selectOption("#tracker", "linear");
@@ -386,6 +389,9 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#installBox:not([hidden])", { timeout: 10000 }).catch(() => {});
     check("D1. app on no repository: the Install state", /isn't installed on any/.test(await frame.textContent("#installText")));
+    check("…and only Install + Refresh: no empty Repository box, no \"Don't see it?\", no files line (U4)",
+      await frame.isVisible("#installApp") && await frame.isVisible("#refreshRepos") && !(await frame.isVisible("#container")) &&
+      !(await frame.isVisible("#manageLink")) && !(await frame.isVisible("#attachNote")) && !(await frame.isVisible("#fields fieldset")));
     await frame.click("#installApp");
     await sleep(800);
     // GitHub sends the install window to the app's Setup URL with setup_action=request.
@@ -395,14 +401,31 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     });
     await sw.evaluate((id) => chrome.tabs.update(id, { url: "https://github.com/apps/tracebug-dev?setup_action=request&installation_id=1" }), popTab);
     await sleep(1200);
-    await sw.evaluate(() => chrome.windows.remove(self.__popupIds[self.__popupIds.length - 1]));
+    // B3: GitHub is done with the window once it reports setup_action — the
+    // worker closes it, and the panel reloads by itself.
+    const installWinLeft = await sw.evaluate(async () => {
+      try { await chrome.windows.get(self.__popupIds[self.__popupIds.length - 1]); return true; } catch { return false; }
+    });
+    check("…the worker closes GitHub's install window when it reports setup_action (B3)", !installWinLeft);
     await frame.waitForFunction(() => /Waiting for your organisation owner/.test(document.getElementById("installText").textContent), null, { timeout: 8000 }).catch(() => {});
     check("D2. GitHub says an owner must approve: \"Waiting for your organisation owner to approve TraceBug\"",
       /^Waiting for your organisation owner to approve TraceBug/.test((await frame.textContent("#installText")).trim()),
       (await frame.textContent("#installText")).trim());
-    // Approved: Refresh shows the repositories and the note goes.
+    // B3: install on an account you own — GitHub reports setup_action=install;
+    // the window closes and the list refreshes by itself (no Refresh click).
     state.installed = true;
-    await frame.click("#refreshRepos");
+    await frame.click("#installApp");
+    await sleep(800);
+    const popTab2 = await sw.evaluate(async () => {
+      const w = await chrome.windows.get(self.__popupIds[self.__popupIds.length - 1], { populate: true });
+      return w.tabs[0].id;
+    });
+    await sw.evaluate((id) => chrome.tabs.update(id, { url: "https://github.com/apps/tracebug-dev?setup_action=install&installation_id=2" }), popTab2);
+    await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 10000 }).catch(() => {});
+    check("…after Install, the repositories appear by themselves — no Refresh (B3)",
+      await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO));
+    // Refresh still works as the fallback.
+    await frame.click("#refreshRepos").catch(() => {});
     await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 8000 }).catch(() => {});
     check("…once approved, Refresh lists the repositories and the note is gone",
       await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO) &&
@@ -476,10 +499,10 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await frame.click("#disconnect");
     await frame.waitForSelector("#revokeNote:not([hidden])", { timeout: 8000 }).catch(() => {});
     const authLeft = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_auth_v1")).tb_tracker_auth_v1 || {});
-    check("D7. Disconnect deletes the sign-in and says how to fully revoke, with the link",
+    check("D7. Disconnect deletes the sign-in and says how to remove its access on GitHub, with the link (B7)",
       !authLeft.github && await frame.isVisible("#revokeLink") &&
-      /remove TraceBug/.test(await frame.textContent("#revokeNote")) &&
-      (await frame.textContent("#revokeLink")).trim() === "github.com/settings/applications");
+      /^Signed out\. TraceBug deleted its GitHub sign-in from this browser\. To remove its access on GitHub too:/.test((await frame.textContent("#revokeText")).trim()) &&
+      (await frame.textContent("#revokeLink")).trim() === "Authorized GitHub Apps");
     // Settings says the same.
     await sw.evaluate((t) => chrome.storage.local.set({ tb_tracker_auth_v1: { github: {
       tokens: { accessToken: t.a, refreshToken: t.r, expiresAt: Date.now() + 8 * 3600e3 }, account: "octo", connectedAt: Date.now() } } }),
@@ -490,8 +513,38 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await opt.waitForSelector('.tracker-acct[data-tracker="github"] .acct-disconnect:not([hidden])', { timeout: 8000 }).catch(() => {});
     await opt.click('.tracker-acct[data-tracker="github"] .acct-disconnect');
     await opt.waitForSelector('.tracker-acct[data-tracker="github"] .revoke-link', { timeout: 5000 }).catch(() => {});
-    check("…and so does Settings", (await opt.getAttribute('.tracker-acct[data-tracker="github"] .revoke-link', "href").catch(() => "")) === "https://github.com/settings/applications" &&
-      /deleted its GitHub sign-in from this browser/.test(await opt.textContent('.tracker-acct[data-tracker="github"] .acct-status')));
+    check("…and so does Settings, linking Authorized GitHub Apps (B7)", (await opt.getAttribute('.tracker-acct[data-tracker="github"] .revoke-link', "href").catch(() => "")) === "https://github.com/settings/apps/authorizations" &&
+      /^Signed out\. TraceBug deleted its GitHub sign-in from this browser/.test(await opt.textContent('.tracker-acct[data-tracker="github"] .acct-status')));
+
+    // ── B11: one GitHub connection ──
+    const GH = '.tracker-acct[data-tracker="github"]';
+    const lineOf = () => opt.textContent(GH + " .acct-line").then((t) => t.trim());
+    await sw.evaluate((t) => chrome.storage.local.set({
+      tb_tracker_auth_v1: { github: { tokens: { accessToken: t.a, refreshToken: t.r, expiresAt: Date.now() + 8 * 3600e3 }, account: "octo", connectedAt: Date.now() } },
+      tb_integrations_v1: { github: { token: t.pat } },
+    }), { a: ACCESS, r: REFRESH, pat: PAT });
+    await opt.reload();
+    await opt.waitForFunction((g) => /Signed in as octo/.test(document.querySelector(g + " .acct-line").textContent), GH, { timeout: 8000 }).catch(() => {});
+    const ints11 = (await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {};
+    check("B11. older storage with a sign-in AND a token keeps one — the sign-in — and says its mode",
+      !(ints11.github && ints11.github.token) && (await lineOf()) === "Signed in as octo · GitHub App", await lineOf());
+    await sw.evaluate((pat) => chrome.storage.local.set({ tb_tracker_auth_v1: {}, tb_integrations_v1: { github: { token: pat } } }), PAT);
+    await opt.reload();
+    await opt.waitForFunction((g) => /Using a personal token/.test(document.querySelector(g + " .acct-line").textContent), GH, { timeout: 8000 }).catch(() => {});
+    check("…token mode: \"Using a personal token ghp_…ABCD\", no Connect button, a quiet \"Switch to GitHub sign-in (recommended)\"",
+      (await lineOf()) === "Using a personal token ghp_…ABCD" && !(await opt.isVisible(GH + " .acct-connect")) &&
+      (await opt.textContent(GH + " .acct-switch")).trim() === "Switch to GitHub sign-in (recommended)" && await opt.isVisible(GH + " .acct-switch"), await lineOf());
+    await opt.click(GH + " .acct-switch");
+    check("…switching asks first: \"This replaces your token ghp_…ABCD\"",
+      await opt.isVisible(GH + " .acct-confirm") && /^This replaces your token ghp_…ABCD\./.test((await opt.textContent(GH + " .acct-confirm-text")).trim()));
+    await opt.click(GH + " .acct-confirm-no");
+    check("…Cancel leaves the token as it was", !(await opt.isVisible(GH + " .acct-confirm")) &&
+      ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1.github || {}).token === PAT);
+    await opt.click(GH + " .acct-disconnect");
+    await opt.waitForSelector(GH + " .revoke-link", { timeout: 5000 }).catch(() => {});
+    check("…Disconnect in token mode says the token went, not a sign-in",
+      /^Token removed from this browser\. You can delete it on GitHub:/.test(await opt.textContent(GH + " .acct-status")) &&
+      (await opt.getAttribute(GH + " .revoke-link", "href")) === "https://github.com/settings/tokens");
   } finally {
     await ctx.close();
   }

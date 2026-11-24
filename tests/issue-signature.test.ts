@@ -18,6 +18,7 @@ import {
   setIssueSignature,
   signIssueBody,
   signSlackPost,
+  issueFooterMarkdown,
   _resetIssueSignature,
 } from '../src/integrations/issue-signature';
 
@@ -111,9 +112,23 @@ describe('it cannot be applied twice', () => {
   });
 });
 
+describe('a filed GitHub issue has one footer (U6)', () => {
+  beforeEach(() => { _resetIssueSignature(); });
+  it('credit and session on one line while the credit is on', () => {
+    expect(issueFooterMarkdown('abcdef0123456789')).toMatch(/^_\[Reported with TraceBug\]\(https?:\/\/[^)]+\) · Session `abcdef01`_$/);
+  });
+  it('just the session once the credit is off — no TraceBug line at all', () => {
+    setIssueSignature(false);
+    expect(issueFooterMarkdown('abcdef0123456789')).toBe('_Session `abcdef01`_');
+  });
+});
+
 describe('every send path is signed at one chokepoint', () => {
   it('signs issueBody, which GitHub, Linear and the bridge all use', () => {
-    expect(TRACKER).toContain('return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub })');
+    // Linear: signed as in 1.13. GitHub: ONE footer — the session and the credit (U6).
+    expect(TRACKER).toContain('return signIssueBody(generateGitHubIssue(report, { legacyText: true })');
+    expect(TRACKER).toContain('generateGitHubIssue(report, { filed: true, footer: false })');
+    expect(TRACKER).toContain('issueFooterMarkdown(report.session.sessionId)');
     // All four call sites go through issueBody / slackText, never the raw
     // generators — that is what keeps the paths from drifting.
     expect(TRACKER).toContain('body: issueBody(report) }, signal)');

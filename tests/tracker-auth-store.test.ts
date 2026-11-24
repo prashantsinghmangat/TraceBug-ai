@@ -3,7 +3,7 @@
 // plain object the way the worker runs against chrome.storage.local.
 import { describe, it, expect, vi } from 'vitest';
 import {
-  resolveAuth, withTrackerAuth, describeAuth, saveOAuth, forgetOAuth,
+  resolveAuth, withTrackerAuth, describeAuth, saveOAuth, forgetOAuth, extraGitHubConnection,
   ReconnectNeededError, NotConnectedError, REFRESH_SKEW_MS,
   type AuthMap, type AuthStorage, type AuthContext,
 } from '../src/providers/auth-store';
@@ -267,5 +267,25 @@ describe('a rotated refresh token is stored before anything else', () => {
     await resolveAuth(ctx(store, { fetchFn: fetchFn as unknown as typeof fetch }));
     const after = log.slice(log.indexOf('github') + 1);
     expect(after[0]).toBe('write:ghr_new');
+  });
+});
+
+describe("one GitHub connection (B11)", () => {
+  const signIn = { tokens: { accessToken: "ghu_a", tokenType: "bearer" }, account: "octo", connectedAt: NOW } as AuthMap["github"];
+  const token = { github: { token: "ghp_PASTEDtoken0123456789" } };
+
+  it("storage with both keeps the sign-in and drops the token", () => {
+    expect(extraGitHubConnection({ github: signIn }, token)).toBe("token");
+  });
+  it("…unless the sign-in needs reconnecting: then the working token stays", () => {
+    expect(extraGitHubConnection({ github: { ...signIn!, needsReconnect: true } }, token)).toBe("signin");
+  });
+  it("one connection (or none) is left alone", () => {
+    expect(extraGitHubConnection({ github: signIn }, {})).toBeNull();
+    expect(extraGitHubConnection({}, token)).toBeNull();
+    expect(extraGitHubConnection({}, null)).toBeNull();
+  });
+  it("Linear is not touched (frozen; it has its own rules)", () => {
+    expect(extraGitHubConnection({ linear: signIn } as AuthMap, { linear: { apiKey: "lin_api_x" } })).toBeNull();
   });
 });

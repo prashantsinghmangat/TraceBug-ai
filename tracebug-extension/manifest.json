@@ -72,7 +72,8 @@
     {
       "resources": [
         "create-issue.html",
-        "confirm-send.js"
+        "confirm-send.js",
+        "panel-fields.js"
       ],
       "matches": [
         "<all_urls>"

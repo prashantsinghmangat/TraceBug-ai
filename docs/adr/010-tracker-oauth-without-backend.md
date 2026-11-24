@@ -110,7 +110,10 @@ the extension is public.
   - Rate limits (primary and secondary) → "GitHub rate limit: try again after HH:MM"; archived / Issues-off
     repositories are listed as unavailable.
   - Disconnect deletes the token locally; GitHub needs the client secret to revoke, so the user is pointed to
-    github.com/settings/applications.
+    Authorized GitHub Apps (github.com/settings/apps/authorizations — not settings/applications, the OAuth Apps tab).
+  - One GitHub connection at a time: a sign-in or a pasted token, never both. Each replaces the other after a
+    confirm; storage that holds both (older versions) keeps the sign-in (or the token, if the sign-in needs
+    reconnecting).
   - GitHub Enterprise Server isn't supported.
 - **Device flow, with no secret.** It works for GitHub Apps once it is enabled in the app settings. The device-code
   request and the poll send only `client_id` ([authorizing OAuth apps][gh-dev]).

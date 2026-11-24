@@ -1,7 +1,7 @@
 // Run: node e2e/ext-integrations-hub.e2e.mjs   (needs `npm run build:ext` first)
 //
 // Phase 13 step 5 + redesign step 5: the Integrations hub (integrations-hub.js)
-// in the popup, Settings → "Manage integrations" (one card per tracker), the
+// in the popup, Settings → "Integrations" (one card per tracker, then Preferences), the
 // header status icon, and the ticket's default-tracker button.
 //   0. nothing connected: popup icon says so, no dot
 //   1. keyboard only: the roving grid, the connect dialog (focus trap, Esc,
@@ -187,18 +187,28 @@ try {
   const card = (id) => `.tracker-acct[data-tracker="${id}"]`;
   const pillOf = (id) => set.textContent(id === "github" ? "#ghPill" : id === "linear" ? "#lnPill" : "#slPill");
   await set.waitForFunction(() => !document.querySelector('.tracker-acct[data-tracker="github"] .acct-connect').hidden, null, { timeout: 8000 }).catch(() => {});
-  check("2. settings is \"Manage integrations\" with one card per tracker, and no hub grid",
-    /Manage integrations/.test(await set.textContent("#integrations")) && !!(await set.$(card("github"))) && !!(await set.$(card("linear"))) &&
-    !!(await set.$("#slPill")) && !(await set.$(".tbh-tile")));
+  check("2. settings is \"Integrations\" with one card per tracker (GitHub first, with its logo), and no hub grid",
+    (await set.textContent("#integrations")).trim() === "Integrations" && !!(await set.$(card("github"))) && !!(await set.$(card("linear"))) &&
+    !!(await set.$("#slPill")) && !(await set.$(".tbh-tile")) &&
+    (await set.$eval(".int-card", (c) => !!c.querySelector('.tracker-acct[data-tracker="github"]') && !!c.querySelector('.int-logo svg[aria-label="GitHub"]'))));
+  check("…Preferences comes after the tracker cards",
+    await set.evaluate(() => !!(document.getElementById("slPill").compareDocumentPosition(document.getElementById("intGlobal")) & Node.DOCUMENT_POSITION_FOLLOWING)));
   check("…not connected: \"Not connected\" pills, GitHub offers Connect",
     (await pillOf("github")) === "Not connected" && (await pillOf("slack")) === "Not connected" &&
     await set.isVisible(`${card("github")} .acct-connect`) && !(await set.isVisible(`${card("github")} .acct-disconnect`)));
   check("…Linear can't sign in in this build: its API-key path is open, no dead Connect",
-    !(await set.isVisible(`${card("linear")} .acct-connect`)) && await set.evaluate(() => document.getElementById("lnAdvanced").open) &&
-    /Use an API key instead/.test(await set.textContent("#lnAdvanced summary")));
-  check("…default tracker: nothing to pick yet", await set.isDisabled("#defaultTracker") &&
-    /Connect a tracker first/.test(await set.textContent("#defaultTracker")));
-  check("…\"Open the issue after creating\" is on by default", await set.isChecked("#openAfterCreate"));
+    !(await set.isVisible(`${card("linear")} .acct-connect`)) && await set.evaluate(() => document.getElementById("lnAdvanced").open));
+  check("…and it says so once: \"Connect with an API key\", no \"Paste … below\" line above it (U8)",
+    (await set.textContent("#lnAdvanced summary")).trim() === "Connect with an API key" &&
+    !(await set.isVisible(`${card("linear")} .acct-line`)));
+  check("…Slack offers Disconnect only once connected (U8)", !(await set.isVisible("#slClear")));
+  check("…default tracker: nothing to pick yet — a line, not a dead select", await set.isHidden("#defaultTracker") &&
+    await set.isVisible("#defaultTrackerEmpty") &&
+    (await set.textContent("#defaultTrackerEmpty")) === "Connect a tracker above to choose a default");
+  check("…\"Open the issue after creating\" is a switch, on by default",
+    await set.isChecked("#openAfterCreate") && (await set.getAttribute("#openAfterCreate", "role")) === "switch");
+  check("…remembered choices: \"On 0 sites\", Forget off",
+    (await set.textContent("#rememberedCount")) === "On 0 sites" && await set.isDisabled("#forgetChoices"));
 
   const deep = await ctx.newPage();
   await deep.goto(OPT + "#integrations:connect=github");
@@ -239,15 +249,14 @@ try {
     (await pillOf("linear")) === "Connected" && /Using an API key lin_…WXYZ\./.test(await set.textContent(`${card("linear")} .acct-line`)) &&
     await set.isVisible(`${card("linear")} .acct-disconnect`), (await set.textContent(`${card("linear")} .acct-line`)).trim());
   check("…the secret itself is nowhere on the page", !(await set.content()).includes("lin_api_hubTestKey"));
-  check("…sites with remembered choices are counted per tracker",
-    (await set.textContent(`${card("github")} .acct-sites-text`)) === "Remembered choices on 2 sites." &&
-    (await set.textContent(`${card("linear")} .acct-sites-text`)) === "Remembered choices on 1 site.");
-  await set.click(`${card("github")} .acct-forget`);
-  await set.waitForFunction(() => document.querySelector('.tracker-acct[data-tracker="github"] .acct-sites').hidden, null, { timeout: 5000 }).catch(() => {});
-  const sitesLeft = await getLocal("tb_tracker_sites_v1");
-  check("…Forget clears that tracker's only", await set.isHidden(`${card("github")} .acct-sites`) &&
-    JSON.stringify(Object.keys(sitesLeft)) === '["https://b.example"]' && !!sitesLeft["https://b.example"].picks["linear|token:"], JSON.stringify(sitesLeft));
-  check("…Slack: \"Connected\"", (await pillOf("slack")) === "Connected");
+  check("…Preferences counts the sites with remembered choices", (await set.textContent("#rememberedCount")) === "On 2 sites" &&
+    !(await set.isDisabled("#forgetChoices")));
+  await set.click("#forgetChoices");
+  await set.waitForFunction(() => document.getElementById("rememberedCount").textContent === "On 0 sites", null, { timeout: 5000 }).catch(() => {});
+  check("…Forget clears them, says so beside the button, and turns itself off",
+    !(await getLocal("tb_tracker_sites_v1")) && await set.isDisabled("#forgetChoices") &&
+    (await set.$eval("#forgetChoices", (b) => b.closest(".pref-row").querySelector(".saved").textContent)) === "Forgotten");
+  check("…Slack: \"Connected\", and now Disconnect is offered", (await pillOf("slack")) === "Connected" && await set.isVisible("#slClear"));
   check("…default tracker lists the connections, GitHub first",
     (await set.$$eval("#defaultTracker option", (o) => o.map((x) => x.value).join())) === "github,linear,slack" && (await set.inputValue("#defaultTracker")) === "github");
   await pop.waitForFunction(() => /GitHub/.test(document.getElementById("intBtn").title), null, { timeout: 5000 }).catch(() => {});
@@ -257,12 +266,17 @@ try {
   await set.selectOption("#defaultTracker", "slack");
   await sleep(500);
   check("…picking Slack is stored", (await getLocal("tb_tracker_default_v1")) === "slack");
+  const savedBeside = (sel) => set.$eval(sel, (c) => c.closest(".pref-row").querySelector(".saved").textContent);
+  check("…picking a default says \"Saved\" beside the select", (await savedBeside("#defaultTracker")) === "Saved");
   await pop.waitForFunction(() => /^Slack/.test(document.getElementById("intBtn").title), null, { timeout: 5000 }).catch(() => {});
   check("…the popup icon follows: Slack · connected", (await pop.getAttribute("#intBtn", "title")) === "Slack · connected");
   await setLocal({ tb_tracker_default_v1: "github" });
-  await set.uncheck("#openAfterCreate");
+  await set.click('label[for="openAfterCreate"]');
   await sleep(300);
-  check("…\"Open the issue after creating\" off is stored", (await getLocal("tb_open_issue_after_create_v1")) === false);
+  check("…\"Open the issue after creating\" off (its label toggles it) is stored, \"Saved\" beside it",
+    (await getLocal("tb_open_issue_after_create_v1")) === false && (await savedBeside("#openAfterCreate")) === "Saved");
+  await sleep(2600);
+  check("…and the \"Saved\" fades away", (await savedBeside("#openAfterCreate")) === "" && !(await set.$("#prefsStatus")));
   await set.check("#openAfterCreate");
   await set.click(`${card("linear")} .acct-disconnect`);
   await set.waitForFunction(() => document.getElementById("lnPill").textContent === "Not connected", null, { timeout: 5000 }).catch(() => {});
@@ -348,10 +362,10 @@ try {
     /Send to GitHub/.test(await page.textContent(`${M} .tb-qb-btn-primary`)) &&
     (await page.$$eval(`${M} .tb-qb-more-menu [data-action="linear"], ${M} .tb-qb-more-menu [data-action="slack"]`, (b) => b.length)) === 2 &&
     !(await page.$(`${M} .tb-qb-more-menu [data-action="open-github"]`)));
-  const caretTitle = () => page.getAttribute(`${M} [data-tb-split-caret]`, "title");
-  check('…split button ▾: warning dot, tooltip without the repo; no separate plug icon',
+  const caretTitle = () => page.getAttribute(`${M} [data-tb-split-main]`, "title");
+  check('…the one send button: warning dot, tooltip without the repo; no separate plug icon',
     /^GitHub · a connection needs attention/.test(await caretTitle()) &&
-    !!(await page.$(`${M} [data-tb-split-caret] .tb-qb-status-dot`)) &&
+    !!(await page.$(`${M} [data-tb-split-main] .tb-qb-status-dot`)) &&
     !(await page.$(`${M} [data-action="tracker-status"]`)), await caretTitle());
   check("…no repo, team or account name anywhere in the page's ticket",
     !/acme-private|octo|ana@acme/.test(await page.evaluate(() => document.getElementById("tracebug-quick-bug-modal").outerHTML)));
@@ -374,10 +388,10 @@ try {
   check("…no attention: no dot, tooltip GitHub · connected",
     /^GitHub · connected/.test(await caretTitle()) && !(await page.$(`${M} .tb-qb-status-dot`)),
     (await caretTitle()) + " | " + await page.evaluate(() => document.documentElement.getAttribute("data-tb-caps")));
-  await page.click(`${M} [data-tb-split-caret]`);
+  await page.click(`${M} [data-tb-split-main]`);
   let frame = null;
   for (let i = 0; i < 60 && !frame; i++) { frame = page.frames().find((f) => f.url().includes("/create-issue.html")) || null; if (!frame) await sleep(100); }
-  check("…clicking ▾ opens the GitHub Create panel in the ticket", !!frame);
+  check("…clicking the button opens the GitHub Create panel in the ticket", !!frame);
   if (frame) {
     await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 10000 }).catch(() => {});
     await frame.focus("#container");
@@ -408,7 +422,7 @@ try {
   const authAfter = await getLocal("tb_tracker_auth_v1");
   check("…confirmed: the row is gone, the sign-in forgotten, GitHub back in the grid",
     !(await hub.$('.tbh-row[data-tracker="github"]')) && !(authAfter && authAfter.github) &&
-    /Disconnected GitHub/.test(await hub.textContent(".tbh-live")) && !!(await hub.$('.tbh-tile[data-tracker="github"]')));
+    /^Signed out of GitHub. TraceBug deleted its GitHub sign-in/.test(await hub.textContent(".tbh-live")) && !!(await hub.$('.tbh-tile[data-tracker="github"]')));
   await set.reload();
   await set.waitForFunction(() => document.getElementById("ghPill").textContent === "Not connected", null, { timeout: 5000 }).catch(() => {});
   check("…settings agrees: the GitHub card is \"Not connected\" with Connect again", (await pillOf("github")) === "Not connected" &&

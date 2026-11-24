@@ -17,7 +17,7 @@ import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
-import { generateBugTitle, generateFlowSummary } from "../title-generator";
+import { generateBugTitle, generateFlowSummary, isPlaceholderTitle } from "../title-generator";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
@@ -142,31 +142,37 @@ function _panelTarget(primary: _SendTarget): "github" | "linear" | null {
 
 /**
  * The footer's main send control. Extension mode with a tracker that has a
- * Create panel: a split button — the main part sends to the default tracker
- * (the panel opens with Create focused), ▾ or Alt+Down opens the same panel on
- * the tracker picker. Nothing connected yet: "Connect a tracker", which opens the
- * panel to connect. The page learns only ids and booleans: the tooltip names
- * the tracker, never the repository, team or account (those stay in the
- * extension's frame and pages). Elsewhere: the plain main button.
+ * Create panel: ONE button (U1/U2 — the split's ▾ did the same thing) that
+ * sends to the default tracker; the panel opens with Create focused, and its
+ * "Create a [GitHub ▾] issue" select is where the tracker is chosen. Alt+Down
+ * opens the same panel on that select. Nothing connected yet: "Connect a
+ * tracker", which opens the panel to connect. The page learns only ids and
+ * booleans: the tooltip names the tracker, never the repository, team or
+ * account (those stay in the extension's frame and pages). Elsewhere: the
+ * plain main button. The wrapper keeps data-tb-send-split: the panel anchors
+ * to it.
  */
 function _primarySendHtml(): string {
   const target = _primaryTarget();
   const panel = isExtensionMode() ? _panelTarget(target) : null;
   if (!panel) return _sendButtonHtml(target, true);
   const s = getIntegrationStatus();
-  const opens = target === "github" || target === "linear" ? ` aria-haspopup="dialog" aria-expanded="false"` : "";
-  const main = s.trackerConnected
-    ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` })
-    : _sendButtonHtml(panel, true, {
-      attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
-      inner: `<span class="tb-qb-split-logos">${(["github", "linear"] as const).filter((t) => hasIntegration(t)).map((t) => brandLogo(t, 14)).join("")}</span> Connect a tracker`,
-    });
   const tip = !s.trackerConnected
     ? "No tracker connected · connect one"
     : `${TRACKER_LABELS[panel]} · ${s.trackerAttention ? "a connection needs attention" : "connected"}`;
   const dot = s.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : "";
-  const caret = `<button type="button" data-action="send-menu" data-tb-split-caret data-target="${panel}" class="tb-qb-btn tb-qb-split-caret" aria-haspopup="dialog" aria-expanded="false" aria-keyshortcuts="Alt+ArrowDown" title="${escapeHtml(tip + " — choose where to send (Alt+↓)")}" aria-label="${escapeHtml("Choose where to send · " + tip)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>${dot}</button>`;
-  return `<div class="tb-qb-split" data-tb-send-split>${main}${caret}</div>`;
+  const attrs = `data-tb-split-main data-target="${panel}" aria-keyshortcuts="Alt+ArrowDown"` +
+    (target === "github" || target === "linear" || !s.trackerConnected ? ` aria-haspopup="dialog" aria-expanded="false"` : "");
+  const main = s.trackerConnected
+    ? _sendButtonHtml(target, true, { attrs })
+    : _sendButtonHtml(panel, true, {
+      attrs,
+      inner: `<span class="tb-qb-split-logos">${(["github", "linear"] as const).filter((t) => hasIntegration(t)).map((t) => brandLogo(t, 14)).join("")}</span> Connect a tracker`,
+    });
+  // The status (tooltip, attention dot) rides on the one button.
+  const withTip = main.replace(/ title="[^"]*"/, "").replace(/^<button /, `<button title="${escapeHtml(tip + " (Alt+↓: choose where to send)")}" `)
+    .replace(/<\/button>$/, `${dot}</button>`);
+  return `<div class="tb-qb-split" data-tb-send-split>${withTip}</div>`;
 }
 
 // Cloud endpoint for the Share link flow. Defaults to production; can be
@@ -411,7 +417,10 @@ export async function showQuickBugCapture(
   // silent substitution produced wrong tickets (bug B under bug A's title).
   const sessionTitle = options?.sessionId ? currentSession?.title : undefined;
   const sessionDesc = options?.sessionId ? currentSession?.description : undefined;
-  const title = options?.prefilledTitle ?? sessionTitle ?? (draft?.title || autoTitle);
+  // U6: a draft that only holds the old "No User Interactions" title doesn't
+  // win over a fresh title for a session that now has actions.
+  const draftTitle = draft?.title && !(isPlaceholderTitle(draft.title) && !isPlaceholderTitle(autoTitle)) ? draft.title : "";
+  const title = options?.prefilledTitle ?? sessionTitle ?? (draftTitle || autoTitle);
   const description = options?.prefilledDescription ?? sessionDesc ?? (draft?.description || autoDesc);
   const draftRestored = !options?.prefilledTitle && !sessionTitle && !!draft && !!(draft.title || draft.description);
 
@@ -1102,6 +1111,11 @@ function _openModal(
     try { box.querySelector<HTMLButtonElement>('[data-cc="keep"]')?.focus(); } catch {}
   };
   const requestClose = (trusted = true) => {
+    // B4: the Create panel closes first — never left over the "Close this
+    // ticket?" question. Removing its slot is enough: the extension's content
+    // script sees its frame go and cancels the request (a Create already in
+    // flight still finishes in the extension).
+    document.querySelectorAll("[data-tb-create-panel]").forEach((el) => el.remove());
     if (!trusted || isKept()) { close(); return; }
     showCloseConfirm();
   };
@@ -1216,6 +1230,9 @@ function _openModal(
       || document.getElementById("tb-int-config")
       || document.getElementById("tb-share-consent");
     if (child) { child.remove(); return; }
+    // The extension's Create panel is a layer too (Esc inside it is its own).
+    const createPanel = document.querySelector("[data-tb-create-panel]");
+    if (createPanel) { createPanel.remove(); return; }
     const moreMenu = modal.querySelector<HTMLElement>(".tb-qb-more-menu");
     if (moreMenu?.dataset.open === "true") {
       moreMenu.dataset.open = "false";
@@ -1915,8 +1932,6 @@ ${report.steps}` : userDesc)
       void _runAIAnalysis(root, modal, data);
     } else if (action === "integrations-configure") {
       showIntegrationsConfigModal(root, () => {});
-    } else if (action === "send-menu") {
-      _openSendPanel(modal, "picker");
     }
   });
 
@@ -2435,6 +2450,23 @@ function _firstScreenshot(screenshots: ScreenshotData[]): PageAttachment[] | und
   return undefined;
 }
 
+/** GitHub: the first screenshot and the recording, for the panel's Copy /
+ *  Download buttons after Create (GitHub's API never receives them). */
+async function _githubPanelFiles(screenshots: ScreenshotData[]): Promise<PageAttachment[] | undefined> {
+  const out = _firstScreenshot(screenshots) || [];
+  const v = getLastVideoRecording();
+  const m = v && /^video\/(webm|mp4)/.exec(v.mimeType || "");
+  if (v && m && v.blob && v.blob.size <= ATTACH_FILE_CAP) {
+    const shot = out[0] ? Math.floor(out[0].data.length * 3 / 4) : 0;
+    if (shot + v.blob.size <= ATTACH_TOTAL_CAP) {
+      try {
+        out.push({ name: _attachName(_videoFilename(v), m[1]), type: `video/${m[1]}`, data: await _blobToBase64(v.blob) });
+      } catch { /* the screenshot still goes */ }
+    }
+  }
+  return out.length ? out : undefined;
+}
+
 async function _trackerAttachments(report: BugReport, screenshots: ScreenshotData[]): Promise<PageAttachment[]> {
   const out: PageAttachment[] = [];
   let total = 0;
@@ -2476,7 +2508,7 @@ function _wireSendSplit(modal: HTMLElement): void {
     const btn = (e.target as HTMLElement).closest?.('[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
     if (btn && e.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
   }, true);
-  modal.querySelectorAll<HTMLElement>("[data-tb-split-main], [data-tb-split-caret]").forEach((b) => {
+  modal.querySelectorAll<HTMLElement>("[data-tb-split-main]").forEach((b) => {
     b.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown" && e.altKey) {
         e.preventDefault();
@@ -2486,11 +2518,11 @@ function _wireSendSplit(modal: HTMLElement): void {
   });
 }
 
-/** ▾: open the panel tracker's Create panel on the picker (or focus it if open). */
+/** Alt+Down: open the panel tracker's Create panel on the picker (or focus it if open). */
 function _openSendPanel(modal: HTMLElement, focus: "create" | "picker"): void {
   const open = document.querySelector<HTMLIFrameElement>("[data-tb-create-panel] iframe");
   if (open) { open.focus(); return; }
-  const target = modal.querySelector<HTMLElement>("[data-tb-split-caret]")?.dataset.target;
+  const target = modal.querySelector<HTMLElement>("[data-tb-split-main]")?.dataset.target;
   const btn = target === "github" ? modal.querySelector<HTMLButtonElement>('[data-action="open-github"]')
     : target === "linear" ? modal.querySelector<HTMLButtonElement>('[data-action="linear"]') : null;
   if (!btn) return;
@@ -2510,10 +2542,11 @@ async function _fileViaTracker(
   if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
   try {
     // Linear uploads its files; GitHub can't take files through its API, so it
-    // gets just the first screenshot — for the panel's "Copy screenshot".
+    // gets the first screenshot and the recording — for the panel's Copy /
+    // Download buttons after Create.
     const attachments = !isExtensionMode() ? undefined
       : provider === "linear" ? await _trackerAttachments(report, screenshots)
-      : provider === "github" ? _firstScreenshot(screenshots) : undefined;
+      : provider === "github" ? await _githubPanelFiles(screenshots) : undefined;
     const result = await createTrackerIssue(provider, report, undefined, attachments);
     const ref = result.ref ? ` ${result.ref}` : "";
     // The Create panel can file somewhere other than the button's tracker.
@@ -2523,14 +2556,21 @@ async function _fileViaTracker(
       // worker opened it (ADR 010); opening it here too would be an unasked-for
       // tab, a duplicate, or a blocked popup.
       if (!result.opened && !result.shown) window.open(result.url, "_blank", "noopener,noreferrer");
-      // The number is a real link to the issue (new tab, no opener).
-      if (ref) showToast(`✓ ${where} issue created`, root, { text: ref.trim(), href: result.url });
+      // U11: the in-page panel already says "Created #N" with the link — a
+      // toast over the button bar would only repeat it. Elsewhere the number
+      // is a real link to the issue (new tab, no opener).
+      if (result.panel) { /* the panel's "Created #N" */ }
+      else if (ref) showToast(`✓ ${where} issue created`, root, { text: ref.trim(), href: result.url });
       else showToast(`✓ ${where} issue created`, root, { text: "Open", href: result.url });
     } else {
       showToast(`✓ Sent to ${where}`, root);
     }
-    if (screenshots.length) _downloadAllScreenshots(screenshots);
-    _downloadVideoIfPresent();
+    // The in-page panel offers Copy / Download screenshot and Download
+    // recording itself; elsewhere the files download here.
+    if (!result.panel) {
+      if (screenshots.length) _downloadAllScreenshots(screenshots);
+      _downloadVideoIfPresent();
+    }
     _clearDraft();
     // The in-page Create panel shows "Created #N" with its link inside this
     // ticket — keep the ticket open so it stays readable; the user closes it.
@@ -3979,9 +4019,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
     #${MODAL_ID} .tb-qb-footer { position:relative; }
     #${MODAL_ID} .tb-qb-split { display:inline-flex; align-items:stretch; }
-    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { border-top-right-radius:0; border-bottom-right-radius:0; }
-    #${MODAL_ID} .tb-qb-split-caret { position:relative; padding:8px 10px; border-top-left-radius:0; border-bottom-left-radius:0; background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; border-left:1px solid rgba(0,0,0,0.18); box-shadow:0 2px 10px rgba(255,92,108,0.28); }
-    #${MODAL_ID} .tb-qb-split-caret:hover { filter:brightness(1.06); }
+    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { position:relative; }
     #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; z-index:1; }
     #${MODAL_ID} .tb-qb-split-logos { display:inline-flex; gap:3px; }
     #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }

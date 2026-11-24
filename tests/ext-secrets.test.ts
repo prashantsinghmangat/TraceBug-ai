@@ -437,6 +437,24 @@ describe('panel token entry: checked before saving, never echoed', () => {
     expect(r.ok === false && r.code).toBe('missing_scope');
   });
 
+  it('a fine-grained token is never held to the classic "repo" scope rule (B9), even with an empty scopes header', async () => {
+    const FG = 'github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+    vi.stubGlobal('fetch', vi.fn(async () => reply(200, { login: 'octo' }, { 'x-oauth-scopes': '' })));
+    expect(await checkTrackerSecret('github', FG)).toEqual({ ok: true, account: 'octo' });
+    // …while a classic token with that same empty header still needs "repo".
+    const classic = await checkTrackerSecret('github', TOKEN);
+    expect(classic.ok === false && classic.code).toBe('missing_scope');
+  });
+
+  it('a fine-grained token that cannot see the chosen repository → no_access, not missing_scope', async () => {
+    const FG = 'github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyz0123456789ABCDEF';
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/user')
+      ? reply(200, { login: 'octo' }, { 'x-oauth-scopes': '' })
+      : reply(404, { message: 'Not Found' })));
+    const r = await checkTrackerSecret('github', FG, 'acme/private');
+    expect(r.ok === false && r.code).toBe('no_access');
+  });
+
   it('a token that cannot see the chosen repository → no_access, naming the repo', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/user')
       ? reply(200, { login: 'octo' }) // fine-grained: no scopes header

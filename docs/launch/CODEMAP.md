@@ -64,17 +64,30 @@ the same step.
   `trackerStatusList`, `connectTracker`, `pollTrackerConnect`, `disconnectTracker`, `oauthUiSupported` = manifest
   declares optional `identity`; Firefox build strips it). Bridge: `provider-bridge.js` `validateExtensionPageSender`,
   `validateChoice`, `TRACKER_UI_VERBS`. UI: `confirm-send.js` "Create panel" (`startPanel`, `selectTracker`,
-  `loadContainers`, `loadFields`, `collectChoice`), `options.js` "Tracker accounts" (`renderTrackerAccounts`).
+  `loadContainers`, `loadFields` (seq-guarded), `collectChoice`; field picks live in ONE state, `panel.picks`, via
+  `panel-fields.js` `initialPicks`/`toggle`/`choiceFields` — tests `tests/panel-fields.test.ts`; repo suggestions
+  `renderSuggest`/`wireSuggest` (panel's own listbox `#containerSuggest`, the datalist is data only); copy
+  `copyText`/`clipboardBlocked`; Download links `showDownloads`; B11 `askReplace`/`onSwitchSignIn`/`disconnectNote`),
+  `options.js` "Tracker accounts" (`renderTrackerAccounts`). Panel frame `allow="clipboard-write *"` in
+  `content-script.js` `mountCreatePanel` (the dynamic src origin ≠ the loaded extension origin, so `'src'` blocked all writes).
+  **One GitHub connection (B11):** `auth-store.ts` `extraGitHubConnection`; worker `enforceOneGitHub` (every
+  tracker UI call), `dropGitHubToken`, `disconnectGitHub` (→ `removed: "signin"|"token"`, `revokeUrl` =
+  settings/apps/authorizations, `tokenUrl`). Device flow: `tb:tracker:connect` with `open:false` → page copies the
+  code → `tb:tracker:connect-show` opens GitHub's window. Install window closes on `setup_action` (`onInstallTabUrl`).
+  Issue text: GitHub `issueTitle(report, true)`/`issueBody` (one footer, `issueFooterMarkdown`); Linear passes
+  `legacyText` (frozen) — tests `tests/github-issue-text.test.ts`.
   **Integrations hub (step 5):** status model `src/providers/integration-status.ts` (`summarizeIntegrations`,
   `pageIntegrationHint`; in the worker bundle) → worker `integrationSummary` / `pageIntegrationHintNow` (status
   answer `summary`, TB_HOST_ACCESS `integrations`), default key `tb_tracker_default_v1` (`tb:tracker:set-primary`).
   UI `integrations-hub.js` + `.css` (`mount(container, {mode, handoff, tokenPath, onSummary})`: tabs, rows, roving
   grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) only. **Settings → Manage
-  integrations (redesign step 5):** `options.html` `#integrations` (`#intGlobal`: `#defaultTracker`,
-  `#openAfterCreate`, `#forgetChoices`) + the `.tracker-acct` cards; `options.js` `renderTrackerAccounts` (state from
-  the status `summary`, `tokenHint`, `.acct-sites` count/Forget, `renderDefaultTracker`), `saveTrackerSecret` (via
+  integrations (redesign step 5):** `options.html` `#integrations` — `.int-card` per tracker (GitHub first, logo via
+  `TraceBugIntegrationsHub.logo`, `.acct-primary` Connect, `.acct-secondary` default repo + Disconnect), then
+  `#intGlobal` Preferences (`.pref-row`s: `#defaultTracker`/`#defaultTrackerEmpty`, `#openAfterCreate` switch,
+  `#rememberedCount` + `#forgetChoices`); `options.js` `renderTrackerAccounts` (state from the status `summary`,
+  `tokenHint`, `renderRemembered`, `renderDefaultTracker`), `flashSaved` (the fading "Saved"), `saveTrackerSecret` (via
   `tb:tracker:save-token`), deep links `#integrations:connect=<id>` (focus the card's Connect) / `:token=<id>`. Ticket: `quick-bug.ts`
-  `_primaryTarget`/`_sendButtonHtml`/`_trackerStatusHtml`, logos `src/ui/brand-logos.ts` (copy in the hub JS).
+  `_primaryTarget`/`_sendButtonHtml`/`_primarySendHtml` (ONE button `[data-tb-split-main]` in `[data-tb-send-split]`, tooltip + dot + Alt+↓; no ▾ since U1/U2), logos `src/ui/brand-logos.ts` (copy in the hub JS).
   Tests `tests/integration-status.test.ts`, e2e `e2e/ext-integrations-hub.e2e.mjs` (`e2e:hub`).
   **GitHub hardening (first release):** `src/providers/api.ts` `githubSpecialError` / `GitHubSsoError` /
   `GitHubRateLimitError` / `isGitHubPageUrl`; `trackers.ts` `ghFetch` (SSO partial notes, `ssoLinks`),

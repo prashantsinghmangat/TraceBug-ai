@@ -9,6 +9,18 @@ import { isFailedRequest } from "./request-status";
 
 const USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
 
+/** The titles a session with no user actions gets. */
+const PLACEHOLDER_TITLES = ["Empty Session — No User Interactions", "Screenshot Capture — No User Interactions"] as const;
+
+/**
+ * One of the "no user interactions" titles. A restored draft can still carry
+ * one after the session has gained actions (U6): callers swap it for a fresh
+ * title then.
+ */
+export function isPlaceholderTitle(title: string | undefined | null): boolean {
+  return (PLACEHOLDER_TITLES as readonly string[]).includes(String(title || "").trim());
+}
+
 /** The last user action at or before `index` (events are in capture order),
  *  falling back to the session's last action when `index` is -1. */
 export function lastUserActionBefore(events: TraceBugEvent[], index: number): TraceBugEvent | null {
@@ -97,7 +109,7 @@ function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEven
   }
 
   if (userActions.length === 0) {
-    return screenshots && screenshots.length > 0 ? "Screenshot Capture — No User Interactions" : "Empty Session — No User Interactions";
+    return screenshots && screenshots.length > 0 ? PLACEHOLDER_TITLES[1] : PLACEHOLDER_TITLES[0];
   }
 
   // Nothing failed (no error, no real failed request): the title says so up

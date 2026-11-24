@@ -87,10 +87,14 @@
   // attach (Linear uploads them; GitHub can't and ignores them).
   var OPTIONAL = { github: ["attachments"], linear: ["attachments"] };
   var ATTACH_TYPES = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "text/html": "html" };
+  // GitHub only: the recording rides along for the panel's "Download
+  // recording" after Create. GitHub's API never receives files, and Linear
+  // never gets a video (it would upload it).
+  var ATTACH_TYPES_GITHUB = { "video/webm": "webm", "video/mp4": "mp4" };
   var ATTACH_MAX_FILES = 6;
   var ATTACH_MAX_FILE_BYTES = 20 * 1024 * 1024;
   var ATTACH_MAX_TOTAL_BYTES = 30 * 1024 * 1024;
-  var ATTACH_NAME_RE = /^[A-Za-z0-9 _.()-]{1,100}\.(png|jpe?g|webp|html)$/;
+  var ATTACH_NAME_RE = /^[A-Za-z0-9 _.()-]{1,100}\.(png|jpe?g|webp|html|webm|mp4)$/;
   var BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 
   var MAX_FIELD_BYTES = 2 * 1024 * 1024;      // 2 MB per field
@@ -284,7 +288,7 @@
       return { ok: false, error: "This report is too large to file — export the .html instead." };
     }
     if (payload.attachments !== undefined) {
-      var at = validateAttachments(payload.attachments);
+      var at = validateAttachments(payload.attachments, target);
       if (!at.ok) return at;
       out.attachments = at.attachments;
     }
@@ -297,8 +301,9 @@
    * allowlist, base64 only, capped in count and size. Returns
    * { ok, attachments: [{name, type, data}] } or an error.
    */
-  function validateAttachments(list) {
+  function validateAttachments(list, target) {
     if (!Array.isArray(list)) return { ok: false, error: "Malformed attachments." };
+    var types = target === "github" ? Object.assign({}, ATTACH_TYPES, ATTACH_TYPES_GITHUB) : ATTACH_TYPES;
     if (list.length > ATTACH_MAX_FILES) return { ok: false, error: "Too many attachments." };
     var out = [];
     var total = 0;
@@ -310,10 +315,10 @@
         if (["name", "type", "data"].indexOf(ks[j]) === -1) return { ok: false, error: 'Unexpected field "' + ks[j] + '" in attachment.' };
       }
       if (typeof a.name !== "string" || !ATTACH_NAME_RE.test(a.name)) return { ok: false, error: "Bad attachment name." };
-      if (typeof a.type !== "string" || !ATTACH_TYPES[a.type]) return { ok: false, error: "Unsupported attachment type." };
+      if (typeof a.type !== "string" || !Object.prototype.hasOwnProperty.call(types, a.type)) return { ok: false, error: "Unsupported attachment type." };
       var ext = a.name.slice(a.name.lastIndexOf(".") + 1).toLowerCase();
       if (ext === "jpeg") ext = "jpg";
-      if (ext !== ATTACH_TYPES[a.type]) return { ok: false, error: "Attachment name and type don't match." };
+      if (ext !== types[a.type]) return { ok: false, error: "Attachment name and type don't match." };
       if (typeof a.data !== "string" || !a.data || a.data.length % 4 !== 0 || !BASE64_RE.test(a.data)) {
         return { ok: false, error: "Attachment data must be base64." };
       }

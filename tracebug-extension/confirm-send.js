@@ -113,15 +113,21 @@ function fmtSize(n) {
 function renderAttachNote(trackerId) {
   const el = $("attachNote");
   if (!el) return;
-  if (!REQ_ATTACH.length) { el.hidden = true; return; }
-  const list = REQ_ATTACH.map((a) => a.name + " (" + fmtSize(a.size) + ")").join(", ");
   const t = panel.current;
+  // U4 (GitHub): only once there is something to file. Linear is frozen as is.
+  if (!REQ_ATTACH.length || (EMBED && trackerId === "github" && !(t && t.connected))) { el.hidden = true; return; }
+  const list = REQ_ATTACH.map((a) => a.name + " (" + fmtSize(a.size) + ")").join(", ");
   const ask = trackerId === "linear" && t && t.uploadOrigins && t.uploadOrigins.length && !t.uploadGranted
     ? " · Linear stores attachments on " + t.uploadWhere + "; Chrome asks once when you create."
     : "";
-  el.textContent = trackerId === "linear"
-    ? "Attaches: " + list + ask
-    : "Not attached (GitHub can't take files): " + list + (EMBED ? " — after Create, Copy screenshot puts it on your clipboard to paste into a comment." : "");
+  if (trackerId === "linear") el.textContent = "Attaches: " + list + ask;
+  else if (EMBED) {
+    // One short line under Create.
+    const img = REQ_ATTACH.some((a) => /^image\//.test(a.type));
+    const vid = REQ_ATTACH.some((a) => /^video\//.test(a.type));
+    el.textContent = "GitHub can't take files — after Create, copy or download " +
+      (img && vid ? "the screenshot and recording" : vid ? "the recording" : "the screenshot") + ".";
+  } else el.textContent = "Not attached (GitHub can't take files): " + list;
   el.hidden = false;
 }
 
@@ -131,7 +137,9 @@ const panel = {
   current: null,         // the selected row
   items: [],             // containers for the current tracker
   fieldSpecs: [],        // FieldSpec[] for the current container
-  fieldsFor: "",         // container the specs belong to
+  picks: {},             // what is picked, per field — drawn from, and sent (panel-fields.js)
+  fieldsFor: "",         // container the specs belong to (or are loading for)
+  fieldsSeq: 0,          // the newest field load; older answers are dropped
   pollTimer: null,
   loadSeq: 0,
   keep: null,            // choices held across a reconnect: {tracker, container, fields}
@@ -214,28 +222,29 @@ async function selectTracker(id) {
   const t = rowFor(id);
   panel.current = t;
   panel.items = [];
-  panel.fieldSpecs = [];
-  panel.fieldsFor = "";
-  $("fields").textContent = "";
+  panel.fieldsSeq++;
+  clearFields();
   $("containerList").textContent = "";
+  // U9: only the current message — nothing from before this (re)render.
   panelMsg("");
-  show("deviceBox", false);
-  show("accessBox", false);
+  ["deviceBox", "accessBox", "replaceBox", "revokeNote", "ssoBox"].forEach((id) => show(id, false));
   if (!t) return;
   setTitle(t);
   renderAttachNote(t.id);
 
-  put("account", t.connected
-    ? (t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token" + (t.tokenHint ? " " + t.tokenHint : ""))
-    : "");
-  // The panel can also remove a token; the window leaves that to settings.
-  show("disconnect", t.via === "oauth" || (EMBED && t.via === "token"));
+  put("account", accountText(t));
+  // The panel can also remove a token; the window leaves that to settings —
+  // except GitHub, whose one connection Disconnect removes whichever it is.
+  show("disconnect", t.via === "oauth" || (t.via === "token" && (EMBED || t.id === "github")));
+  // Token mode: sign-in is a quiet link, where this build can sign in.
+  show("switchSignIn", t.id === "github" && t.connected && t.via === "token" && !!t.canConnect);
   show("installBox", false);
   show("repoNote", false);
 
   if (!t.connected) {
     show("pickBox", false);
     show("connectBox", true);
+    show("tokenBox", true);
     put("connectText", t.canConnect
       ? (t.needsReconnect ? t.label + " needs you to sign in again." : "Connect " + t.label + " to pick where this goes.")
       : $("tokenBox")
@@ -250,6 +259,8 @@ async function selectTracker(id) {
 
   show("connectBox", false);
   show("pickBox", true);
+  show("repoField", true);
+  renderSuggest(false);
   put("containerLabel", t.containerNoun);
   show("manageLink", !!t.manageUrl);
   $("manageLink").dataset.url = t.manageUrl || "";
@@ -263,6 +274,150 @@ async function selectTracker(id) {
   syncCreateButton();
   await loadContainers();
   await loadFields(true);
+}
+
+// ── Repository suggestions (panel, U7/U10) ────────────────────────────────
+// Our own listbox under the field, in the panel's flow: never wider than the
+// panel, scrolls past a max height, never over "Don't see it?". The window
+// keeps the browser's datalist.
+
+const suggest = { active: -1, shown: [] };
+
+function suggestOpen() {
+  const ul = $("containerSuggest");
+  return !!ul && !ul.hidden;
+}
+
+function suggestItems() {
+  const q = selectedContainer().toLowerCase();
+  const exact = panel.items.find((it) => String(it.id).toLowerCase() === q);
+  // The field holds a listed repository: it first, then all the others (to switch).
+  const list = exact ? [exact].concat(panel.items.filter((it) => it !== exact))
+    : !q ? panel.items
+    : panel.items.filter((it) => String(it.id).toLowerCase().includes(q) || String(it.label || "").toLowerCase().includes(q));
+  return list.slice(0, 100);
+}
+
+function renderSuggest(open) {
+  const ul = $("containerSuggest");
+  if (!ul) return;
+  const items = open ? suggestItems() : [];
+  suggest.shown = items;
+  if (suggest.active >= items.length) suggest.active = -1;
+  ul.textContent = "";
+  items.forEach((it, i) => {
+    const li = document.createElement("li");
+    li.id = "sg_" + i;
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", i === suggest.active ? "true" : "false");
+    li.textContent = String(it.label || it.id);
+    const extra = it.unavailable ? String(it.unavailable) + " (can't file here)" : it.detail ? String(it.detail) : "";
+    if (extra) {
+      const s = document.createElement("span");
+      s.className = "muted";
+      s.textContent = extra;
+      li.appendChild(s);
+    }
+    if (it.unavailable) li.setAttribute("aria-disabled", "true");
+    // Keep focus in the field; the click picks.
+    li.addEventListener("mousedown", (e) => e.preventDefault());
+    li.addEventListener("click", () => pickSuggestion(i));
+    ul.appendChild(li);
+  });
+  ul.hidden = !items.length;
+  const c = $("container");
+  c.setAttribute("aria-expanded", items.length ? "true" : "false");
+  if (suggest.active >= 0 && items.length) {
+    c.setAttribute("aria-activedescendant", "sg_" + suggest.active);
+    try { $("sg_" + suggest.active).scrollIntoView({ block: "nearest" }); } catch {}
+  } else c.removeAttribute("aria-activedescendant");
+}
+
+function pickSuggestion(i) {
+  const it = suggest.shown[i];
+  if (!it) return;
+  $("container").value = String(it.id);
+  suggest.active = -1;
+  renderSuggest(false);
+  // The field's usual checks (why it can't take issues, its labels).
+  $("container").dispatchEvent(new Event("input"));
+}
+
+function wireSuggest() {
+  const c = $("container");
+  if (!$("containerSuggest")) return;
+  c.addEventListener("input", (e) => { if (e.isTrusted) { suggest.active = -1; renderSuggest(true); } });
+  c.addEventListener("click", () => renderSuggest(!suggestOpen()));
+  // The list sits in the flow above Create: closing it on the mousedown that
+  // blurs the field would move Create before the mouseup, and the click
+  // would be lost. A pointer blur closes it once that click has landed.
+  let pointerDown = false;
+  document.addEventListener("pointerdown", () => { pointerDown = true; }, true);
+  document.addEventListener("pointerup", () => { pointerDown = false; }, true);
+  c.addEventListener("blur", () => {
+    if (!pointerDown) { renderSuggest(false); return; }
+    document.addEventListener("click", () => setTimeout(() => { if (document.activeElement !== c) renderSuggest(false); }, 0), { once: true, capture: true });
+    // No click follows (the pointer left the panel): close anyway.
+    setTimeout(() => { if (document.activeElement !== c) renderSuggest(false); }, 1000);
+  });
+  c.addEventListener("keydown", (e) => {
+    const open = suggestOpen();
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) {
+        // Start on the repository the field already holds, if it's listed.
+        const q = selectedContainer().toLowerCase();
+        suggest.active = Math.max(0, suggestItems().findIndex((it) => String(it.id).toLowerCase() === q));
+        renderSuggest(true);
+        return;
+      }
+      suggest.active = Math.min(suggest.active + 1, suggest.shown.length - 1);
+      renderSuggest(true);
+    } else if (e.key === "ArrowUp" && open) {
+      e.preventDefault();
+      suggest.active = Math.max(suggest.active - 1, 0);
+      renderSuggest(true);
+    } else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && open && suggest.active >= 0) {
+      e.preventDefault();
+      pickSuggestion(suggest.active);
+    } else if (e.key === "Escape" && open) {
+      // Closes the list only, not the panel.
+      e.preventDefault();
+      e.stopPropagation();
+      renderSuggest(false);
+    } else if (e.key === "Tab" && open) {
+      renderSuggest(false);
+    }
+  });
+}
+
+/** How it's connected, in words: GitHub names the mode (B11); Linear keeps its own. */
+function accountText(t) {
+  if (!t || !t.connected) return "";
+  const hint = t.tokenHint ? " " + t.tokenHint : "";
+  if (t.id === "github") {
+    return t.via === "oauth" ? "Signed in" + (t.account ? " as " + t.account : "") + " · GitHub App" : "Using a personal token" + hint;
+  }
+  return t.via === "oauth" ? (t.account ? "as " + t.account : "signed in") : "with a token" + hint;
+}
+
+/**
+ * One GitHub connection (B11): before a sign-in replaces a token, or a token
+ * a sign-in, ask in the panel. onYes runs inside the Replace click, so it can
+ * still ask the browser for permissions. The window has no box: no question.
+ */
+function askReplace(text, onYes) {
+  if (!$("replaceBox")) { onYes(); return; }
+  put("replaceText", text);
+  show("replaceBox", true);
+  $("replaceYes").onclick = () => { show("replaceBox", false); onYes(); };
+  $("replaceNo").onclick = () => { show("replaceBox", false); };
+  $("replaceYes").focus();
+}
+
+/** A sign-in record exists for this tracker (working, or waiting for Reconnect). */
+function hasSignIn(t) {
+  return !!t && (t.via === "oauth" || !!t.needsReconnect);
 }
 
 /** A tb:tracker:* answer that needs host access shows the Allow button. */
@@ -307,6 +462,11 @@ async function loadContainers() {
   // Signed in to the GitHub App but it's on no repository: offer the install.
   const noInstall = !panel.items.length && t.id === "github" && t.via === "oauth" && !!$("installBox");
   show("installBox", noInstall);
+  // U4: not installed → Install + Refresh only; the repository field, its
+  // link and the files line come back once there is something to pick.
+  show("repoField", !noInstall);
+  if (noInstall) { clearFields(); show("attachNote", false); } else renderAttachNote(t.id);
+  if (suggestOpen()) renderSuggest(true);
   if (noInstall) {
     panel.installWatch = true;
     // GitHub told us (setup_action=request) an owner has to approve it.
@@ -316,12 +476,16 @@ async function loadContainers() {
     put("installApp", res.installPending ? "Install on another account" : "Install TraceBug on GitHub");
   }
   panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
-  checkRepoAllowed();
   await checkPrefill(t);
   if (seq !== panel.loadSeq) return;
   // Linear's container id is opaque; show the team the remembered id is.
   if (!selectedContainer() && panel.items.length === 1) $("container").value = panel.items[0].id;
+  // U9: about the repository the field shows now — after any fallback above.
+  checkRepoAllowed();
   syncCreateButton();
+  // B8: the list just (re)loaded — after an install, a Refresh, a reconnect —
+  // so a repository that is valid now gets its labels and assignees.
+  if (!noInstall && selectedContainer() && !unavailableReason()) await loadFields(true);
 }
 
 /**
@@ -363,33 +527,51 @@ async function checkPrefill(t) {
   syncCreateButton();
 }
 
+function clearFields() {
+  $("fields").textContent = "";
+  panel.fieldSpecs = [];
+  panel.picks = {};
+  panel.fieldsFor = "";
+}
+
 async function loadFields(useRemembered) {
   const t = panel.current;
   const container = selectedContainer();
   if (!t || !container || container === panel.fieldsFor) return;
+  const seq = ++panel.fieldsSeq;
   // A repository that can't take issues: nothing to pick, and the reason stays on screen.
-  if (unavailableReason()) { $("fields").textContent = ""; panel.fieldSpecs = []; panel.fieldsFor = ""; return; }
+  if (unavailableReason()) { clearFields(); return; }
+  clearFields();
   panel.fieldsFor = container;
-  $("fields").textContent = "";
-  panel.fieldSpecs = [];
   const res = await send("tb:tracker:fields", { tracker: t.id, container });
-  if (container !== selectedContainer()) return;
-  if (needsAccess(res)) return;
+  // A newer load (another repository, a reconnect) owns the panel now.
+  if (seq !== panel.fieldsSeq || container !== selectedContainer()) {
+    if (seq === panel.fieldsSeq) panel.fieldsFor = "";
+    return;
+  }
+  // Failed: forget the attempt, so the next list refresh (or pick) tries again.
+  if (needsAccess(res)) { panel.fieldsFor = ""; return; }
   if (!res || res.error) {
+    panel.fieldsFor = "";
     panelMsg((res && res.error) || "Could not load the fields.", true);
     return;
   }
-  panel.fieldSpecs = Array.isArray(res.fields) ? res.fields : [];
+  const specs = Array.isArray(res.fields) ? res.fields : [];
   const keep = panel.keep && panel.keep.tracker === t.id && panel.keep.container === container ? panel.keep : null;
   const remembered = keep ? keep.fields
     : useRemembered && t.site && t.site.container === container ? (t.site.fields || {})
     : useRemembered && t.last && t.last.container === container ? (t.last.fields || {}) : null;
   panel.keep = null;
-  panel.fieldSpecs.forEach((f) => $("fields").appendChild(renderField(f, remembered ? remembered[f.key] : undefined)));
+  // One state, drawn here and sent by Create; cleared right before drawing.
+  panel.fieldSpecs = specs;
+  panel.picks = self.TraceBugPanelFields.initialPicks(specs, remembered);
+  const box = $("fields");
+  box.textContent = "";
+  specs.forEach((f) => box.appendChild(renderField(f)));
 }
 
-function renderField(spec, preset) {
-  const want = new Set(Array.isArray(preset) ? preset : preset ? [preset] : []);
+function renderField(spec) {
+  const PF = self.TraceBugPanelFields;
   if (spec.kind === "single") {
     const wrap = document.createElement("div");
     wrap.className = "pblock";
@@ -408,20 +590,17 @@ function renderField(spec, preset) {
       const o = document.createElement("option");
       o.value = String(op.id);
       o.textContent = String(op.label);
-      if (want.has(op.id)) o.selected = true;
+      if (PF.isPicked(panel.picks, spec.key, o.value)) o.selected = true;
       sel.appendChild(o);
     });
+    sel.addEventListener("change", () => { panel.picks[spec.key] = sel.value; });
     wrap.append(lab, sel);
     if (spec.note) wrap.appendChild(noteEl(spec.note));
     return wrap;
   }
 
-  // Multi-select as chips. Nothing remembered for this repo yet (preset is
-  // undefined, not an empty list) → "bug" starts ticked, if the repo has it.
-  if (preset === undefined) {
-    const bug = (spec.options || []).find((op) => String(op.label).toLowerCase() === "bug");
-    if (bug) want.add(bug.id);
-  }
+  // Multi-select as chips, drawn from panel.picks and written back to it
+  // ("bug" starts ticked on a repository with nothing remembered: panel-fields.js).
   const fs = document.createElement("fieldset");
   fs.dataset.field = spec.key;
   const lg = document.createElement("legend");
@@ -447,9 +626,9 @@ function renderField(spec, preset) {
     chip.className = "chip";
     chip.value = String(op.id);
     chip.textContent = String(op.label);
-    chip.setAttribute("aria-pressed", want.has(op.id) ? "true" : "false");
+    chip.setAttribute("aria-pressed", PF.isPicked(panel.picks, spec.key, chip.value) ? "true" : "false");
     chip.addEventListener("click", () => {
-      chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      chip.setAttribute("aria-pressed", PF.toggle(panel.picks, spec.key, chip.value) ? "true" : "false");
     });
     box.appendChild(chip);
   });
@@ -471,19 +650,10 @@ function noteEl(text) {
   return n;
 }
 
+/** What Create sends: the same state the chips and selects are drawn from. */
 function collectChoice() {
   const t = panel.current;
-  const fields = {};
-  panel.fieldSpecs.forEach((f) => {
-    if (f.kind === "single") {
-      const sel = document.querySelector('select[data-field="' + CSS.escape(f.key) + '"]');
-      if (sel && sel.value) fields[f.key] = sel.value;
-    } else {
-      const fs = document.querySelector('fieldset[data-field="' + CSS.escape(f.key) + '"]');
-      fields[f.key] = fs ? [...fs.querySelectorAll('button.chip[aria-pressed="true"]')].map((c) => c.value) : [];
-    }
-  });
-  return { tracker: t.id, container: selectedContainer(), fields };
+  return { tracker: t.id, container: selectedContainer(), fields: self.TraceBugPanelFields.choiceFields(panel.fieldSpecs, panel.picks) };
 }
 
 async function refreshAfterAuthChange(id) {
@@ -506,9 +676,50 @@ function requestPermissions(perm) {
   });
 }
 
+/**
+ * Copy text: the async clipboard first (call it from the click, before any
+ * await), else a selected read-only input and execCommand("copy").
+ */
 async function copyText(text) {
   if (!text) return false;
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const back = document.activeElement;
+  const box = document.createElement("input");
+  box.readOnly = true;
+  box.value = text;
+  box.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+  document.body.appendChild(box);
+  box.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}
+  box.remove();
+  if (back && typeof back.focus === "function") { try { back.focus(); } catch {} }
+  return ok;
+}
+
+/** The site's Permissions-Policy blocks the clipboard in this frame (it wins
+ *  over the frame's allow attribute). Only then do we say "this site". */
+function clipboardBlocked() {
+  const fp = document.featurePolicy || document.permissionsPolicy;
+  try { return !!(fp && typeof fp.allowsFeature === "function" && !fp.allowsFeature("clipboard-write")); }
+  catch { return false; }
+}
+
+/** Select the device code on screen, so Ctrl+C works when Copy can't. */
+function selectCode() {
+  const el = $("userCode");
+  if (!el) return;
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  } catch {}
+}
+
+function copyFailedText(what) {
+  return (clipboardBlocked() ? "This site blocks copying. " : "Couldn't copy. ") + what;
 }
 
 /** After signing in on GitHub's tab, put this window back in front of it. */
@@ -568,11 +779,17 @@ function tokenMsg(text, isErr) {
   el.className = "msg" + (isErr ? " err" : "");
 }
 
-async function onTokenSave() {
+async function onTokenSave(e, replaceOk) {
   const t = panel.current;
   if (!t || panel.tokenSaving) return;
   const secret = ($("tokenInput").value || "").trim();
   if (!secret) { tokenMsg("Paste " + (t.id === "linear" ? "an API key" : "a token") + " first.", true); $("tokenInput").focus(); return; }
+  // One GitHub connection: a token replaces the sign-in — ask first.
+  if (t.id === "github" && hasSignIn(t) && replaceOk !== true) {
+    askReplace("This replaces your GitHub sign-in" + (t.account ? " (" + t.account + ")" : "") + " with this token.",
+      () => onTokenSave(null, true));
+    return;
+  }
   // Host access first, inside the click (an await before it loses the gesture).
   const granted = await requestPermissions({ origins: t.apiHosts || [] });
   if (!granted) { tokenMsg("TraceBug needs access to " + t.label + " to check and use the " + secretNoun(t) + ".", true); return; }
@@ -671,8 +888,11 @@ async function onConnect() {
   const granted = await requestPermissions(t.connectPermissions);
   if (!granted) { panelMsg("TraceBug needs that permission to sign in to " + t.label + ".", true); return; }
   $("connect").disabled = true;
+  show("revokeNote", false);
   panelMsg("Connecting to " + t.label + "…");
-  const res = await send("tb:tracker:connect", { tracker: t.id });
+  // open:false — copy the code while this page still has focus, then open
+  // GitHub's window (it takes focus, and the clipboard refuses an unfocused page).
+  const res = await send("tb:tracker:connect", { tracker: t.id, open: false });
   $("connect").disabled = false;
   if (!res || res.error) { panelMsg((res && res.error) || "Could not connect.", true); return; }
   if (needsAccess(res)) { panelMsg(""); return; }
@@ -680,16 +900,17 @@ async function onConnect() {
     put("userCode", res.userCode || "");
     $("openDevice").dataset.url = res.verificationUri || "";
     show("deviceBox", true);
-    // The worker opened GitHub's page (res.opened: a popup window, else a tab)
-    // and closes it when the token arrives — the token is the only "connected"
-    // signal. The copy can fail (the click's user activation may have lapsed);
-    // the code is selectable and has its own Copy button either way.
+    // The code is selectable and has its own Copy button if this fails.
     const copied = await copyText(res.userCode || "");
-    show("openDevice", !res.opened);
-    const where = res.opened === "tab" ? "GitHub tab" : "GitHub window";
+    // The worker opens GitHub's page (a popup window, else a tab) and closes
+    // it when the token arrives — the token is the only "connected" signal.
+    const shown = res.opened ? { ok: true, opened: res.opened } : await send("tb:tracker:connect-show", { tracker: t.id });
+    const opened = shown && shown.ok ? shown.opened : null;
+    show("openDevice", !opened);
+    const where = opened === "tab" ? "GitHub tab" : "GitHub window";
     panel.deviceHint = copied
       ? "Code copied — in the " + where + ", press " + pasteKeys() + ", then Continue and Authorize."
-      : "Copy the code (or select it) and paste it in the " + where + ", then Continue and Authorize.";
+      : "Select the code and copy it, then paste it in the " + where + " and Continue and Authorize.";
     put("deviceHint", panel.deviceHint);
     panelMsg("This window carries on by itself once you authorize.");
     schedulePoll(t.id, res.interval || 5);
@@ -733,12 +954,46 @@ async function onDisconnect() {
   const res = await send("tb:tracker:disconnect", { tracker: t.id, token: EMBED && t.via === "token" });
   if (!res || res.error) { panelMsg((res && res.error) || "Could not disconnect.", true); return; }
   await refreshAfterAuthChange(t.id);
-  if (res.revokeUrl && $("revokeNote")) {
-    $("revokeLink").dataset.url = res.revokeUrl;
+  // Exactly what was removed, and where to finish on GitHub (B7, B11).
+  const what = disconnectNote(res);
+  if (!what) return;
+  if ($("revokeNote")) {
+    put("revokeText", what.text);
+    put("revokeLink", what.link);
+    $("revokeLink").dataset.url = what.url;
     show("revokeNote", true);
-  } else if (res.revokeUrl) {
-    panelMsg("Disconnected — TraceBug deleted its sign-in from this browser. To fully revoke, remove TraceBug at " + res.revokeUrl);
+  } else {
+    panelMsg(what.text + " " + what.link + " (" + what.url + ")");
   }
+}
+
+/** The Disconnect answer in words: { text, link, url }, or null. */
+function disconnectNote(res) {
+  if (res.removed === "signin" && res.revokeUrl) {
+    return { text: "Signed out. TraceBug deleted its GitHub sign-in from this browser. To remove its access on GitHub too:",
+      link: "Authorized GitHub Apps", url: res.revokeUrl };
+  }
+  if (res.removed === "token" && res.tokenUrl) {
+    return { text: "Token removed from this browser. You can delete it on GitHub:", link: "Personal access tokens", url: res.tokenUrl };
+  }
+  return null;
+}
+
+/** Token mode → "Switch to GitHub sign-in": confirm, then the usual Connect. */
+function onSwitchSignIn(e) {
+  e.preventDefault();
+  const t = panel.current;
+  if (!t || !t.canConnect) return;
+  askReplace("This replaces your token" + (t.tokenHint ? " " + t.tokenHint : "") + ". TraceBug signs in with GitHub instead.", () => {
+    // The device code shows in the Connect box; the token form isn't wanted here.
+    show("switchSignIn", false);
+    show("pickBox", false);
+    show("connectBox", true);
+    show("connect", false);
+    show("tokenBox", false);
+    put("connectText", "Sign in on GitHub to replace your token.");
+    onConnect();
+  });
 }
 
 function wirePanel() {
@@ -757,11 +1012,11 @@ function wirePanel() {
     $("tokenHelp").addEventListener("click", (e) => { e.preventDefault(); openExternal($("tokenHelp").dataset.url || ""); });
   }
   if ($("revokeLink")) $("revokeLink").addEventListener("click", (e) => { e.preventDefault(); openExternal($("revokeLink").dataset.url || ""); });
+  if ($("switchSignIn")) $("switchSignIn").addEventListener("click", onSwitchSignIn);
   if ($("installApp")) {
     $("installApp").addEventListener("click", openInstall);
     $("configureRepo").addEventListener("click", (e) => { e.preventDefault(); openInstall(); });
     $("refreshRepos").addEventListener("click", () => loadContainers());
-    $("container").addEventListener("input", checkRepoAllowed);
     // Back from GitHub (window focus, tab shown again): look again.
     const back = () => { if (panel.installWatch) loadContainers(); };
     window.addEventListener("focus", back);
@@ -773,7 +1028,9 @@ function wirePanel() {
     try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#integrations") }); } catch {}
   });
   $("copyCode").addEventListener("click", async () => {
-    if (await copyText($("userCode").textContent || "")) panelMsg("Code copied — press " + pasteKeys() + " on GitHub.");
+    if (await copyText($("userCode").textContent || "")) { panelMsg("Code copied — press " + pasteKeys() + " on GitHub."); return; }
+    selectCode();
+    panelMsg(copyFailedText("The code is selected: press " + (pasteKeys() === "⌘V" ? "⌘C" : "Ctrl+C") + "."), true);
   });
   $("manageLink").addEventListener("click", (e) => {
     e.preventDefault();
@@ -797,7 +1054,12 @@ function wirePanel() {
     await loadFields(true);
   });
   const c = $("container");
+  wireSuggest();
   c.addEventListener("input", () => {
+    // U9: a note about the repository that was there before goes with it;
+    // then what applies to this one (archived, Issues off, not allowed).
+    panelMsg("");
+    checkRepoAllowed();
     syncCreateButton();
     // Picking from the list fires `input` with an exact match: load at once.
     if (panel.items.some((it) => it.id === selectedContainer())) loadFields(false);
@@ -873,7 +1135,8 @@ async function createIssue(e) {
 
 function showDone(tracker, r) {
   decided = true;
-  ["connectBox", "accessBox", "pickBox", "disconnect"].forEach((id) => show(id, false));
+  // U9: after Create, only "Created #N".
+  ["connectBox", "accessBox", "pickBox", "disconnect", "revokeNote", "ssoBox", "replaceBox", "switchSignIn"].forEach((id) => show(id, false));
   $("tracker").disabled = true;
   panelMsg("");
   const link = $("issueLink");
@@ -889,6 +1152,7 @@ function showDone(tracker, r) {
     : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.") + attached + missing);
   show("attachNote", false);
   show("copyShot", tracker === "github" && canCopyShot());
+  if (tracker === "github") showDownloads();
   show("doneBox", true);
   $("send").hidden = true;
   $("cancel").textContent = "Close";
@@ -896,30 +1160,64 @@ function showDone(tracker, r) {
   $("cancel").focus();
 }
 
-// ── "Copy screenshot" (panel, GitHub) ──────────────────────────────────────
+// ── Copy / Download screenshot, Download recording (panel, GitHub) ─────────
 // GitHub's API takes no files, so after Create the user can paste the
-// screenshot into a comment. The image is fetched from the worker before
-// Create (the request's files go when it ends) and lives only in this frame.
-// Written on a real click only; no new permission (the frame is allowed
-// clipboard-write). Hidden without a screenshot or a clipboard that takes images.
+// screenshot into a comment, or download it and the recording. The files are
+// fetched from the worker before Create (the request's files go when it ends)
+// and live only in this frame. Copy is written on a real click only; no new
+// permission (the frame is allowed clipboard-write). Downloads are an <a
+// download> on a blob: URL of this frame — no downloads permission.
 
 function canCopyShot() {
   return !!(EMBED && panel.shot && navigator.clipboard && typeof navigator.clipboard.write === "function" &&
     typeof window.ClipboardItem === "function");
 }
 
+async function loadFile(kind) {
+  const want = kind === "video" ? /^video\// : /^image\//;
+  if (!EMBED || !REQ_ATTACH.some((a) => want.test(a.type))) return null;
+  const r = await send("tb:panel:screenshot", kind === "video" ? { id: ID, nonce: NONCE, kind } : { id: ID, nonce: NONCE });
+  return r && r.ok && typeof r.data === "string" ? { type: r.type, data: r.data, name: typeof r.name === "string" ? r.name : "" } : null;
+}
+
 async function loadShot() {
-  if (!EMBED || !REQ_ATTACH.some((a) => /^image\//.test(a.type))) return;
-  const r = await send("tb:panel:screenshot", { id: ID, nonce: NONCE });
-  panel.shot = r && r.ok && typeof r.data === "string" ? { type: r.type, data: r.data } : null;
+  panel.shot = await loadFile("image");
+  panel.video = await loadFile("video");
+}
+
+function fileBlob(f) {
+  const bin = atob(f.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: f.type });
+}
+
+/** A file name we made, never a path: letters, digits and a few marks. */
+function safeName(name, fallback) {
+  const n = String(name || "").replace(/[^A-Za-z0-9 _.()-]+/g, "-").slice(0, 100);
+  return /\.[a-z0-9]{2,4}$/i.test(n) ? n : fallback;
+}
+
+/** After Create: point the Download links at blob: URLs of this frame. */
+function showDownloads() {
+  [["downloadShot", panel.shot, "tracebug-screenshot.png"], ["downloadVideo", panel.video, "tracebug-recording.webm"]].forEach(([id, f, fallback]) => {
+    const a = $(id);
+    if (!a) return;
+    if (!f) { a.hidden = true; return; }
+    try {
+      if (a.dataset.blobUrl) URL.revokeObjectURL(a.dataset.blobUrl);
+      const url = URL.createObjectURL(fileBlob(f));
+      a.dataset.blobUrl = url;
+      a.href = url;
+      a.download = safeName(f.name, fallback);
+      a.hidden = false;
+    } catch { a.hidden = true; }
+  });
 }
 
 /** The clipboard takes PNG: re-encode JPEG/WebP through a canvas. */
 async function shotAsPng() {
-  const bin = atob(panel.shot.data);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const blob = new Blob([bytes], { type: panel.shot.type });
+  const blob = fileBlob(panel.shot);
   if (panel.shot.type === "image/png") return blob;
   const bmp = await createImageBitmap(blob);
   const c = document.createElement("canvas");
@@ -936,9 +1234,8 @@ async function copyShot(e) {
     await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
     panelMsg("Screenshot copied. Paste it into a comment on the issue.");
   } catch {
-    // Also a site whose Permissions-Policy blocks clipboard-write: the policy
-    // reaches this frame and write() rejects; nothing tells us before the click.
-    panelMsg("Couldn't copy the screenshot on this site. Download it from the ticket instead.", true);
+    // "This site blocks copying" only when its Permissions-Policy really does.
+    panelMsg(copyFailedText("Use Download screenshot instead."), true);
   }
 }
 

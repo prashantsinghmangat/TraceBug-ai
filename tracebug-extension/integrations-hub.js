@@ -213,7 +213,11 @@
       title.append(el("span", { text: c.label }));
       if (c.isDefault) title.append(el("span", { class: "tbh-badge", text: "Default" }));
       names.append(title);
-      const sub = [c.account || (c.via === "token" ? "with a token" : c.via === "webhook" ? "webhook" : ""), c.container].filter(Boolean).join(" · ");
+      // GitHub names its one connection's mode (B11).
+      const how = c.id === "github"
+        ? (c.via === "oauth" ? "Signed in" + (c.account ? " as " + c.account : "") + " · GitHub App" : c.via === "token" ? "Using a personal token" : "")
+        : c.account || (c.via === "token" ? "with a token" : c.via === "webhook" ? "webhook" : "");
+      const sub = [how, c.container].filter(Boolean).join(" · ");
       if (sub) names.append(el("div", { class: "tbh-row-sub", text: sub }));
       head.append(names);
       const pill = el("span", { class: "tbh-pill " + c.state, text: STATE_TEXT[c.state] + (c.state === "reconnect" ? " ⚠" : "") });
@@ -334,7 +338,14 @@
         if (c.id !== "slack") {
           const r = await C().msg("tb:tracker:disconnect", { tracker: c.id });
           if (!r || r.error) { say((r && r.error) || "Couldn't disconnect.", true); yes.disabled = false; return; }
-          if (r.revokeUrl) msgText += " To revoke TraceBug's access entirely, visit " + r.revokeUrl;
+          // GitHub: exactly what was removed, and where to finish on GitHub.
+          if (r.removed === "signin" && r.revokeUrl) {
+            msgText = "Signed out of GitHub. TraceBug deleted its GitHub sign-in from this browser. To remove its access on GitHub too: Authorized GitHub Apps (" + r.revokeUrl + ").";
+          } else if (r.removed === "token" && r.tokenUrl) {
+            msgText = "Removed the GitHub token from this browser. You can delete it on GitHub: Personal access tokens (" + r.tokenUrl + ").";
+          } else if (r.revokeUrl) {
+            msgText += " To revoke TraceBug's access entirely, visit " + r.revokeUrl;
+          }
         }
         await forgetToken(c.id);
         delete state.testResult[c.id];

@@ -199,8 +199,8 @@ try {
   await sleep(800);
 
   const primary = page.locator('#tracebug-quick-bug-modal [data-action="open-github"]').first();
-  check('with nothing connected, the ticket offers "Connect a tracker ▾"', (await primary.innerText()).trim() === "Connect a tracker" &&
-    !!(await page.$('#tracebug-quick-bug-modal [data-tb-split-caret]')), (await primary.innerText()).trim());
+  check('with nothing connected, the ticket offers one "Connect a tracker" button (no ▾ half)', (await primary.innerText()).trim() === "Connect a tracker" &&
+    !(await page.$('#tracebug-quick-bug-modal [data-tb-split-caret]')), (await primary.innerText()).trim());
 
   const confirmP = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 10000 });
   await primary.click();
@@ -227,8 +227,8 @@ try {
   check("2. the code is shown large and selectable", (await win.textContent("#userCode")).trim() === "ABCD-1234" &&
     (await win.$eval("#userCode", (e) => parseFloat(getComputedStyle(e).fontSize))) >= 28 &&
     (await win.$eval("#userCode", (e) => getComputedStyle(e).userSelect)) === "all");
-  check("…with the clipboard refused: a Copy button and a 'copy or select' hint",
-    (await win.isVisible("#copyCode")) && /Copy the code \(or select it\)/.test(await win.textContent("#deviceHint")),
+  check("…copied before GitHub's window opened (or a 'select the code' hint), and a Copy button",
+    (await win.isVisible("#copyCode")) && /Code copied|Select the code and copy it/.test(await win.textContent("#deviceHint")),
     await win.textContent("#deviceHint"));
   check("…and no Reopen button while the popup is open", !(await win.isVisible("#openDevice")));
 
@@ -350,7 +350,7 @@ try {
   await opt.goto(`chrome-extension://${extId}/options.html`);
   await opt.waitForFunction(() => /octo/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-line').textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const line = await opt.textContent('.tracker-acct[data-tracker="github"] .acct-line');
-  check('settings: "Signed in as octo."', (line || "").trim() === "Signed in as octo.", line);
+  check('settings: "Signed in as octo · GitHub App" (the mode, B11)', (line || "").trim() === "Signed in as octo · GitHub App", line);
   check("settings: no token in the page", !(await opt.content()).includes(ACCESS));
   check("settings: the token form is folded away", !(await opt.evaluate(() => document.getElementById("ghAdvanced").open)));
   const defSel = '.tracker-acct[data-tracker="github"] .acct-default';
@@ -369,7 +369,7 @@ try {
     !(await welcome.isVisible("#trConnect")) && (await welcome.isVisible("#trPick")) &&
     /Connected as octo/.test(await welcome.textContent("#trStatus")));
   await opt.click('.tracker-acct[data-tracker="github"] .acct-disconnect');
-  await opt.waitForFunction(() => /Disconnected/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-status').textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  await opt.waitForFunction(() => /Signed out/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-status').textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const after = await sw.evaluate(() => chrome.storage.local.get(["tb_tracker_auth_v1", "tb_tracker_prefs_v1"]));
   check("Disconnect forgets the sign-in and the remembered picks",
     !(after.tb_tracker_auth_v1 && after.tb_tracker_auth_v1.github) && !(after.tb_tracker_prefs_v1 && after.tb_tracker_prefs_v1.github),

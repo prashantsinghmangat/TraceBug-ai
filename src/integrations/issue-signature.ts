@@ -30,6 +30,15 @@ export function issueSignatureMarkdown(): string {
   return `_[${TEXT}](${storeUrl("issue")})_`;
 }
 
+/**
+ * A filed GitHub issue's ONE footer (U6): the session id, and the credit when
+ * it is on — never "Captured with TraceBug" and "Reported with TraceBug" both.
+ */
+export function issueFooterMarkdown(sessionId: string): string {
+  const session = `Session \`${String(sessionId || "").slice(0, 8)}\``;
+  return issueSignatureEnabled() ? `_[${TEXT}](${storeUrl("issue")}) · ${session}_` : `_${session}_`;
+}
+
 /** Slack's own link syntax — `<url|label>`, not markdown. */
 export function issueSignatureSlack(): string {
   return `_<${storeUrl("issue")}|${TEXT}>_`;

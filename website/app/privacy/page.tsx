@@ -147,8 +147,8 @@ export default function PrivacyPage() {
                 never the page or path), in{" "}
                 <code className="text-accent">chrome.storage.local</code>.
                 Nothing is remembered from private windows; at most 200 sites
-                are kept; Settings → Integrations → &ldquo;Forget remembered
-                choices&rdquo; deletes them.
+                are kept; Settings → Integrations → Preferences →
+                &ldquo;Remembered choices&rdquo; → Forget deletes them.
               </li>
             </ul>
           </section>

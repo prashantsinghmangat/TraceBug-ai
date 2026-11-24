@@ -719,14 +719,14 @@ function mountCreatePanel(id, nonce) {
   var modal = document.getElementById("tracebug-quick-bug-modal");
   var anchor = modal && modal.querySelector(".tb-qb-footer .tb-qb-actions");
   if (!anchor) { panelFallback(id, nonce); return; }
-  // The split button (if the ticket has one) anchors the panel as its
+  // The send button (if the ticket has one) anchors the panel as its
   // dropdown and gets focus back when it closes. The page's hint picks what
   // the frame focuses first; it can't do anything else.
   var split = modal.querySelector("[data-tb-send-split]");
   var focusHint = modal.getAttribute("data-tb-panel-focus") === "picker" ? "picker" : "create";
   var active = document.activeElement;
   var opener = split && active && split.contains(active) ? active
-    : split ? split.querySelector(focusHint === "picker" ? "[data-tb-split-caret]" : "[data-tb-split-main]") : null;
+    : split ? split.querySelector("[data-tb-split-main]") : null;
 
   // getURL gives the per-session dynamic URL (use_dynamic_url); the loaded
   // document's origin is the extension's own. Both are ours, nothing else is.
@@ -743,8 +743,14 @@ function mountCreatePanel(id, nonce) {
   var frame = document.createElement("iframe");
   frame.src = src;
   frame.title = "Create an issue";
-  // The device code's Copy button needs the clipboard inside the frame.
-  frame.setAttribute("allow", "clipboard-write");
+  // The device code's Copy and "Copy screenshot" need the clipboard inside the
+  // frame. `*`, not the default 'src': the src is the dynamic URL, but the
+  // document that loads has the extension's own origin, so 'src' never matches
+  // it and Chrome blocked every write. Naming that origin would put the
+  // extension id in the page. `*` grants nothing the page lacks: it could
+  // frame anything it likes with the same attribute. A site's own
+  // Permissions-Policy (clipboard-write=()) still wins.
+  frame.setAttribute("allow", "clipboard-write *");
   // !important on every box property: a page's own `iframe { … !important }`
   // rules (height caps are common) would otherwise squeeze the panel into a
   // scroll box, and its Create button might never be fully on screen.

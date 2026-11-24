@@ -267,6 +267,13 @@ describe('attachments from the page (provider-bridge.js)', () => {
     for (const a of bad) expect(B.validatePayload('linear', { title: 'T', body: 'B', attachments: [a] }).ok).toBe(false);
     expect(B.validatePayload('linear', { title: 'T', body: 'B', attachments: Array(7).fill(ok) }).ok).toBe(false);
   });
+  it('takes the recording for GitHub only (the panel\'s Download recording), never for Linear', () => {
+    const video = { name: 'tracebug-recording-1.webm', type: 'video/webm', data: 'AAAA' };
+    expect(B.validatePayload('github', { title: 'T', body: 'B', attachments: [ok, video] }).ok).toBe(true);
+    expect(B.validatePayload('github', { title: 'T', body: 'B', attachments: [{ ...video, name: 'r.mp4', type: 'video/mp4' }] }).ok).toBe(true);
+    expect(B.validatePayload('linear', { title: 'T', body: 'B', attachments: [video] }).ok).toBe(false);
+    expect(B.validatePayload('github', { title: 'T', body: 'B', attachments: [{ ...video, name: 'r.mp4' }] }).ok).toBe(false);
+  });
   it('refuses a file over 20 MB', () => {
     const big = 'A'.repeat(Math.ceil((20 * 1024 * 1024 + 3) / 3) * 4);
     expect(B.validatePayload('linear', { title: 'T', body: 'B', attachments: [{ ...ok, data: big }] }).error).toMatch(/too large/);

@@ -57,8 +57,22 @@
     return null;
   }
 
+  /** The async clipboard, else a selected read-only input + execCommand. */
   async function copy(text) {
-    try { await navigator.clipboard.writeText(text || ""); return true; } catch { return false; }
+    if (!text) return false;
+    try { await navigator.clipboard.writeText(text); return true; } catch {}
+    const back = document.activeElement;
+    const box = document.createElement("input");
+    box.readOnly = true;
+    box.value = text;
+    box.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+    document.body.appendChild(box);
+    box.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch {}
+    box.remove();
+    if (back && typeof back.focus === "function") { try { back.focus(); } catch {} }
+    return ok;
   }
 
   /**
@@ -75,15 +89,19 @@
     return requestPermissions(t.connectPermissions).then(async (granted) => {
       if (!granted) { ui.say("TraceBug needs that permission to sign in to " + t.label + ".", true); return; }
       ui.say("Connecting to " + t.label + "…");
-      const res = await msg("tb:tracker:connect", { tracker: t.id });
+      // open:false — copy the code while this page has focus, then open
+      // GitHub's window (it takes focus; the clipboard refuses an unfocused page).
+      const res = await msg("tb:tracker:connect", { tracker: t.id, open: false });
       if (!res || res.error) { ui.say((res && res.error) || "Could not connect.", true); return; }
       if (res.flow === "device") {
         ui.code(res.userCode || "");
         const copied = await copy(res.userCode);
+        const shown = res.opened ? { ok: true, opened: res.opened } : await msg("tb:tracker:connect-show", { tracker: t.id });
+        const opened = shown && shown.ok ? shown.opened : null;
         // Nothing could be opened by the worker: offer the button instead.
-        ui.reopen(!res.opened);
-        ui.say(codeHint(copied, res.opened));
-        poll(t, ui, res.interval || 5, res.opened, codeHint(copied, res.opened));
+        ui.reopen(!opened);
+        ui.say(codeHint(copied, opened));
+        poll(t, ui, res.interval || 5, opened, codeHint(copied, opened));
         return;
       }
       ui.code(null);
@@ -127,8 +145,14 @@
    */
   async function fillDefaultPicker(t, select, say) {
     const noun = String(t.containerNoun || "repository").toLowerCase();
-    select.textContent = "";
+    // Settings re-renders on every storage change, so two fills can overlap:
+    // only the newest one fills, and it clears right before it does — clearing
+    // before the await let both append (every option listed twice).
+    const seq = (select._tbFillSeq || 0) + 1;
+    select._tbFillSeq = seq;
     const res = await msg("tb:tracker:containers", { tracker: t.id });
+    if (select._tbFillSeq !== seq) return 0;
+    select.textContent = "";
     if (!res || res.error || !Array.isArray(res.items)) {
       say((res && res.error) || (res && res.needsAccess ? "Click Connect again to allow access." : "Could not load the list."), true);
       return 0;

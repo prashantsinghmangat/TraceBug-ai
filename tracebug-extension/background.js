@@ -2318,9 +2318,11 @@ async function handlePanelMessage(message, sender) {
       // the request's files are deleted when it ends.
       const got = await panelRequestFor(message, sender, false);
       if (got.error) return { ok: false };
+      // kind "video": the recording, for "Download recording" (GitHub only).
       const files = (await localGet([ATTACH_PREFIX + got.id], {}))[ATTACH_PREFIX + got.id];
-      const img = Array.isArray(files) ? files.find((f) => f && /^image\/(png|jpeg|webp)$/.test(f.type)) : null;
-      return img ? { ok: true, type: img.type, data: img.data } : { ok: false };
+      const want = message.kind === "video" ? /^video\/(webm|mp4)$/ : /^image\/(png|jpeg|webp)$/;
+      const img = Array.isArray(files) ? files.find((f) => f && want.test(f.type)) : null;
+      return img ? { ok: true, type: img.type, data: img.data, name: img.name } : { ok: false };
     }
     case "tb:panel:to-window": {
       // From the bound panel frame itself: "Open in a window".
@@ -2768,10 +2770,41 @@ async function finishConnect(api, adapter, tokens) {
   let account = "";
   try { account = await adapter.whoAmI({ via: "oauth", token: tokens.accessToken }); } catch {}
   await api.saveOAuth(trackerAuthStore, adapter.id, tokens, account || undefined, Date.now());
+  // One GitHub connection: the sign-in replaces a saved token (the page
+  // asked "This replaces your token ghp_…" before Connect).
+  if (adapter.id === "github") await dropGitHubToken();
   return { connected: true, account };
 }
 
-async function connectTracker(api, adapter, sender) {
+// ── One GitHub connection (B11) ────────────────────────────────────────────
+// A sign-in or a pasted token, never both. Older storage can hold both: keep
+// the sign-in and drop the token (or, if the sign-in needs reconnecting, keep
+// the token that still works). Checked on every tracker UI call.
+
+async function dropGitHubToken() {
+  const all = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+  if (!all.github || !all.github.token) return;
+  delete all.github.token;
+  await localSet({ [INT_KEY]: all });
+}
+
+async function enforceOneGitHub(api) {
+  if (typeof api.extraGitHubConnection !== "function") return;
+  const got = await localGet([TRACKER_AUTH_KEY, INT_KEY], {});
+  const drop = api.extraGitHubConnection(got[TRACKER_AUTH_KEY] || {}, got[INT_KEY] || {});
+  if (drop === "token") await dropGitHubToken();
+  else if (drop === "signin") await api.forgetOAuth(trackerAuthStore, "github");
+}
+
+// Where the user finishes removing access on GitHub (revoking needs the client
+// secret TraceBug doesn't have, ADR 010 §6): the GitHub App's authorization,
+// or the token itself.
+const GITHUB_APP_AUTHORIZATIONS_URL = "https://github.com/settings/apps/authorizations";
+function githubTokensUrl(token) {
+  return /^github_pat_/.test(token || "") ? "https://github.com/settings/personal-access-tokens" : "https://github.com/settings/tokens";
+}
+
+async function connectTracker(api, adapter, sender, message) {
   if (!oauthUiSupported()) return { error: "Sign-in isn't available in this browser yet. Use a token in TraceBug settings." };
   const c = adapter.connect();
   if (!c) return { error: adapter.label + " sign-in isn't set up in this build. Use a token in TraceBug settings." };
@@ -2790,8 +2823,11 @@ async function connectTracker(api, adapter, sender) {
     const prev = (await sessionGet(DEVICE_FLOW_KEY, {}))[adapter.id];
     if (prev && !prev.done) closeDevicePage(prev, false);
     // GitHub's page goes in a small popup window of its own (a normal tab if
-    // that fails), closed by us once the token arrives.
-    const opened = await openDevicePage(code.verificationUri);
+    // that fails), closed by us once the token arrives. open:false — the page
+    // copies the code first, while it still has focus (a window opened now
+    // takes it, and the clipboard refuses an unfocused page), then asks for
+    // the window with tb:tracker:connect-show.
+    const opened = message && message.open === false ? { how: null, ids: {} } : await openDevicePage(code.verificationUri);
     Object.assign(state, opened.ids);
     const all = await sessionGet(DEVICE_FLOW_KEY, {});
     all[adapter.id] = state;
@@ -2841,7 +2877,10 @@ async function openDevicePage(url) {
   if (!b || !b.isDeviceVerificationUrl(url)) return { how: null, ids: {} };
   try {
     const win = await chrome.windows.create(Object.assign({ url, focused: true }, DEVICE_POPUP));
-    if (win && win.id != null) return { how: "popup", ids: { popupWindowId: win.id, popupTabId: null, popupClosed: false } };
+    if (win && win.id != null) {
+      const winTab = win.tabs && win.tabs[0] && win.tabs[0].id != null ? win.tabs[0].id : null;
+      return { how: "popup", ids: { popupWindowId: win.id, popupTabId: null, popupWinTabId: winTab, popupClosed: false } };
+    }
   } catch {}
   try {
     const tab = await chrome.tabs.create({ url, active: true });
@@ -2873,9 +2912,19 @@ function closeDevicePage(st, refocus) {
   if (st.popupWindowId != null && !st.popupClosed) {
     try { chrome.windows.remove(st.popupWindowId, () => void chrome.runtime.lastError); } catch {}
   }
-  if (st.popupTabId != null) {
-    try { chrome.tabs.remove(st.popupTabId, () => void chrome.runtime.lastError); } catch {}
-  }
+  // B2: also by its tab (closing a popup's only tab closes it), and any popup
+  // window still on GitHub's device pages ("Congratulations, you're all set!")
+  // — only popup windows, which only TraceBug opens there. Reading their
+  // address needs github.com access, granted at Connect.
+  [st.popupTabId, st.popupWinTabId].forEach((id) => {
+    if (id != null) { try { chrome.tabs.remove(id, () => void chrome.runtime.lastError); } catch {} }
+  });
+  try {
+    chrome.tabs.query({ windowType: "popup", url: "https://github.com/login/device*" }, (tabs) => {
+      void chrome.runtime.lastError;
+      (tabs || []).forEach((t) => { try { chrome.tabs.remove(t.id, () => void chrome.runtime.lastError); } catch {} });
+    });
+  } catch {}
   if (!refocus) return;
   if (st.returnWindowId != null) {
     try { chrome.windows.update(st.returnWindowId, { focused: true }, () => void chrome.runtime.lastError); } catch {}
@@ -2959,6 +3008,7 @@ if (chrome.windows && chrome.windows.onRemoved) {
 }
 
 async function disconnectTracker(api, adapter, alsoToken) {
+  if (adapter.id === "github") return disconnectGitHub(api);
   const gone = await api.forgetOAuth(trackerAuthStore, adapter.id);
   // The panel's Disconnect on a token connection removes the token (the
   // repository/team stays, as in settings).
@@ -2980,11 +3030,27 @@ async function disconnectTracker(api, adapter, alsoToken) {
   delete prefs[adapter.id];
   await localSet({ [TRACKER_PREFS_KEY]: prefs });
   await forgetSitesFor(adapter.id);
-  // GitHub's revoke endpoint needs the client secret we don't have (ADR 010 §6),
-  // so the window links the user to where they can revoke it themselves.
-  // The token is deleted here; GitHub's own record of the sign-in stays until
-  // the user removes TraceBug there (revoking needs the client secret we don't have).
-  return { ok: true, revokeUrl: adapter.id === "github" ? "https://github.com/settings/applications" : null };
+  return { ok: true, revokeUrl: null };
+}
+
+/**
+ * GitHub's one connection goes, whichever it is, and the answer says which:
+ * removed "signin" (+ revokeUrl: Authorized GitHub Apps) or "token" (+
+ * tokenUrl: where the user can delete it on GitHub). Remembered choices go too.
+ */
+async function disconnectGitHub(api) {
+  const all = (await localGet([INT_KEY], {}))[INT_KEY] || {};
+  const token = all.github && all.github.token ? all.github.token : "";
+  const gone = await api.forgetOAuth(trackerAuthStore, "github");
+  await dropGitHubToken();
+  const got = await localGet([TRACKER_PREFS_KEY], {});
+  const prefs = got[TRACKER_PREFS_KEY] || {};
+  delete prefs.github;
+  await localSet({ [TRACKER_PREFS_KEY]: prefs });
+  await forgetSitesFor("github");
+  if (gone) return { ok: true, removed: "signin", revokeUrl: GITHUB_APP_AUTHORIZATIONS_URL };
+  if (token) return { ok: true, removed: "token", tokenUrl: githubTokensUrl(token) };
+  return { ok: true, removed: null };
 }
 
 // ── Create panel: "Use a token instead" ────────────────────────────────────
@@ -3003,6 +3069,9 @@ async function saveTrackerToken(api, adapter, message) {
   await localSet({ [INT_KEY]: all });
   const back = (((await localGet([INT_KEY], {}))[INT_KEY] || {})[adapter.id] || {})[field];
   if (back !== secret) return { error: "TraceBug couldn't save it. Try again." };
+  // One GitHub connection: a saved token replaces the sign-in (the page asked
+  // "This replaces your GitHub sign-in" first).
+  if (adapter.id === "github") await api.forgetOAuth(trackerAuthStore, "github");
   return { ok: true, account: r.account || "" };
 }
 
@@ -3026,7 +3095,7 @@ const INSTALL_POPUP = { type: "popup", width: 1000, height: 760 };
 const INSTALL_PENDING_KEY = "tb_github_install_pending_v1";
 
 /** `anyGitHubPage`: an SSO authorisation link (already checked); else only the install page. */
-async function openInstallPage(url, anyGitHubPage) {
+async function openInstallPage(url, anyGitHubPage, sender) {
   let u;
   try { u = new URL(url); } catch { return null; }
   if (u.protocol !== "https:" || u.hostname !== "github.com") return null;
@@ -3043,6 +3112,8 @@ async function openInstallPage(url, anyGitHubPage) {
     } catch {}
   }
   if (!rec) return null;
+  // Where to bring the user back to when GitHub is done (B3).
+  if (sender && sender.tab) { rec.returnTabId = sender.tab.id; rec.returnWindowId = sender.tab.windowId; }
   await sessionSet({ [INSTALL_KEY]: rec });
   return rec.windowId != null ? "popup" : "tab";
 }
@@ -3062,6 +3133,20 @@ async function onInstallTabUrl(tabId, url) {
   const action = u.searchParams.get("setup_action");
   if (action === "request") await localSet({ [INSTALL_PENDING_KEY]: { at: Date.now() } });
   else if (action === "install" || action === "update") await localRemove([INSTALL_PENDING_KEY]);
+  else return;
+  // B3: installed, updated or requested — GitHub is done with this window.
+  // Close it; the panel sees it gone and reloads the list by itself.
+  await sessionSet({ [INSTALL_KEY]: null });
+  try {
+    if (rec.windowId != null) chrome.windows.remove(rec.windowId, () => void chrome.runtime.lastError);
+    else chrome.tabs.remove(rec.tabId, () => void chrome.runtime.lastError);
+  } catch {}
+  if (rec.returnTabId != null) {
+    try { chrome.tabs.update(rec.returnTabId, { active: true }, () => void chrome.runtime.lastError); } catch {}
+  }
+  if (rec.returnWindowId != null) {
+    try { chrome.windows.update(rec.returnWindowId, { focused: true }, () => void chrome.runtime.lastError); } catch {}
+  }
 }
 
 if (chrome.tabs && chrome.tabs.onUpdated) {
@@ -3102,6 +3187,7 @@ async function handleTrackerUi(message, sender) {
   let base = "";
   try { base = chrome.runtime.getURL(""); } catch {}
   if (!b.validateExtensionPageSender(sender, chrome.runtime.id, base) && !(await boundPanelFor(sender))) return { error: "Rejected." };
+  await enforceOneGitHub(api);
 
   if (message.type === "tb:tracker:status") {
     // The panel or window names its request, so its site's picks come along.
@@ -3145,21 +3231,21 @@ async function handleTrackerUi(message, sender) {
         const fields = await api.withTrackerAuth(authContext(adapter, integrations), (auth) => adapter.listFields(auth, container));
         return { fields };
       }
-      case "tb:tracker:connect": return await connectTracker(api, adapter, sender);
+      case "tb:tracker:connect": return await connectTracker(api, adapter, sender, message);
       case "tb:tracker:connect-show": return await showDevicePopup(adapter.id);
       case "tb:tracker:connect-poll": return await pollTrackerConnect(api, adapter);
       case "tb:tracker:disconnect": return await disconnectTracker(api, adapter, message.token === true);
       case "tb:tracker:save-token": return await saveTrackerToken(api, adapter, message);
       case "tb:tracker:open-install": {
         if (adapter.id !== "github" || !adapter.manageUrl) return { error: "There is nothing to install for " + adapter.label + "." };
-        const how = await openInstallPage(adapter.manageUrl);
+        const how = await openInstallPage(adapter.manageUrl, false, sender);
         return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
       }
       case "tb:tracker:install-state": return { open: await installPageOpen(), pending: await installPending() };
       case "tb:tracker:open-sso": {
         // Only a GitHub page, and only from the worker: the link came from a GitHub answer.
         if (adapter.id !== "github" || !api.isGitHubPageUrl(message.url)) return { error: "That isn't a GitHub page." };
-        const how = await openInstallPage(message.url, true);
+        const how = await openInstallPage(message.url, true, sender);
         return how ? { ok: true, how } : { error: "Could not open GitHub. Try again." };
       }
       case "tb:tracker:check-container": {

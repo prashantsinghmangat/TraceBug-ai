@@ -990,7 +990,7 @@ var TraceBugModule = (() => {
       return true;
     });
   }
-  function generateReproSteps(events, errorMessage, errorStack) {
+  function generateReproSteps(events, errorMessage, errorStack, hadError = !!errorMessage) {
     var _a2, _b;
     const steps = [];
     let stepNum = 1;
@@ -1081,7 +1081,7 @@ var TraceBugModule = (() => {
       }
     }
     if (steps.length === 0) {
-      steps.push("1. (No user interactions recorded before the error)");
+      steps.push(hadError ? "1. (No user interactions recorded before the error)" : "1. (No user interactions recorded)");
     }
     const summary = buildErrorSummary(errorMessage, errorStack, events);
     return {
@@ -23347,6 +23347,9 @@ var TraceBugModule = (() => {
   });
 
   // src/title-generator.ts
+  function isPlaceholderTitle(title) {
+    return PLACEHOLDER_TITLES.includes(String(title || "").trim());
+  }
   function lastUserActionBefore(events, index2) {
     const end = index2 >= 0 ? index2 : events.length - 1;
     for (let i2 = end; i2 >= 0; i2--) {
@@ -23415,7 +23418,7 @@ var TraceBugModule = (() => {
       return context2 ? `${context2} \u2014 API ${api == null ? void 0 : api.method} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}` : `API Failure: ${api == null ? void 0 : api.method} ${shortenUrl2(api == null ? void 0 : api.url)} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}`;
     }
     if (userActions.length === 0) {
-      return screenshots2 && screenshots2.length > 0 ? "Screenshot Capture \u2014 No User Interactions" : "Empty Session \u2014 No User Interactions";
+      return screenshots2 && screenshots2.length > 0 ? PLACEHOLDER_TITLES[1] : PLACEHOLDER_TITLES[0];
     }
     const parts = [];
     for (const a2 of collapseTyping(userActions)) {
@@ -23511,7 +23514,7 @@ var TraceBugModule = (() => {
   function shortenUrl2(url) {
     return shortDisplayPath(url);
   }
-  var USER_ACTION_TYPES;
+  var USER_ACTION_TYPES, PLACEHOLDER_TITLES;
   var init_title_generator = __esm({
     "src/title-generator.ts"() {
       "use strict";
@@ -23519,6 +23522,7 @@ var TraceBugModule = (() => {
       init_repro_generator();
       init_request_status();
       USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
+      PLACEHOLDER_TITLES = ["Empty Session \u2014 No User Interactions", "Screenshot Capture \u2014 No User Interactions"];
     }
   });
 
@@ -24459,7 +24463,7 @@ var TraceBugModule = (() => {
     let steps = "";
     if (events.length > 0) {
       const errorMsg = session.errorMessage || "Issue reported by tester";
-      const result2 = generateReproSteps(events, errorMsg, session.errorStack || void 0);
+      const result2 = generateReproSteps(events, errorMsg, session.errorStack || void 0, !!session.errorMessage);
       steps = result2.reproSteps;
     }
     if (!steps) steps = session.reproSteps || "";
@@ -24685,9 +24689,13 @@ var TraceBugModule = (() => {
   }
   function generateSessionSteps(events) {
     const steps = [];
+    let last = null;
     for (const ev of events) {
       const line = describeStep(ev);
-      if (line) steps.push(line);
+      if (!line) continue;
+      if (last && last.line === line && ev.type === "click" && Math.abs((ev.timestamp || 0) - last.at) < 1e3) continue;
+      steps.push(line);
+      last = { line, at: ev.timestamp || 0 };
     }
     return steps.slice(-SESSION_STEPS_LIMIT);
   }
@@ -25020,8 +25028,7 @@ var TraceBugModule = (() => {
     if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
       throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
     }
-    const rawTitle = report.title || "Bug report";
-    const title = rawTitle.match(/^[🔴🟠🟡🟢]/u) ? rawTitle : `${severityTitlePrefix(report.severity)}${rawTitle}`;
+    const title = report.title || "Bug report";
     let body = generateGitHubIssue(report);
     body = body.replace(/^##\s+[^\n]+\n+/, "");
     if (body.length > GITHUB_URL_BODY_LIMIT) {
@@ -25050,9 +25057,10 @@ var TraceBugModule = (() => {
   }
   function generateGitHubIssue(report, opts = {}) {
     const filed = !!opts.filed;
+    const legacy = !!opts.legacyText;
     const env = report.environment;
-    const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/u) ? report.title : `${severityTitlePrefix(report.severity)}${report.title}`;
-    let md = `## ${titleWithSeverity}
+    const heading = !legacy || report.title.match(/^[🔴🟠🟡🟢]/u) ? report.title : `${severityTitlePrefix(report.severity)}${report.title}`;
+    let md = `## ${heading}
 
 `;
     const rc = formatRootCauseLine(report.rootCause);
@@ -25061,7 +25069,7 @@ var TraceBugModule = (() => {
 
 `;
     }
-    if (report.summary) {
+    if (report.summary && (legacy || !/^Bug report captured\b/.test(report.summary))) {
       md += `> **TL;DR:** ${report.summary}
 
 `;
@@ -25070,16 +25078,22 @@ var TraceBugModule = (() => {
 `;
     md += `**URL:** ${env.url}
 `;
+    if (!legacy && report.severity) md += `**Severity:** ${severityBadge(report.severity)}
+`;
     if (report.priority) md += `**Priority:** ${report.priority}
 `;
     md += `
 `;
-    if (report.clickedElement) {
+    if (report.clickedElement && legacy) {
       const ce = report.clickedElement;
       const label = ce.text || ce.ariaLabel || ce.id || ce.tag;
       md += `**User clicked:** \`<${ce.tag}>\` "${label}"`;
       if (ce.selector) md += ` \u2014 \`${ce.selector}\``;
       md += `
+
+`;
+    } else if (report.clickedElement && !(report.sessionSteps && report.sessionSteps.length)) {
+      md += `**Last click:** ${describeClick(report.clickedElement)}
 
 `;
     }
@@ -25313,11 +25327,18 @@ ${(req.response || "").replace(/```/g, "` ` `")}
 
 `;
     }
-    md += `---
+    if (opts.footer !== false) {
+      md += `---
 `;
-    md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) \u2014 free, local-first bug reports \xB7 Session: \`${report.session.sessionId.slice(0, 8)}\`_
+      md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) \u2014 free, local-first bug reports \xB7 Session: \`${report.session.sessionId.slice(0, 8)}\`_
 `;
+    }
     return md;
+  }
+  function describeClick(ce) {
+    const label = String(ce.text || ce.ariaLabel || ce.id || "").trim().split("\n")[0].slice(0, 60);
+    const kind = ce.tag === "a" ? "link" : ce.tag === "button" ? "button" : ce.tag === "input" ? "field" : "element";
+    return label ? `"${label}" ${kind}` : `a ${kind}`;
   }
   function formatVideoMeta(v2) {
     const sec = Math.max(0, Math.floor(v2.durationMs / 1e3));
@@ -30351,6 +30372,10 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   function issueSignatureMarkdown() {
     return `_[${TEXT}](${storeUrl("issue")})_`;
   }
+  function issueFooterMarkdown(sessionId) {
+    const session = `Session \`${String(sessionId || "").slice(0, 8)}\``;
+    return issueSignatureEnabled() ? `_[${TEXT}](${storeUrl("issue")}) \xB7 ${session}_` : `_${session}_`;
+  }
   function issueSignatureSlack() {
     return `_<${storeUrl("issue")}|${TEXT}>_`;
   }
@@ -33185,18 +33210,33 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         return false;
     }
   }
-  function issueTitle(report) {
-    const raw = report.title || "Bug report";
-    return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
+  function issueTitle(report, github = false) {
+    let raw = report.title || "Bug report";
+    if (!github) return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
+    if (isPlaceholderTitle(raw) && report.sessionSteps && report.sessionSteps.length && report.session) {
+      try {
+        raw = generateBugTitle(report.session);
+      } catch (e2) {
+      }
+    }
+    return raw;
   }
   function issueBody(report, filedOnGitHub = false) {
-    return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub }).replace(/^##\s+[^\n]+\n+/, ""));
+    if (!filedOnGitHub) {
+      return signIssueBody(generateGitHubIssue(report, { legacyText: true }).replace(/^##\s+[^\n]+\n+/, ""));
+    }
+    const md = generateGitHubIssue(report, { filed: true, footer: false }).replace(/^##\s+[^\n]+\n+/, "");
+    return `${md.replace(/\s+$/, "")}
+
+---
+
+${issueFooterMarkdown(report.session.sessionId)}`;
   }
   function slackText(report) {
     return signSlackPost(generateSlackPost(report));
   }
   async function createGitHubIssue(report, config, signal) {
-    return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report, true) }, signal);
+    return postGitHubIssue(config, { title: issueTitle(report, true), body: issueBody(report, true) }, signal);
   }
   async function createLinearIssue(report, config, signal) {
     return postLinearIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
@@ -33210,7 +33250,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (!hasIntegration(provider)) {
         throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured \u2014 open TraceBug settings.`);
       }
-      const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report), body: issueBody(report, provider === "github") };
+      const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report, provider === "github"), body: issueBody(report, provider === "github") };
       return sendTrackerViaBridge(provider, content, provider === "slack" ? void 0 : attachments);
     }
     const c2 = getIntegrationsConfig();
@@ -33235,6 +33275,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       init_github_issue();
       init_slack_export();
       init_issue_signature();
+      init_title_generator();
       init_report_builder();
       init_ext_transport();
       init_ext_rpc();
@@ -33337,15 +33378,15 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const panel = isExtensionMode() ? _panelTarget(target) : null;
     if (!panel) return _sendButtonHtml(target, true);
     const s2 = getIntegrationStatus();
-    const opens = target === "github" || target === "linear" ? ` aria-haspopup="dialog" aria-expanded="false"` : "";
-    const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs: `data-tb-split-main${opens}` }) : _sendButtonHtml(panel, true, {
-      attrs: `data-tb-split-main aria-haspopup="dialog" aria-expanded="false"`,
-      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Connect a tracker`
-    });
     const tip = !s2.trackerConnected ? "No tracker connected \xB7 connect one" : `${TRACKER_LABELS[panel]} \xB7 ${s2.trackerAttention ? "a connection needs attention" : "connected"}`;
     const dot = s2.trackerAttention ? `<span class="tb-qb-status-dot" aria-hidden="true"></span>` : "";
-    const caret = `<button type="button" data-action="send-menu" data-tb-split-caret data-target="${panel}" class="tb-qb-btn tb-qb-split-caret" aria-haspopup="dialog" aria-expanded="false" aria-keyshortcuts="Alt+ArrowDown" title="${escapeHtml(tip + " \u2014 choose where to send (Alt+\u2193)")}" aria-label="${escapeHtml("Choose where to send \xB7 " + tip)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>${dot}</button>`;
-    return `<div class="tb-qb-split" data-tb-send-split>${main}${caret}</div>`;
+    const attrs = `data-tb-split-main data-target="${panel}" aria-keyshortcuts="Alt+ArrowDown"` + (target === "github" || target === "linear" || !s2.trackerConnected ? ` aria-haspopup="dialog" aria-expanded="false"` : "");
+    const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs }) : _sendButtonHtml(panel, true, {
+      attrs,
+      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Connect a tracker`
+    });
+    const withTip = main.replace(/ title="[^"]*"/, "").replace(/^<button /, `<button title="${escapeHtml(tip + " (Alt+\u2193: choose where to send)")}" `).replace(/<\/button>$/, `${dot}</button>`);
+    return `<div class="tb-qb-split" data-tb-send-split>${withTip}</div>`;
   }
   function setCloudEndpoint(_endpoint) {
   }
@@ -33494,7 +33535,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const autoDesc = _buildDescription(currentSession2, report);
     const sessionTitle = (options == null ? void 0 : options.sessionId) ? currentSession2 == null ? void 0 : currentSession2.title : void 0;
     const sessionDesc = (options == null ? void 0 : options.sessionId) ? currentSession2 == null ? void 0 : currentSession2.description : void 0;
-    const title = (_c = (_b = options == null ? void 0 : options.prefilledTitle) != null ? _b : sessionTitle) != null ? _c : (draft == null ? void 0 : draft.title) || autoTitle;
+    const draftTitle = (draft == null ? void 0 : draft.title) && !(isPlaceholderTitle(draft.title) && !isPlaceholderTitle(autoTitle)) ? draft.title : "";
+    const title = (_c = (_b = options == null ? void 0 : options.prefilledTitle) != null ? _b : sessionTitle) != null ? _c : draftTitle || autoTitle;
     const description = (_e = (_d = options == null ? void 0 : options.prefilledDescription) != null ? _d : sessionDesc) != null ? _e : (draft == null ? void 0 : draft.description) || autoDesc;
     const draftRestored = !(options == null ? void 0 : options.prefilledTitle) && !sessionTitle && !!draft && !!(draft.title || draft.description);
     if (report && isHistoricalSession) report.video = void 0;
@@ -34060,6 +34102,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       }
     };
     const requestClose = (trusted = true) => {
+      document.querySelectorAll("[data-tb-create-panel]").forEach((el) => el.remove());
       if (!trusted || isKept()) {
         close();
         return;
@@ -34162,6 +34205,11 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const child = document.getElementById("tb-ai-popover") || document.getElementById("tb-mcp-handoff") || document.getElementById("tb-ai-config") || document.getElementById("tb-int-config") || document.getElementById("tb-share-consent");
       if (child) {
         child.remove();
+        return;
+      }
+      const createPanel = document.querySelector("[data-tb-create-panel]");
+      if (createPanel) {
+        createPanel.remove();
         return;
       }
       const moreMenu2 = modal.querySelector(".tb-qb-more-menu");
@@ -34689,8 +34737,6 @@ ${report.steps}` : userDesc : void 0,
       } else if (action === "integrations-configure") {
         showIntegrationsConfigModal(root2, () => {
         });
-      } else if (action === "send-menu") {
-        _openSendPanel(modal, "picker");
       }
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
@@ -35174,6 +35220,21 @@ ${report.steps}`;
     }
     return void 0;
   }
+  async function _githubPanelFiles(screenshots2) {
+    const out = _firstScreenshot(screenshots2) || [];
+    const v2 = getLastVideoRecording();
+    const m = v2 && /^video\/(webm|mp4)/.exec(v2.mimeType || "");
+    if (v2 && m && v2.blob && v2.blob.size <= ATTACH_FILE_CAP) {
+      const shot = out[0] ? Math.floor(out[0].data.length * 3 / 4) : 0;
+      if (shot + v2.blob.size <= ATTACH_TOTAL_CAP) {
+        try {
+          out.push({ name: _attachName(_videoFilename(v2), m[1]), type: `video/${m[1]}`, data: await _blobToBase64(v2.blob) });
+        } catch (e2) {
+        }
+      }
+    }
+    return out.length ? out : void 0;
+  }
   async function _trackerAttachments(report, screenshots2) {
     const out = [];
     let total = 0;
@@ -35206,7 +35267,7 @@ ${report.steps}`;
       const btn = (_b = (_a2 = e2.target).closest) == null ? void 0 : _b.call(_a2, '[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
       if (btn && e2.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
     }, true);
-    modal.querySelectorAll("[data-tb-split-main], [data-tb-split-caret]").forEach((b) => {
+    modal.querySelectorAll("[data-tb-split-main]").forEach((b) => {
       b.addEventListener("keydown", (e2) => {
         if (e2.key === "ArrowDown" && e2.altKey) {
           e2.preventDefault();
@@ -35222,7 +35283,7 @@ ${report.steps}`;
       open.focus();
       return;
     }
-    const target = (_a2 = modal.querySelector("[data-tb-split-caret]")) == null ? void 0 : _a2.dataset.target;
+    const target = (_a2 = modal.querySelector("[data-tb-split-main]")) == null ? void 0 : _a2.dataset.target;
     const btn = target === "github" ? modal.querySelector('[data-action="open-github"]') : target === "linear" ? modal.querySelector('[data-action="linear"]') : null;
     if (!btn) return;
     _panelHintHost(modal).dataset.tbPanelFocus = focus;
@@ -35231,19 +35292,22 @@ ${report.steps}`;
   async function _fileViaTracker(provider, report, root2, screenshots2, close) {
     if (!isExtensionMode()) showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root2);
     try {
-      const attachments = !isExtensionMode() ? void 0 : provider === "linear" ? await _trackerAttachments(report, screenshots2) : provider === "github" ? _firstScreenshot(screenshots2) : void 0;
+      const attachments = !isExtensionMode() ? void 0 : provider === "linear" ? await _trackerAttachments(report, screenshots2) : provider === "github" ? await _githubPanelFiles(screenshots2) : void 0;
       const result2 = await createTrackerIssue(provider, report, void 0, attachments);
       const ref = result2.ref ? ` ${result2.ref}` : "";
       const where = result2.label || TRACKER_LABELS[provider];
       if (result2.url) {
         if (!result2.opened && !result2.shown) window.open(result2.url, "_blank", "noopener,noreferrer");
-        if (ref) showToast(`\u2713 ${where} issue created`, root2, { text: ref.trim(), href: result2.url });
+        if (result2.panel) {
+        } else if (ref) showToast(`\u2713 ${where} issue created`, root2, { text: ref.trim(), href: result2.url });
         else showToast(`\u2713 ${where} issue created`, root2, { text: "Open", href: result2.url });
       } else {
         showToast(`\u2713 Sent to ${where}`, root2);
       }
-      if (screenshots2.length) _downloadAllScreenshots(screenshots2);
-      _downloadVideoIfPresent();
+      if (!result2.panel) {
+        if (screenshots2.length) _downloadAllScreenshots(screenshots2);
+        _downloadVideoIfPresent();
+      }
       _clearDraft();
       if (!result2.panel) setTimeout(close, 300);
       return true;
@@ -36532,9 +36596,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-brand { flex:none; vertical-align:-2px; }
     #${MODAL_ID} .tb-qb-footer { position:relative; }
     #${MODAL_ID} .tb-qb-split { display:inline-flex; align-items:stretch; }
-    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { border-top-right-radius:0; border-bottom-right-radius:0; }
-    #${MODAL_ID} .tb-qb-split-caret { position:relative; padding:8px 10px; border-top-left-radius:0; border-bottom-left-radius:0; background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; border-left:1px solid rgba(0,0,0,0.18); box-shadow:0 2px 10px rgba(255,92,108,0.28); }
-    #${MODAL_ID} .tb-qb-split-caret:hover { filter:brightness(1.06); }
+    #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { position:relative; }
     #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; z-index:1; }
     #${MODAL_ID} .tb-qb-split-logos { display:inline-flex; gap:3px; }
     #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }

@@ -21,7 +21,8 @@
 import type { BugReport } from "../types";
 import { generateGitHubIssue } from "../github-issue";
 import { generateSlackPost } from "../slack-export";
-import { signIssueBody, signSlackPost } from "./issue-signature";
+import { signIssueBody, signSlackPost, issueFooterMarkdown } from "./issue-signature";
+import { generateBugTitle, isPlaceholderTitle } from "../title-generator";
 import { severityTitlePrefix } from "../report-builder";
 import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
 import { sendTrackerViaBridge } from "../ext-rpc";
@@ -117,9 +118,18 @@ export function hasIntegration(provider: TrackerProvider): boolean {
 // ── Shared helpers ────────────────────────────────────────────────────────
 
 /** Severity-prefixed issue title, matching the copy/URL-prefill flows. */
-function issueTitle(report: BugReport): string {
-  const raw = report.title || "Bug report";
-  return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
+/**
+ * GitHub (U6): the bug, no "Low · " severity prefix (severity is a line in the
+ * body); a restored draft's "No User Interactions" title on a session that has
+ * actions gives way to a fresh one. Linear keeps the 1.13 title while frozen.
+ */
+function issueTitle(report: BugReport, github = false): string {
+  let raw = report.title || "Bug report";
+  if (!github) return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
+  if (isPlaceholderTitle(raw) && report.sessionSteps && report.sessionSteps.length && report.session) {
+    try { raw = generateBugTitle(report.session); } catch { /* keep it */ }
+  }
+  return raw;
 }
 
 /**
@@ -128,10 +138,15 @@ function issueTitle(report: BugReport): string {
  *
  * Signed HERE rather than at each call site: GitHub, Linear, the page-world
  * path and the extension bridge path all funnel through this one function, so
- * one path cannot get out of step with another.
+ * one path cannot get out of step with another. GitHub gets ONE footer (U6):
+ * the session id with the credit; Linear keeps the 1.13 text while frozen.
  */
 function issueBody(report: BugReport, filedOnGitHub = false): string {
-  return signIssueBody(generateGitHubIssue(report, { filed: filedOnGitHub }).replace(/^##\s+[^\n]+\n+/, ""));
+  if (!filedOnGitHub) {
+    return signIssueBody(generateGitHubIssue(report, { legacyText: true }).replace(/^##\s+[^\n]+\n+/, ""));
+  }
+  const md = generateGitHubIssue(report, { filed: true, footer: false }).replace(/^##\s+[^\n]+\n+/, "");
+  return `${md.replace(/\s+$/, "")}\n\n---\n\n${issueFooterMarkdown(report.session.sessionId)}`;
 }
 
 /** The Slack text, signed. Slack's link syntax differs — see issue-signature. */
@@ -148,7 +163,7 @@ export async function createGitHubIssue(
   config: GitHubConfig,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
-  return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report, true) }, signal);
+  return postGitHubIssue(config, { title: issueTitle(report, true), body: issueBody(report, true) }, signal);
 }
 
 export async function createLinearIssue(
@@ -191,7 +206,7 @@ export async function createTrackerIssue(
     }
     const content = provider === "slack"
       ? { text: slackText(report) }
-      : { title: issueTitle(report), body: issueBody(report, provider === "github") };
+      : { title: issueTitle(report, provider === "github"), body: issueBody(report, provider === "github") };
     return sendTrackerViaBridge(provider, content, provider === "slack" ? undefined : attachments);
   }
   const c = getIntegrationsConfig();
