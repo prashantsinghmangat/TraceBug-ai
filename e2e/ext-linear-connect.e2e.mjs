@@ -362,7 +362,7 @@ try {
   check("…and Create files it", (await f3.textContent("#issueLink")).trim() === `ENG-${creates.length}` && creates.length === createsBefore + 1);
   await f3.click("#cancel");
 
-  // ══ Settings: Connect shown, key path under "Use an API key instead", Disconnect revokes ══
+  // ══ Settings: the signed-in row, key path under "Use an API key instead", Disconnect revokes ══
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/options.html`);
   const acct = '.tracker-acct[data-tracker="linear"]';
@@ -371,8 +371,16 @@ try {
     /Signed in as ana@acme\.test/.test(await opt.textContent(acct + " .acct-line")) && await opt.isVisible(acct + " .acct-default"));
   check('settings: the key path is "Use an API key instead", folded away',
     (await opt.textContent("#lnAdvanced summary")).trim() === "Use an API key instead" && !(await opt.evaluate(() => document.getElementById("lnAdvanced").open)));
+  await opt.click(acct + " .menu-btn");
   await opt.click(acct + " .acct-disconnect");
-  await opt.waitForFunction((a) => /Disconnected/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 5000 }).catch(() => {});
+  await opt.click("#discYes");
+  await opt.waitForFunction(() => /Disconnected/.test(document.getElementById("intStatus").textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  await opt.waitForSelector('.add-tile[data-tracker="linear"]:not([hidden])', { timeout: 5000 }).catch(() => {});
+  await opt.click('.add-tile[data-tracker="linear"] .tile-connect');
+  check('settings: Connect Linear offers sign-in, with "Connect Linear" in the dialog',
+    (await opt.textContent('#connectDialog [data-pane="linear"] .acct-connect')).trim() === "Connect Linear" &&
+    await opt.isVisible('#connectDialog [data-pane="linear"] .acct-connect'));
+  await opt.keyboard.press("Escape");
   check("Disconnect revokes the grant at Linear (refresh and access token, no secret)",
     revokes.some((r) => r.token === REFRESH && r.token_type_hint === "refresh_token") && revokes.some((r) => r.token === ACCESS) &&
     revokes.every((r) => !("client_secret" in r)), JSON.stringify(revokes));

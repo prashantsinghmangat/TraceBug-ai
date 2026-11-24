@@ -223,7 +223,7 @@ New: send a bug straight to GitHub. Connect GitHub once — sign in on GitHub's 
 
 **Reviewer note for the GitHub release:**
 ```text
-<x.y.z> adds GitHub issue creation. Connect GitHub uses GitHub's device flow (a public GitHub App, no client secret, no backend). It requests the optional hosts https://github.com/* and https://api.github.com/* only when the user clicks Connect GitHub; the optional `identity` permission is requested only for Linear's sign-in (Chrome). The GitHub sign-in token is kept in chrome.storage.local and used only by the service worker; web pages never see it. Test: Settings → Manage integrations → GitHub → "Use a token instead" works without an account on our side.
+<x.y.z> adds GitHub issue creation. Connect GitHub uses GitHub's device flow (a public GitHub App, no client secret, no backend). It requests the optional hosts https://github.com/* and https://api.github.com/* only when the user clicks Connect GitHub; the optional `identity` permission is requested only for Linear's sign-in (Chrome). The GitHub sign-in token is kept in chrome.storage.local and used only by the service worker; web pages never see it. Test: Settings → Integrations → GitHub → Connect → "Personal access token" works without an account on our side.
 ```
 
 ### Note to the reviewer (when a release adds a permission)

@@ -312,9 +312,10 @@ try {
   check("options: GitHub shows as connected via a token", gh && gh.connected && gh.via === "token", JSON.stringify(gh));
   check("options: status carries no token", !JSON.stringify(status).includes(TOKEN));
   check("options: the Chrome build supports sign-in UI", status && status.oauthUi === true);
-  // GitHub sign-in is offered in this build, so the token form is the folded-away fallback.
-  check("options: the token form is folded away when sign-in is offered",
-    await opt.evaluate(() => new Promise((r) => setTimeout(() => r(!document.getElementById("ghAdvanced").open), 300))));
+  // GitHub sign-in is offered in this build, so the token row's menu offers switching to it.
+  await opt.waitForFunction(() => /Using a personal token/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-line').textContent), null, { timeout: 5000 }).catch(() => {});
+  check("options: the token row offers \"Switch to GitHub sign-in\" when sign-in is offered",
+    await opt.evaluate(() => !document.querySelector('.tracker-acct[data-tracker="github"] .acct-switch').hidden));
 } finally {
   await ctx.close();
   server.close();

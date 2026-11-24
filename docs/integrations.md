@@ -6,21 +6,29 @@ TraceBug can create a **real** issue or message in your tracker — GitHub, Line
 
 ### Settings → Integrations
 
-Where each connection is managed: **Settings → Integrations** (the Create panel's **Manage integrations**
-link opens it). One card per tracker, GitHub first:
+Settings has a sidebar (Integrations, AI Debugger, Recording, Privacy, Account, Help) and shows one section at a
+time; the section follows the address (`options.html#integrations`, `#ai`, `#recording`, `#privacy`, `#account`,
+`#help`), so Back and Forward work. Each connection is managed under **Integrations** (the Create panel's **Manage
+integrations** link opens it):
 
-- **Status**, in the same words as the popup and the ticket's tooltip: **Connected**, **Needs reconnect**,
-  **Error** or **Not connected**.
-- **How it's connected:** GitHub "Signed in as octo · GitHub App" or "Using a personal token ghp_…abcd" (masked; the
-  token itself is never shown) — one connection at a time; Linear "Signed in as …" or "Using an API key …".
-- **Connect** (where this build can sign in) or **Reconnect**; while not connected, **Use a token instead** (GitHub) /
-  **Use an API key instead** (Linear) — checked with the tracker before it's saved, never saved unchecked. In GitHub's
-  token mode, sign-in is the quiet link **Switch to GitHub sign-in (recommended)**.
-- Once connected: **Default repository / team** (a picker) and **Disconnect**, which removes the connection and that
-  tracker's remembered choices, and says what it removed. Slack: the webhook URL, **Save**, and **Disconnect** once
-  connected.
-- Builds without TraceBug's GitHub App (store builds until it's registered) and Firefox show the token path, open
-  (**Connect with a token**) — never a Connect button that can't work.
+- **Connected:** one row per connection, with a **Default** pill on the default tracker.
+  - **Status**, in the same words as the popup and the ticket's tooltip: **Connected**, **Needs reconnecting**,
+    **Error**.
+  - **How it's connected:** GitHub "Signed in as octo · GitHub App" or "Using a personal token ghp_…abcd" (masked; the
+    token itself is never shown), one connection at a time; Linear "Signed in as …" or "Using an API key …".
+  - **Default repository / team** (a picker).
+  - The **⋯** menu. GitHub: **Choose repositories on GitHub** (signed in), **Switch to a personal token** /
+    **Switch to GitHub sign-in**, then **Disconnect**. Linear: **Reconnect Linear** when needed, then **Disconnect**.
+    Slack: **Change webhook URL**, then **Disconnect**.
+- **Disconnect** asks first and says exactly what goes, with the GitHub page that finishes the job (**Authorized
+  GitHub Apps** for a sign-in, **Personal access tokens** for a token). It removes the connection and that tracker's
+  remembered choices, then says what it removed.
+- **Add a tracker:** a tile with **Connect** for each tracker not connected yet. GitHub's Connect asks how:
+  **Sign in with GitHub** (recommended; the device code shows in the dialog) or **Personal access token** (**Verify
+  and save**: checked with GitHub first, never saved unchecked). Replacing one way with the other asks first ("This
+  replaces…"). Linear: **Connect Linear** or **Use an API key instead**. Slack: the webhook URL.
+- Builds without TraceBug's GitHub App (store builds until it's registered) and Firefox open GitHub's Connect straight
+  on the token, and Linear's on **Connect with an API key**. There is never a Connect button that can't work.
 - Keyboard-only, light and dark, no sideways scroll at 360 px.
 
 Then **Preferences**: **Default tracker** (used by the Send button on a bug ticket), **Open the issue after
@@ -93,7 +101,7 @@ GitHub is the integration TraceBug supports end to end. **GitHub Enterprise Serv
 5. **Screenshots.** GitHub's API can't attach files, so the issue says what was captured and asks the reader to get
    the replay or screenshots from the reporter — it never claims something is attached. After Create, **Copy
    screenshot** in the panel puts the ticket's screenshot on your clipboard: paste it into a comment on the issue.
-6. **Token instead.** **Use a token instead** in the panel or settings: a fine-grained token with Issues: Read and
+6. **Token instead.** **Use a token instead** in the panel (Settings: Connect → **Personal access token**): a fine-grained token with Issues: Read and
    write (and Metadata: Read), or a classic token with `repo`. It's checked with GitHub before it's saved; a
    rejected token, a missing scope or no access to the repository are named plainly. Store builds released before
    TraceBug's production GitHub App is registered offer only this path.
@@ -164,13 +172,14 @@ After you file an issue, TraceBug remembers the repository or team and the label
   gone (removed, or no longer accessible) isn't selected: TraceBug falls back to your default repository and says so
   in one line ("owner/repo is no longer available, using your default …").
 
-**In settings** (right-click the toolbar icon → Options; the only place on Firefox), open **Advanced: use a token**
-on the tracker's card:
+**In settings** (right-click the toolbar icon → Options; the only place on Firefox), go to **Integrations** and press
+**Connect** on the tracker's tile under **Add a tracker**. For GitHub, choose **Personal access token** in the dialog
+(Firefox opens straight on that step):
 
 | Tracker | What to paste | Where to get it |
 |---|---|---|
 | **GitHub** | Personal access token: fine-grained with **Issues: Read and write** on the repos you want, or classic with `repo`. Default repository is optional. | github.com → Settings → Developer settings → Personal access tokens |
-| **Linear** | Personal API key (under **Advanced: use a key**). Default team is optional. | Linear → Settings → API → Personal API keys |
+| **Linear** | Personal API key (under **Use an API key instead**). Default team is optional. | Linear → Settings → API → Personal API keys |
 | **Slack** | Incoming webhook URL | Slack → your app → Incoming Webhooks |
 
 Saving asks the browser for access to that one tracker's API host. Then **Send to GitHub** (or Linear) opens the

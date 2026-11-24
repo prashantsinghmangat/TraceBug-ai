@@ -138,8 +138,54 @@ function pill(el, on, words) {
   el.textContent = on ? w[0] : w[1];
   el.className = "pill" + (on ? " on" : "");
 }
-// The trackers' words, as in the hub and the ticket's ▾ tooltip.
+// The trackers' words, as in the hub and the ticket's ▾ tooltip; shown as a
+// dot + word on each connected row.
 const TRACKER_WORDS = ["Connected", "Not connected"];
+function stateWord(el, on) {
+  el.textContent = on ? TRACKER_WORDS[0] : TRACKER_WORDS[1];
+  el.className = "state" + (on ? " on" : "");
+}
+
+// ── Sections ────────────────────────────────────────────────────────────────
+// One section at a time, from the URL hash, so links (the panel's "Manage
+// integrations" → #integrations, the popup's #mic) and Back/Forward work.
+// #integrations:connect=… and :token=… are hand-offs, handled further down.
+
+const SECTIONS = ["integrations", "ai", "recording", "privacy", "account", "help"];
+
+function sectionOf(hash) {
+  const m = /^#([a-z]+)/.exec(hash || "");
+  const id = m ? m[1] : "";
+  if (id === "mic") return "recording";
+  return SECTIONS.includes(id) ? id : "integrations";
+}
+
+function showSection(id) {
+  document.querySelectorAll(".section").forEach((s) => { s.hidden = s.dataset.section !== id; });
+  document.querySelectorAll(".nav-item").forEach((a) => {
+    if (a.dataset.section === id) {
+      a.setAttribute("aria-current", "page");
+      document.title = a.textContent.replace(/\d+$/, "").trim() + " · TraceBug settings";
+      // Narrow windows: the nav is a sideways row; keep the current one in view.
+      try { a.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch {}
+    } else {
+      a.removeAttribute("aria-current");
+    }
+  });
+}
+
+showSection(sectionOf(location.hash));
+window.addEventListener("hashchange", () => {
+  showSection(sectionOf(location.hash));
+  window.scrollTo(0, 0);
+  followIntegrationsLink();
+});
+
+// The popup's theme choice (same extension origin), as signin.html does.
+try {
+  const theme = localStorage.getItem("tracebug_popup_theme");
+  if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
+} catch {}
 
 // ── Status pills ────────────────────────────────────────────────────────────
 // Reflects what is stored WITHOUT reading the secret back into the DOM.
@@ -150,11 +196,13 @@ async function refreshPills() {
   const a = r[AI_KEY] || null;
   // A credential is enough since ADR 010 (the repo/team is picked when filing).
   // renderTrackerAccounts() then refines these with any OAuth sign-in.
-  pill($("ghPill"), !!(i.github && i.github.token), TRACKER_WORDS);
-  pill($("lnPill"), !!(i.linear && i.linear.apiKey), TRACKER_WORDS);
-  pill($("slPill"), !!(i.slack && i.slack.webhookUrl), TRACKER_WORDS);
-  // U8: Disconnect only when there is something to disconnect.
-  $("slClear").hidden = !(i.slack && i.slack.webhookUrl);
+  stateWord($("ghPill"), !!(i.github && i.github.token));
+  stateWord($("lnPill"), !!(i.linear && i.linear.apiKey));
+  const slack = !!(i.slack && i.slack.webhookUrl);
+  stateWord($("slPill"), slack);
+  // U8: Slack's row (and its Disconnect) only when there is something to disconnect.
+  $("slRow").hidden = !slack;
+  layoutIntegrations();
   pill($("aiPill"), !!(a && a.provider && (a.provider === "ollama" || a.apiKey)));
 
   // Show the provider/model that is set, which is not secret, so the user can
@@ -374,8 +422,10 @@ async function saveTrackerSecret(id, field, statusEl, granted, hostLabel) {
     return;
   }
   $(field).value = "";
+  statusEl.textContent = "";
+  closeConnect();
   await refreshPills();
-  say(statusEl, "Saved" + (res.account ? " — connected as " + res.account : "") + ".", "ok");
+  say($("intStatus"), "Saved" + (res.account ? " — connected as " + res.account : "") + ".", "ok");
   await renderTrackerAccounts();
 }
 
@@ -411,12 +461,18 @@ async function saveSlack(granted) {
     ? " TraceBug has no access to hooks.slack.com, so it can post but cannot confirm delivery." +
       " Click Save again and choose Allow for real confirmation."
     : "";
-  if (await saveProvider("slack", { webhookUrl }, status, note)) $("slHook").value = "";
+  status.textContent = "";
+  if (await saveProvider("slack", { webhookUrl }, $("intStatus"), note)) {
+    $("slHook").value = "";
+    closeConnect();
+  }
 }
 
 $("slSave").addEventListener("click", withHostAccess(() => HOSTS.slack, saveSlack));
+$("slHook").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("slSave").click(); } });
 
-$("slClear").addEventListener("click", () => clearProvider("slack", $("slStatus"), ["slHook"]));
+$("slClear").addEventListener("click", () => openDisconnect({ id: "slack", label: "Slack" }, $("slRow").querySelector(".menu-btn")));
+$("slChange").addEventListener("click", () => openConnect("slack", { opener: $("slRow").querySelector(".menu-btn") }));
 
 // ── Sites allowed to run AI analysis ────────────────────────────────────────
 // The first AI analysis on a site is confirmed by the user, and the approval is
@@ -442,7 +498,7 @@ async function renderLlmSites() {
     name.textContent = origin;
 
     const btn = document.createElement("button");
-    btn.className = "ghost";
+    btn.className = "secondary small";
     btn.type = "button";
     btn.textContent = "Remove";
     btn.addEventListener("click", async () => {
@@ -506,9 +562,12 @@ function trackerMsg(type, extra) {
 }
 
 const PILL_IDS = { github: "ghPill", linear: "lnPill" };
-const ADVANCED_IDS = { github: "ghAdvanced", linear: "lnAdvanced" };
-const STATE_PILL = { connected: ["Connected", " on"], reconnect: ["Needs reconnect", " warn"], error: ["Error", " warn"] };
+const STATE_PILL = { connected: ["Connected", " on"], reconnect: ["Needs reconnecting", " warn"], error: ["Error", " warn"] };
 const SITES_KEY = "tb_tracker_sites_v1";
+// Where GitHub finishes what Disconnect can't (B7, B11) — named in the confirm
+// before disconnecting; the worker answers with the same pages afterwards.
+const GITHUB_APPS_URL = "https://github.com/settings/apps/authorizations";
+const GITHUB_TOKENS_URL = "https://github.com/settings/tokens";
 // The last status row per tracker, for the "This replaces…" questions.
 const trackerRows = {};
 
@@ -517,12 +576,12 @@ const trackerRows = {};
  * or a token a sign-in. onYes runs inside the Replace click, so it can still
  * ask the browser for permissions.
  */
-function askReplace(box, text, onYes) {
+function askReplace(box, text, onYes, onNo) {
   if (!box) { onYes(); return; }
   box.querySelector(".acct-confirm-text").textContent = text;
   box.hidden = false;
   box.querySelector(".acct-confirm-yes").onclick = () => { box.hidden = true; onYes(); };
-  box.querySelector(".acct-confirm-no").onclick = () => { box.hidden = true; };
+  box.querySelector(".acct-confirm-no").onclick = () => { box.hidden = true; if (onNo) onNo(); };
   box.querySelector(".acct-confirm-yes").focus();
 }
 
@@ -552,19 +611,37 @@ function renderRemembered(all) {
   $("forgetChoices").disabled = n === 0;
 }
 
-/** Each card's logo, from the hub's marks (integrations-hub.js). */
+/** Each row's and tile's logo, from the hub's marks (integrations-hub.js). */
 document.querySelectorAll(".int-logo[data-logo]").forEach((el) => {
   const hub = window.TraceBugIntegrationsHub;
   if (hub && !el.firstChild) el.append(hub.logo(el.dataset.logo, 22));
 });
 
 /**
- * One card per tracker, from the worker's status (tb:tracker:status): the
+ * A tracker is either connected (a row in Connected) or offered (a tile in
+ * Add a tracker). Also the count beside Integrations in the sidebar.
+ */
+function layoutIntegrations() {
+  const on = Array.from(document.querySelectorAll("#connectedList .conn-row"))
+    .filter((r) => !r.hidden).map((r) => r.dataset.tracker);
+  $("connectedEmpty").hidden = on.length > 0;
+  let offered = 0;
+  document.querySelectorAll(".add-tile").forEach((tile) => {
+    tile.hidden = on.includes(tile.dataset.tracker);
+    if (!tile.hidden) offered++;
+  });
+  $("addCard").hidden = !offered;
+  $("navIntCount").textContent = String(on.length);
+  $("navIntCount").hidden = !on.length;
+}
+
+/**
+ * One row per connection, from the worker's status (tb:tracker:status): the
  * state in the hub's words, how it's connected (signed in, or a token shown
- * masked), the default repository/team, and Connect / Use a token /
- * Disconnect as they apply. Connect only where the build can sign in (feature
- * detection: Firefox and store builds without the GitHub App get the token
- * path, open, never a dead button).
+ * masked), the default repository/team, and the ⋯ menu's actions as they
+ * apply. Sign-in is offered only where the build can (feature detection:
+ * Firefox and store builds without the GitHub App get the token path, never
+ * a dead button).
  */
 async function renderTrackerAccounts() {
   const res = await trackerMsg("tb:tracker:status");
@@ -572,12 +649,13 @@ async function renderTrackerAccounts() {
   if (!res || !Array.isArray(res.trackers)) return;
   const conns = (res.summary && res.summary.connections) || [];
   res.trackers.forEach((t) => {
-    const box = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"]');
-    if (!box) return;
+    const row = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"]');
+    if (!row) return;
     const conn = conns.find((c) => c.id === t.id) || null;
     const state = conn ? conn.state : null;
     trackerRows[t.id] = t;
-    const line = box.querySelector(".acct-line");
+    row.hidden = !(conn || t.connected || t.needsReconnect);
+    const line = row.querySelector(".acct-line");
     const gh = t.id === "github";
     let text = "";
     // GitHub names its one connection's mode (B11); Linear keeps its words.
@@ -586,58 +664,67 @@ async function renderTrackerAccounts() {
     else if (t.via === "token") text = "Using an API key" + (t.tokenHint ? " " + t.tokenHint : "") + "." +
       (t.needsReconnect ? " Your " + t.label + " sign-in expired." : "");
     else if (t.needsReconnect) text = "Your " + t.label + " sign-in expired. Reconnect to keep filing issues.";
-    // Not connected: the Connect button, or the open token form, says it (U8).
-    else text = "";
     if (state === "error" && conn.detail) text += " " + conn.detail;
     line.textContent = text;
     line.hidden = !text;
-    const connect = box.querySelector(".acct-connect");
-    // GitHub in token mode: sign-in is the quiet "Switch" link, not a button.
-    connect.hidden = !t.canConnect || t.via === "oauth" || (gh && t.via === "token");
-    connect.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
-    connect.onclick = () => connectFromOptions(t, box);
-    const switchLink = box.querySelector(".acct-switch");
+
+    // ⋯ menu: what applies to this connection. Disconnect is always there.
+    const menuBtn = row.querySelector(".menu-btn");
+    const reconnect = row.querySelector(".acct-reconnect");
+    reconnect.hidden = !(t.needsReconnect && t.canConnect);
+    reconnect.onclick = () => startSignIn(t, { opener: menuBtn });
+    const manage = row.querySelector(".acct-manage");
+    if (manage) {
+      manage.hidden = !(gh && t.via === "oauth" && t.manageUrl);
+      manage.onclick = () => TraceBugTrackerConnect.openHttps(t.manageUrl);
+    }
+    const toToken = row.querySelector(".acct-to-token");
+    if (toToken) {
+      toToken.hidden = !(gh && t.via !== "token");
+      toToken.onclick = () => openConnect("github", { pane: "github-token", opener: menuBtn, switching: true });
+    }
+    const switchLink = row.querySelector(".acct-switch");
     if (switchLink) {
       switchLink.hidden = !(gh && t.via === "token" && t.canConnect);
-      switchLink.onclick = (e) => {
-        e.preventDefault();
-        askReplace(box.querySelector(".acct-confirm"),
+      switchLink.onclick = () => {
+        openConnect("github", { pane: "github-signin", opener: menuBtn, switching: true });
+        const pane = paneOf("github-signin");
+        askReplace(pane.querySelector(".acct-confirm"),
           "This replaces your token" + (t.tokenHint ? " " + t.tokenHint : "") + ". TraceBug signs in with GitHub instead.",
-          () => connectFromOptions(t, box));
+          () => connectFromOptions(t, pane), closeConnect);
       };
     }
-    const disconnect = box.querySelector(".acct-disconnect");
-    disconnect.hidden = !t.connected && !t.needsReconnect;
-    // No button to show → no empty row under the account line.
-    connect.parentElement.hidden = connect.hidden;
-    disconnect.onclick = () => disconnectFromOptions(t, box);
+    row.querySelector(".acct-disconnect").onclick = () => openDisconnect(t, menuBtn);
+
     // Connected (either way): pick the default repo/team here. Its "Saved"
-    // sits beside it; errors go to the card's status line.
-    const pickWrap = box.querySelector(".acct-default-wrap");
+    // sits beside it; errors go to the row's status line.
+    const pickWrap = row.querySelector(".acct-default-wrap");
     pickWrap.hidden = !t.connected;
-    pickWrap.parentElement.hidden = pickWrap.hidden && disconnect.hidden;
     if (t.connected) {
       const pick = pickWrap.querySelector("select");
       TraceBugTrackerConnect.fillDefaultPicker(t, pick,
-        (msg, isErr) => isErr ? say(box.querySelector(".acct-status"), msg, "err", " ") : flashSaved(pick, true));
+        (msg, isErr) => isErr ? say(row.querySelector(".acct-status"), msg, "err", " ") : flashSaved(pick, true));
     }
     const pillEl = $(PILL_IDS[t.id]);
     if (pillEl) {
       const w = STATE_PILL[state] || ["Not connected", ""];
       pillEl.textContent = w[0];
-      pillEl.className = "pill" + w[1];
+      pillEl.className = "state" + w[1];
     }
-    // The token form is the main path wherever sign-in isn't offered.
-    // Once connected it's folded away entirely (Disconnect first to swap tokens).
-    // U8: where it's the only way in, it's open and says so — not "instead".
-    const adv = $(ADVANCED_IDS[t.id]);
-    if (adv) {
-      const noun = t.id === "linear" ? "an API key" : "a token";
-      adv.querySelector("summary").textContent = t.canConnect ? "Use " + noun + " instead" : "Connect with " + noun;
+    // Linear's connect form (frozen): sign-in where offered, else the key.
+    // U8: where the key is the only way in, it's open and says so.
+    if (t.id === "linear") {
+      const pane = paneOf("linear");
+      const connect = pane.querySelector(".acct-connect");
+      connect.hidden = !t.canConnect;
+      connect.textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
+      connect.onclick = () => connectFromOptions(t, pane);
+      const adv = $("lnAdvanced");
+      adv.querySelector("summary").textContent = t.canConnect ? "Use an API key instead" : "Connect with an API key";
+      if (!t.canConnect) adv.open = true;
     }
-    if (adv && !t.canConnect) adv.open = true;
-    if (adv) adv.hidden = t.connected && !adv.open;
   });
+  layoutIntegrations();
   renderDefaultTracker(res.summary);
 }
 
@@ -646,6 +733,9 @@ function renderDefaultTracker(summary) {
   const sel = $("defaultTracker");
   if (!sel || !summary) return;
   const conns = summary.connections || [];
+  document.querySelectorAll("#connectedList .conn-row").forEach((r) => {
+    r.querySelector(".default-pill").hidden = !conns.length || r.dataset.tracker !== (summary.defaultId || conns[0].id);
+  });
   sel.textContent = "";
   // Nothing connected: a muted line, not a dead select.
   sel.hidden = !conns.length;
@@ -665,18 +755,172 @@ $("defaultTracker").addEventListener("change", async () => {
   flashSaved($("defaultTracker"), !!(res && res.ok));
 });
 
-function connectFromOptions(t, box) {
-  const status = box.querySelector(".acct-status");
-  const dev = box.querySelector(".device");
+// ── ⋯ menus ─────────────────────────────────────────────────────────────────
+// A button that opens a list of actions: arrows move, Esc closes back to the
+// button, Tab or a click elsewhere closes.
+
+function closeMenus() {
+  document.querySelectorAll('.menu-btn[aria-expanded="true"]').forEach((b) => {
+    b.setAttribute("aria-expanded", "false");
+    b.nextElementSibling.hidden = true;
+  });
+}
+
+function menuItems(menu) {
+  return Array.from(menu.querySelectorAll('[role="menuitem"]')).filter((i) => !i.hidden);
+}
+
+document.querySelectorAll(".menu-btn").forEach((btn) => {
+  const menu = btn.nextElementSibling;
+  btn.addEventListener("click", () => {
+    const open = btn.getAttribute("aria-expanded") === "true";
+    closeMenus();
+    if (open) return;
+    // A divider only between two groups that both show.
+    menu.querySelectorAll("hr").forEach((hr) => {
+      let before = false, after = false;
+      for (let n = hr.previousElementSibling; n; n = n.previousElementSibling) if (n.tagName !== "HR" && !n.hidden) before = true;
+      for (let n = hr.nextElementSibling; n; n = n.nextElementSibling) if (n.tagName !== "HR" && !n.hidden) after = true;
+      hr.hidden = !(before && after);
+    });
+    btn.setAttribute("aria-expanded", "true");
+    menu.hidden = false;
+    const items = menuItems(menu);
+    if (items[0]) items[0].focus();
+  });
+  menu.addEventListener("keydown", (e) => {
+    const items = menuItems(menu);
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const n = items.length;
+      if (n) items[(i + (e.key === "ArrowDown" ? 1 : n - 1) + n) % n].focus();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeMenus();
+      btn.focus();
+    } else if (e.key === "Tab") {
+      closeMenus();
+    }
+  });
+  // The item's own handler runs first; then the menu folds away.
+  menu.addEventListener("click", (e) => { if (e.target.closest('[role="menuitem"]')) closeMenus(); });
+});
+document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) closeMenus(); });
+
+// ── Connect dialog ──────────────────────────────────────────────────────────
+// GitHub: two choices (sign-in, recommended; or a token), each its own step.
+// Without sign-in in this build (Firefox) it opens straight on the token.
+// Linear and Slack: their forms as before, in the same frame.
+
+const dlg = $("connectDialog");
+let dlgOpener = null;
+const PANE_TEXT = {
+  "github-choose": ["Connect GitHub", "Choose how to connect"],
+  "github-signin": ["Connect GitHub", "Sign in with GitHub"],
+  "github-token": ["Connect GitHub", "Personal access token"],
+  linear: ["Connect Linear", "Sign in, or paste an API key"],
+  slack: ["Connect Slack", "Incoming webhook"],
+};
+
+function paneOf(name) { return dlg.querySelector('.pane[data-pane="' + name + '"]'); }
+
+function showPane(name, opts) {
+  dlg.querySelectorAll(".pane").forEach((p) => { p.hidden = p.dataset.pane !== name; });
+  const ln = trackerRows.linear;
+  let [title, sub] = PANE_TEXT[name];
+  if (opts && opts.switching) title = name === "github-token" ? "Switch to a personal token" : "Switch to GitHub sign-in";
+  if (name === "linear" && ln && ln.needsReconnect) title = "Reconnect Linear";
+  if (name === "linear" && ln && !ln.canConnect) sub = "Paste an API key";
+  $("dlgTitle").textContent = title;
+  $("dlgSub").textContent = sub;
+  // Back to the two choices — only where there were two to choose from.
+  const back = !(opts && opts.switching) && !!(trackerRows.github && trackerRows.github.canConnect);
+  dlg.querySelectorAll(".dlg-back").forEach((b) => { b.hidden = !back; });
+}
+
+function resetSignInPane() {
+  const pane = paneOf("github-signin");
+  pane.querySelector(".acct-confirm").hidden = true;
+  pane.querySelector(".device").hidden = true;
+  pane.querySelector(".acct-connect").hidden = true;
+  pane.querySelector(".connect-status").textContent = "";
+}
+
+/** Open Connect for one tracker on its first step, or on opts.pane. */
+function openConnect(id, opts) {
+  const o = opts || {};
+  const t = trackerRows[id];
+  let pane = o.pane || (id === "github" ? (t && t.canConnect ? "github-choose" : "github-token") : id);
+  if (id === "github" && pane === "github-signin" && !(t && t.canConnect)) pane = "github-token";
+  const logo = $("dlgLogo");
+  logo.textContent = "";
+  if (window.TraceBugIntegrationsHub) logo.append(window.TraceBugIntegrationsHub.logo(id, 20));
+  ["ghStatus", "lnStatus", "slStatus"].forEach((s) => { $(s).textContent = ""; });
+  $("ghReplace").hidden = true;
+  resetSignInPane();
+  showPane(pane, o);
+  dlgOpener = o.opener || document.activeElement;
+  if (!dlg.open) dlg.showModal();
+  const first = { "github-choose": "ghChooseSignIn", "github-token": "ghToken", slack: "slHook" }[pane];
+  if (first) $(first).focus();
+  else if (pane === "linear") {
+    const c = paneOf("linear").querySelector(".acct-connect");
+    if (!c.hidden) c.focus(); else $("lnKey").focus();
+  }
+}
+
+function closeConnect() { if (dlg.open) dlg.close(); }
+
+dlg.addEventListener("close", () => {
+  const o = dlgOpener;
+  dlgOpener = null;
+  if (o && o.isConnected && !o.closest("[hidden]")) o.focus();
+});
+dlg.addEventListener("click", (e) => { if (e.target === dlg) closeConnect(); });
+$("dlgClose").addEventListener("click", closeConnect);
+$("ghChooseSignIn").addEventListener("click", () => startSignIn(trackerRows.github));
+$("ghChooseToken").addEventListener("click", () => { showPane("github-token"); $("ghToken").focus(); });
+dlg.querySelectorAll(".dlg-back").forEach((b) => b.addEventListener("click", () => {
+  resetSignInPane();
+  showPane("github-choose");
+  $("ghChooseSignIn").focus();
+}));
+// The sign-in step's own button: shown again once a code ends (try again).
+paneOf("github-signin").querySelector(".acct-connect").addEventListener("click",
+  () => connectFromOptions(trackerRows.github, paneOf("github-signin")));
+
+document.querySelectorAll(".tile-connect").forEach((b) => b.addEventListener("click", async () => {
+  const id = b.dataset.tracker;
+  if (id !== "slack" && !trackerRows[id]) await renderTrackerAccounts();
+  openConnect(id, { opener: b });
+}));
+
+/** Sign in from a click (Connect, Reconnect): the dialog shows the progress. */
+function startSignIn(t, opts) {
+  if (!t) return;
+  if (t.id === "github") {
+    openConnect("github", Object.assign({}, opts, { pane: "github-signin" }));
+    connectFromOptions(t, paneOf("github-signin"));
+  } else {
+    openConnect(t.id, opts);
+    connectFromOptions(t, paneOf(t.id));
+  }
+}
+
+function connectFromOptions(t, pane) {
+  const status = pane.querySelector(".connect-status");
+  const dev = pane.querySelector(".device");
   // TraceBugTrackerConnect (tracker-connect.js) asks for permissions inside
   // this click, copies the device code, opens GitHub's page and polls.
-  const connectBtn = box.querySelector(".acct-connect");
-  const reopenBtn = box.querySelector(".device-reopen");
-  // GitHub's card has the device-code row; Linear's (a sign-in popup) doesn't.
-  const copyBtn = box.querySelector(".device-copy");
+  const connectBtn = pane.querySelector(".acct-connect");
+  const reopenBtn = pane.querySelector(".device-reopen");
+  // GitHub's step has the device-code box; Linear's (a sign-in popup) doesn't.
+  const copyBtn = pane.querySelector(".device-copy");
+  if (t.id === "github") connectBtn.hidden = true;
   if (copyBtn) {
     copyBtn.onclick = async () => {
-      const code = box.querySelector(".device-code").textContent || "";
+      const code = pane.querySelector(".device-code").textContent || "";
       if (await TraceBugTrackerConnect.copy(code)) say(status, "Code copied — press " + TraceBugTrackerConnect.pasteKeys() + " on GitHub.", "ok", " ");
     };
   }
@@ -684,28 +928,86 @@ function connectFromOptions(t, box) {
   TraceBugTrackerConnect.connect(t, {
     say: (text, isErr) => say(status, text, isErr ? "err" : "ok", " "),
     code: (code) => {
-      const el = box.querySelector(".device-code");
+      const el = pane.querySelector(".device-code");
       if (el) el.textContent = code || "";
       if (dev) dev.hidden = !code;
     },
     reopen: (on) => { if (reopenBtn) reopenBtn.hidden = !on; },
-    final: (code) => { connectBtn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + t.label; },
+    final: (code) => {
+      connectBtn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + t.label;
+      connectBtn.hidden = false;
+    },
     done: async (account) => {
-      say(status, "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
+      closeConnect();
+      say($("intStatus"), "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
       await renderTrackerAccounts();
-      const pick = box.querySelector(".acct-default");
+      const pick = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"] .acct-default');
       if (pick && !pick.closest("[hidden]")) pick.focus();
     },
   });
 }
 
-async function disconnectFromOptions(t, box) {
-  const status = box.querySelector(".acct-status");
+// ── Disconnect confirm ──────────────────────────────────────────────────────
+// Says exactly what is removed before it is, and where to finish on GitHub —
+// revoking needs a client secret TraceBug doesn't have (B7, B11).
+
+const disc = $("disconnectDialog");
+let discOpener = null;
+
+function disconnectWords(t) {
+  if (t.id === "slack") return { text: "TraceBug forgets the Slack webhook. Reports stop posting to that channel." };
+  if (t.id === "github" && t.via === "token") {
+    return { text: "TraceBug removes the token" + (t.tokenHint ? " " + t.tokenHint : "") +
+      " from this browser. You can delete it on GitHub: ", link: "Personal access tokens", url: GITHUB_TOKENS_URL };
+  }
+  if (t.id === "github") {
+    return { text: "TraceBug deletes its GitHub sign-in from this browser. To remove its access on GitHub too: ",
+      link: "Authorized GitHub Apps", url: GITHUB_APPS_URL };
+  }
+  return { text: "TraceBug signs out of " + t.label + " and forgets any pasted key on this browser. Issues already filed stay in " + t.label + "." };
+}
+
+function openDisconnect(t, opener) {
+  $("discTitle").textContent = "Disconnect " + t.label + "?";
+  const w = disconnectWords(t);
+  const p = $("discText");
+  p.textContent = w.text;
+  if (w.link) {
+    const a = document.createElement("a");
+    a.href = w.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = w.link;
+    p.append(a, ".");
+  }
+  const yes = $("discYes");
+  yes.disabled = false;
+  yes.onclick = async () => {
+    yes.disabled = true;
+    disc.close();
+    if (t.id === "slack") await clearProvider("slack", $("intStatus"), ["slHook"]);
+    else await disconnectFromOptions(t);
+    // Its row is gone: land on the section, where the result is said.
+    $("integrationsTitle").focus();
+  };
+  discOpener = opener || null;
+  disc.showModal();
+  $("discCancel").focus();
+}
+
+$("discCancel").addEventListener("click", () => disc.close());
+disc.addEventListener("close", () => {
+  const o = discOpener;
+  discOpener = null;
+  if (o && o.isConnected && !o.closest("[hidden]")) o.focus();
+});
+
+async function disconnectFromOptions(t) {
+  const status = $("intStatus");
   // A token connection: Disconnect removes the token too.
   const res = await trackerMsg("tb:tracker:disconnect", { tracker: t.id, token: t.via === "token" });
   if (!res || res.error) { say(status, (res && res.error) || "Could not disconnect.", "err"); return; }
-  // GitHub: exactly what was removed, and where to finish on GitHub (B7, B11)
-  // — revoking needs a client secret TraceBug doesn't have.
+  // GitHub: exactly what was removed, and where to finish on GitHub (B7, B11).
   const what = res.removed === "signin" && res.revokeUrl
     ? { text: "Signed out. TraceBug deleted its GitHub sign-in from this browser. To remove its access on GitHub too: ", link: "Authorized GitHub Apps", url: res.revokeUrl }
     : res.removed === "token" && res.tokenUrl
@@ -734,51 +1036,50 @@ try {
   });
 } catch {}
 
-// ── Hand-offs into Manage integrations ─────────────────────────────────────
+// ── Hand-offs into Integrations ────────────────────────────────────────────
 // The popup's hub can't run a sign-in (it closes when GitHub's window takes
 // focus), so it opens #integrations:connect=<id> or #integrations:token=<id>
 // here. Connect needs a click on this page (permissions.request needs the
-// gesture), so the card's Connect button is focused and highlighted.
+// gesture), so the dialog opens with "Sign in" focused.
 
-const TOKEN_FORMS = {
-  github: { details: "ghAdvanced", field: "ghToken" },
-  linear: { details: "lnAdvanced", field: "lnKey" },
-  slack: { details: null, field: "slHook" },
+const TOKEN_PANES = {
+  github: { pane: "github-token", field: "ghToken" },
+  linear: { pane: "linear", field: "lnKey" },
+  slack: { pane: "slack", field: "slHook" },
 };
 
-function highlight(card) {
-  if (!card) return;
-  card.scrollIntoView({ block: "center" });
-  card.classList.add("deep-link-target");
-  setTimeout(() => card.classList.remove("deep-link-target"), 2500);
+function highlight(el) {
+  if (!el) return;
+  el.scrollIntoView({ block: "center" });
+  el.classList.add("deep-link-target");
+  setTimeout(() => el.classList.remove("deep-link-target"), 2500);
 }
 
 function showTokenForm(id) {
-  const f = TOKEN_FORMS[id];
+  const f = TOKEN_PANES[id];
   if (!f) return;
-  if (f.details && $(f.details)) { $(f.details).hidden = false; $(f.details).open = true; }
-  const field = $(f.field);
-  if (!field) return;
-  highlight(field.closest(".card"));
-  field.focus();
+  openConnect(id, { pane: f.pane });
+  if (id === "linear") $("lnAdvanced").open = true;
+  $(f.field).focus();
 }
 
 async function showConnect(id) {
   await renderTrackerAccounts();
-  const box = document.querySelector('.tracker-acct[data-tracker="' + id + '"]');
-  const btn = box && box.querySelector(".acct-connect");
-  if (!btn || btn.hidden) { showTokenForm(id); return; }
-  highlight(box.closest(".card"));
-  btn.focus();
+  const row = document.querySelector('#connectedList .conn-row[data-tracker="' + id + '"]');
+  const t = trackerRows[id];
+  // Already connected and working: show its row.
+  if (row && !row.hidden && !(t && t.needsReconnect)) { highlight(row); return; }
+  if (!t || !t.canConnect) { showTokenForm(id); return; }
+  openConnect(id);
 }
 
-(function followIntegrationsLink() {
+function followIntegrationsLink() {
   const m = /^#integrations(?::(connect|token)=(github|linear|slack))?$/.exec(location.hash);
-  if (!m) return;
-  $("integrations").scrollIntoView({ block: "start" });
+  if (!m || !m[1]) return;
   if (m[1] === "connect") showConnect(m[2]);
-  else if (m[1] === "token") showTokenForm(m[2]);
-})();
+  else showTokenForm(m[2]);
+}
+followIntegrationsLink();
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 
@@ -787,6 +1088,30 @@ refreshPills();
 renderTrackerAccounts();
 showMigrationNotices();
 renderLlmSites();
+renderAccount();
+
+// ── Site Audit account (ADR 009) ────────────────────────────────────────────
+// Only the signed-in email (what signin.html stores and shows); sign in, sign
+// out and delete stay on signin.html.
+async function renderAccount() {
+  const acct = ((await get(["tb_audit_gate_v1"])).tb_audit_gate_v1 || {}).account;
+  const email = acct && acct.email ? String(acct.email) : "";
+  pill($("accountPill"), !!email, ["Signed in", "Not signed in"]);
+  $("accountHelp").textContent = email
+    ? "Signed in as " + email + ". Site Audit needs it after 3 audits."
+    : "Needed after 3 audits: email and a code, no password.";
+  $("accountLink").textContent = email ? "Manage" : "Sign in";
+}
+try {
+  chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.tb_audit_gate_v1) renderAccount(); });
+} catch {}
+
+// Recording → Microphone: the ⓘ shows why it's granted on this page.
+$("micWhyBtn").addEventListener("click", () => {
+  const open = $("micWhy").hidden;
+  $("micWhy").hidden = !open;
+  $("micWhyBtn").setAttribute("aria-expanded", String(open));
+});
 
 // ── Microphone grant ────────────────────────────────────────────────────────
 // Lives here, not in the popup, for one concrete reason: an extension popup is
@@ -913,16 +1238,10 @@ renderLlmSites();
   // that the popup cannot survive the permission prompt, so landing here is
   // already the one extra step; don't add a second one on top of it.
   if (location.hash === "#mic") {
-    // The browser's own permission prompt below (requestMicGrant) should
-    // appear almost immediately, but this page still loads with every other
-    // card (AI Debugger, GitHub, Linear, Slack…) visible above and below it —
-    // a brief highlight on the one card that matters makes it unmistakable
-    // even in the moment before the native prompt shows up.
+    // #mic opens the Recording section (sectionOf); a brief highlight on the
+    // card marks it in the moment before the browser's own prompt shows up.
     const card = document.getElementById("micCard");
-    if (card) {
-      card.scrollIntoView({ block: "center" });
-      card.classList.add("deep-link-target");
-    }
+    if (card) card.classList.add("deep-link-target");
     void requestMicGrant();
   }
 })();

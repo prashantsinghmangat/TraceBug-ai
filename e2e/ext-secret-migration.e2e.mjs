@@ -233,7 +233,8 @@ try {
 
     // --- the settings page is what the user actually looks at ---------------
     const opt = await ctx.newPage();
-    await opt.goto(`chrome-extension://${extId}/options.html`, { waitUntil: "load" });
+    // AI Debugger: the section with the "Configured" pill; the notice shows on every section.
+    await opt.goto(`chrome-extension://${extId}/options.html#ai`, { waitUntil: "load" });
     await opt.waitForTimeout(1200);
     const optText = await opt.evaluate(() => document.body.innerText);
     check("settings page renders", optText.trim().length > 50);

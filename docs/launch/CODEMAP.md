@@ -80,13 +80,18 @@ the same step.
   `pageIntegrationHint`; in the worker bundle) → worker `integrationSummary` / `pageIntegrationHintNow` (status
   answer `summary`, TB_HOST_ACCESS `integrations`), default key `tb_tracker_default_v1` (`tb:tracker:set-primary`).
   UI `integrations-hub.js` + `.css` (`mount(container, {mode, handoff, tokenPath, onSummary})`: tabs, rows, roving
-  grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) only. **Settings → Manage
-  integrations (redesign step 5):** `options.html` `#integrations` — `.int-card` per tracker (GitHub first, logo via
-  `TraceBugIntegrationsHub.logo`, `.acct-primary` Connect, `.acct-secondary` default repo + Disconnect), then
-  `#intGlobal` Preferences (`.pref-row`s: `#defaultTracker`/`#defaultTrackerEmpty`, `#openAfterCreate` switch,
-  `#rememberedCount` + `#forgetChoices`); `options.js` `renderTrackerAccounts` (state from the status `summary`,
-  `tokenHint`, `renderRemembered`, `renderDefaultTracker`), `flashSaved` (the fading "Saved"), `saveTrackerSecret` (via
-  `tb:tracker:save-token`), deep links `#integrations:connect=<id>` (focus the card's Connect) / `:token=<id>`. Ticket: `quick-bug.ts`
+  grid, dialog) mounted by `popup.js` `initIntegrations` (header `#intBtn`, `#hubView`) only. **Settings (S1
+  "Sidebar sections", 2026-11-24):** `options.html` sidebar `.nav-item[data-section]` + one `.section` at a time
+  (`options.js` `sectionOf`/`showSection`, hash: `#integrations` `#ai` `#recording` (`#mic` too) `#privacy`
+  `#account` `#help`). Integrations: `#connectedList` rows `.tracker-acct[data-tracker]` (`.acct-line`,
+  `.acct-default`, `.acct-status`, state word `#ghPill`/`#lnPill`, ⋯ `.menu-btn` + `.menu` with `.acct-reconnect`
+  `.acct-manage` `.acct-to-token` `.acct-switch` `.acct-disconnect`), Slack `#slRow`; `#addCard` `.add-tile`
+  `.tile-connect`; `layoutIntegrations` (rows vs tiles, `#navIntCount`). `<dialog id="connectDialog">` with `.pane`s
+  (`github-choose`/`-signin`/`-token`, `linear`, `slack`; `openConnect`, `showPane`, `startSignIn`,
+  `connectFromOptions`); `<dialog id="disconnectDialog">` (`openDisconnect`, `disconnectWords`); results in
+  `#intStatus` (`.revoke-link`). `#intGlobal` Preferences (`.pref-row`s). `renderTrackerAccounts`,
+  `renderDefaultTracker` (+ `.default-pill`), `flashSaved`, `saveTrackerSecret` (via `tb:tracker:save-token`), hand-offs
+  `#integrations:connect=<id>` (dialog, Sign in focused) / `:token=<id>`. Screenshots: `docs/audit/settings-ui/shots.mjs`. Ticket: `quick-bug.ts`
   `_primaryTarget`/`_sendButtonHtml`/`_primarySendHtml` (ONE button `[data-tb-split-main]` in `[data-tb-send-split]`, tooltip + dot + Alt+↓; no ▾ since U1/U2), logos `src/ui/brand-logos.ts` (copy in the hub JS).
   Tests `tests/integration-status.test.ts`, e2e `e2e/ext-integrations-hub.e2e.mjs` (`e2e:hub`).
   **GitHub hardening (first release):** `src/providers/api.ts` `githubSpecialError` / `GitHubSsoError` /

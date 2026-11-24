@@ -2,538 +2,737 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TraceBug settings</title>
-  <!-- Extension page: CSP is script-src 'self', so all script is external. -->
+  <!-- Extension page: CSP is script-src 'self', so all script is external.
+       Layout S1 "Sidebar sections" in direction A "Quiet" (2026-11-24, as the
+       Create panel): one section at a time, following the URL hash. No remote
+       loads: Inter only if the system has it. -->
   <style>
     :root {
-      --bg: #0B0D14;
-      --panel: #141823;
-      --text: #EEF0F5;
-      --muted: #A8AEBE;
-      --line: #252A38;
-      --accent: #FF5C6C;
-      --ok: #4CC38A;
-      --warn: #E0A040;
-      --field-line: #333A4D;
-      --on-accent: #0B0D14;
-      --note-text: #FDE68A;
-      --strong-text: #EEF0F5;
-      --link: #FF8590;
-      color-scheme: dark;
+      --bg: #F7F8FA; --panel: #FFFFFF; --field: #FFFFFF; --tile: #F3F4F6; --hover: #F9FAFB;
+      --text: #111827; --muted: #6B7280; --label: #374151;
+      --border: #E5E7EB; --divider: #F1F2F4; --field-line: #D1D5DB;
+      --primary: #111827; --primary-hover: #000000; --on-primary: #FFFFFF;
+      --danger: #B91C1C; --danger-hover: #991B1B; --on-danger: #FFFFFF; --ring: #2563EB; --link: #1D4ED8;
+      --ok: #16A34A; --ok-text: #15803D; --warn: #F59E0B; --warn-text: #B45309;
+      --switch-off: #D1D5DB; --knob: #FFFFFF;
+      --note-bg: #FFFBEB; --note-line: #FDE68A; --note-text: #92400E;
+      --shadow: 0 12px 32px rgba(17, 24, 39, .14);
+      color-scheme: light;
     }
-    /* Light: the system's choice, or data-theme="light"; data-theme="dark" forces dark. */
-    @media (prefers-color-scheme: light) {
-      :root:not([data-theme="dark"]) {
-        --bg: #F6F7FA; --panel: #FFFFFF; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
-        --accent: #D93A4C; --ok: #1E8A55; --warn: #A86A00; --field-line: #C9CFDA; --on-accent: #FFFFFF;
-        --note-text: #7A4A00; --strong-text: #141823; --link: #C62834; color-scheme: light;
+    /* Dark: the system's choice, or data-theme="dark"; the panel's dark tokens. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0B0D14; --panel: #141823; --field: #0F121A; --tile: #1F2430; --hover: #1A1F2C;
+        --text: #EEF0F5; --muted: #A8AEBE; --label: #D1D5DB;
+        --border: #2A2F3D; --divider: #1F2430; --field-line: #333A4D;
+        --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
+        --danger: #F87171; --danger-hover: #FCA5A5; --on-danger: #111827; --ring: #60A5FA; --link: #93C5FD;
+        --ok: #4ADE80; --ok-text: #4ADE80; --warn: #FBBF24; --warn-text: #FBBF24;
+        --switch-off: #3A4152; --knob: #EEF0F5;
+        --note-bg: rgba(245, 158, 11, .1); --note-line: rgba(245, 158, 11, .3); --note-text: #FDE68A;
+        --shadow: 0 12px 32px rgba(0, 0, 0, .5);
+        color-scheme: dark;
       }
     }
-    :root[data-theme="light"] {
-      --bg: #F6F7FA; --panel: #FFFFFF; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
-      --accent: #D93A4C; --ok: #1E8A55; --warn: #A86A00; --field-line: #C9CFDA; --on-accent: #FFFFFF;
-      --note-text: #7A4A00; --strong-text: #141823; --link: #C62834; color-scheme: light;
+    :root[data-theme="dark"] {
+      --bg: #0B0D14; --panel: #141823; --field: #0F121A; --tile: #1F2430; --hover: #1A1F2C;
+      --text: #EEF0F5; --muted: #A8AEBE; --label: #D1D5DB;
+      --border: #2A2F3D; --divider: #1F2430; --field-line: #333A4D;
+      --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
+      --danger: #F87171; --danger-hover: #FCA5A5; --on-danger: #111827; --ring: #60A5FA; --link: #93C5FD;
+      --ok: #4ADE80; --ok-text: #4ADE80; --warn: #FBBF24; --warn-text: #FBBF24;
+      --switch-off: #3A4152; --knob: #EEF0F5;
+      --note-bg: rgba(245, 158, 11, .1); --note-line: rgba(245, 158, 11, .3); --note-text: #FDE68A;
+      --shadow: 0 12px 32px rgba(0, 0, 0, .5);
+      color-scheme: dark;
     }
     * { box-sizing: border-box; }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    [hidden] { display: none !important; }
+    :focus { outline: none; }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    svg { flex: none; }
     body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 14px/1.5 "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-      padding: 32px 20px 64px;
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 640px; margin: 0 auto; }
-    h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; }
-    h1.brand { display: flex; align-items: center; gap: 10px; }
-    .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 18px;
-      margin-bottom: 16px;
-    }
-    .card h2 { font-size: 14px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
-    /* Marks the card a #hash deep link (e.g. #mic) landed on, so it's
-       unmistakable which one matters on a page that otherwise shows every
-       setting at once. */
-    button.small { padding: 4px 10px; font-size: 12px; }
-    .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 92, 108, 0.25); }
-    .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
-    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-    input, select {
-      width: 100%;
-      margin-top: 4px;
-      padding: 8px 10px;
-      border: 1px solid var(--field-line);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      font: inherit;
-      font-size: 13px;
-    }
-    input[type="password"] { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
-    textarea {
-      width: 100%;
-      margin-top: 4px;
-      padding: 8px 10px;
-      border: 1px solid var(--field-line);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      font: 12px/1.4 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-      resize: vertical;
-    }
-    .row { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
-    button {
-      padding: 9px 14px;
-      border: 0;
-      border-radius: 8px;
-      cursor: pointer;
-      background: var(--accent);
-      color: var(--on-accent);
-      font: 600 13px "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    }
-    button.ghost {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--field-line);
-    }
-    .status { font-size: 12px; color: var(--muted); min-height: 18px; margin-top: 8px; }
-    .status.ok { color: var(--ok); }
-    .status.err { color: var(--warn); }
-    .pill {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding: 2px 7px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      color: var(--muted);
-    }
-    .pill.on, .pill.ok { color: var(--ok); border-color: rgba(34, 197, 94, 0.4); }
-    .pill.warn { color: var(--warn); border-color: rgba(245, 158, 11, 0.4); }
-    .notice {
-      background: rgba(245, 158, 11, 0.1);
-      border: 1px solid rgba(245, 158, 11, 0.3);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 12.5px;
-      margin-bottom: 16px;
-      color: var(--note-text);
-    }
-    .notice button { margin-top: 10px; }
-    .privacy {
-      border: 1px solid rgba(255, 92, 108, 0.25);
-      background: rgba(255, 92, 108, 0.08);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 12.5px;
-      color: var(--strong-text);
-      margin-bottom: 20px;
-    }
-    .rotate { color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .siterow {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .siterow:last-child { border-bottom: 0; }
-    .siteorigin {
-      flex: 1 1 auto;
-      font: 12px/1.4 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
-      word-break: break-all;
-    }
-    .siterow button { padding: 5px 10px; font-size: 12px; }
     a { color: var(--link); }
-    /* ADR 010: sign-in row + the token fallback tucked under Advanced. */
-    .tracker-acct [hidden], .tracker-acct[hidden] { display: none !important; }
-    .advanced { margin-top: 10px; }
-    .advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
-    /* Integrations: tracker cards, then Preferences. 8 px grid; the hub's look
-       (integrations-hub.css): sentence-case pills, logo + name + status. */
-    .int-head { margin: 32px 0 16px; }
-    .int-head h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
-    .int-head p { margin: 0; color: var(--muted); font-size: 13px; }
-    .int-card, .prefs { padding: 16px; }
-    .int-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .int-card-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
-    .int-card-head .pill { margin-left: auto; }
-    .int-logo { flex: none; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; color: var(--text); }
-    .int-card .pill { font-size: 11px; text-transform: none; letter-spacing: 0; padding: 2px 8px; white-space: nowrap; }
-    .int-card .pill.on { color: var(--ok); border-color: var(--ok); }
-    .int-card .pill.warn { color: var(--warn); border-color: var(--warn); }
-    .int-card .acct-line { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
-    .acct-primary { margin: 0 0 8px; }
-    .acct-switch { display: inline-block; font-size: 13px; color: var(--link); margin: 0 0 8px; }
-    .acct-confirm { margin: 8px 0; padding: 8px 16px 16px; border: 1px solid var(--line); border-radius: 8px; }
-    .acct-confirm p { margin: 8px 0; font-size: 13px; }
-    .acct-confirm[hidden] { display: none; }
-    .acct-secondary {
-      display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px;
-      margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line);
+    code { font: 12px ui-monospace, Menlo, Consolas, monospace; }
+
+    /* Page: sidebar + content; the content wraps under the sidebar when narrow. */
+    .page {
+      max-width: 1120px; margin: 0 auto; padding: 32px 24px 64px;
+      display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px;
     }
-    .acct-secondary .acct-default-wrap { flex: 1 1 240px; min-width: 0; margin: 0; }
-    .acct-secondary .acct-default-wrap select { margin-top: 8px; }
-    .acct-disconnect { margin-left: auto; }
-    .int-card .advanced { margin-top: 8px; }
-    .int-card .advanced summary { display: inline-block; list-style: none; color: var(--link); font-size: 13px; margin-bottom: 8px; }
-    .int-card .advanced summary::-webkit-details-marker { display: none; }
-    .int-card .advanced summary:hover { text-decoration: underline; }
-    .int-card .status:empty, .prefs .status:empty { min-height: 0; margin: 0; }
-    .prefs { padding-top: 8px; padding-bottom: 0; }
-    .prefs h3 { margin: 8px 0 8px; font-size: 14px; font-weight: 600; }
-    .pref-row {
+    .side { flex: 1 1 240px; max-width: 240px; position: sticky; top: 32px; }
+    .content { flex: 999 1 560px; min-width: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; margin: 0 0 20px 8px; }
+    .nav { display: flex; flex-direction: column; gap: 2px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px;
+      color: var(--label); text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap;
+      border: 0; box-shadow: none;
+    }
+    .nav-item svg { color: var(--muted); }
+    .nav-item:hover { background: var(--tile); color: var(--text); }
+    .nav-item[aria-current="page"] { background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(17, 24, 39, .04); }
+    .nav-item[aria-current="page"] svg { color: var(--text); }
+    .nav-count {
+      margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+      background: var(--tile); color: var(--label); font-size: 12px; font-weight: 600; line-height: 20px; text-align: center;
+    }
+    .side-note { margin: 20px 0 0; padding: 16px 10px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.5; }
+    @media (max-width: 863px) {
+      .page { padding: 16px 16px 48px; gap: 16px; }
+      .side { position: static; max-width: none; flex-basis: 100%; min-width: 0; }
+      .brand { margin: 0 0 12px 0; }
+      .nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 4px; }
+      .nav::-webkit-scrollbar { display: none; }
+      .nav-item { flex: none; }
+      .side-note { margin-top: 8px; padding: 0; border: 0; }
+    }
+
+    /* Sections */
+    .sec-head { margin: 0 0 20px; }
+    .sec-head h1 { font-size: 22px; font-weight: 600; line-height: 28px; margin: 0; }
+    .sec-head h1:focus-visible { border-radius: 4px; }
+    .sec-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .section > * + * { margin-top: 16px; }
+    .section > .sec-head + * { margin-top: 0; }
+
+    /* Cards and rows */
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+    .card-head {
+      display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--divider);
+      font-size: 13px; font-weight: 600; color: var(--label);
+    }
+    .card-head .pill { margin-left: auto; }
+    .card-body { padding: 20px; }
+    .card-body > * + * { margin-top: 16px; }
+    .row {
       display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px;
-      padding: 16px 0; border-top: 1px solid var(--line);
+      padding: 16px 20px;
     }
-    .pref-text { flex: 1 1 200px; min-width: 0; }
-    .prefs .pref-label { display: block; margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
-    .pref-help { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-    .pref-control { flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
-    .pref-control select { width: 200px; max-width: 100%; margin: 0; }
-    .pref-control select[hidden], .prefs [hidden] { display: none; }
-    .pref-empty, .pref-value { font-size: 12px; color: var(--muted); }
-    .pref-value { white-space: nowrap; }
-    .prefs button:disabled { opacity: .5; cursor: default; }
-    /* "Saved": next to the control that changed, fades after ~2 s. Takes no
-       room while empty, so a wrapped row doesn't shift. */
-    .saved { font-size: 12px; font-weight: 400; color: var(--ok); opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    .row + .row, .row + .rows, .rows + .row { border-top: 1px solid var(--divider); }
+    .row-text { flex: 1 1 260px; min-width: 0; }
+    .row-label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 500; color: var(--text); }
+    .row-help { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    .row-control { flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; max-width: 100%; }
+    .row-control select { width: 220px; max-width: 100%; }
+    .row.stack { display: block; }
+    .row.stack > * + * { margin-top: 8px; }
+    .empty { margin: 0; padding: 20px; color: var(--muted); font-size: 14px; }
+    .hint { margin: 0; color: var(--muted); font-size: 13px; }
+    .muted { color: var(--muted); font-size: 13px; }
+
+    /* Controls */
+    button, a.btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 36px; padding: 0 14px; border-radius: 8px; cursor: pointer; text-decoration: none; white-space: nowrap;
+      font: 600 13px/1 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--primary); color: var(--on-primary); border: 1px solid var(--primary);
+    }
+    button:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+    button.secondary, a.btn.secondary { background: var(--panel); color: var(--text); border-color: var(--border); }
+    button.secondary:hover:not(:disabled), a.btn.secondary:hover { background: var(--hover); border-color: var(--field-line); }
+    button.ghost { background: transparent; color: var(--label); border-color: transparent; }
+    button.ghost:hover:not(:disabled) { background: var(--tile); border-color: transparent; }
+    button.danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+    button.danger:hover:not(:disabled) { background: var(--danger-hover); border-color: var(--danger-hover); }
+    button.small { height: 30px; padding: 0 10px; font-size: 12px; }
+    button:disabled { opacity: .45; cursor: default; }
+    .iconbtn {
+      width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 0; background: transparent; color: var(--muted);
+    }
+    .iconbtn:hover:not(:disabled), .iconbtn[aria-expanded="true"] { background: var(--tile); color: var(--text); border: 0; }
+    label.field { display: block; font-size: 13px; font-weight: 500; color: var(--label); }
+    input[type="text"], input[type="password"], input:not([type]), select, textarea {
+      display: block; width: 100%; margin-top: 6px; padding: 0 12px; height: 38px;
+      border: 1px solid var(--field-line); border-radius: 8px; background: var(--field); color: var(--text);
+      font: 400 14px Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .row-control select, .conn-default select { margin-top: 0; }
+    input[type="password"] { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+    textarea { height: auto; padding: 8px 12px; font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+    input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 0; border-color: transparent; }
+    .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .actions .status { margin: 0 auto 0 0; }
+
+    /* A switch: the checkbox itself (role="switch"), so it stays one
+       focusable, label-clickable control. */
+    input.switch {
+      -webkit-appearance: none; appearance: none; flex: none; width: 40px; height: 24px; margin: 0; padding: 0;
+      border: 0; border-radius: 999px; cursor: pointer; transition: background-color .15s;
+      background: radial-gradient(circle 9px at 12px 50%, var(--knob) 96%, transparent 100%), var(--switch-off);
+    }
+    input.switch:checked { background: radial-gradient(circle 9px at calc(100% - 12px) 50%, var(--on-primary) 96%, transparent 100%), var(--primary); }
+    input.switch:focus-visible { outline-offset: 2px; }
+
+    /* Pills, status words, "Saved" */
+    .pill {
+      display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px;
+      font-size: 12px; font-weight: 500; white-space: nowrap; background: var(--tile); color: var(--label);
+    }
+    .pill.on, .pill.ok { color: var(--ok-text); }
+    .pill.warn { color: var(--warn-text); }
+    .state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+    .state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--switch-off); }
+    .state.on { color: var(--ok-text); }
+    .state.on::before { background: var(--ok); }
+    .state.warn { color: var(--warn-text); }
+    .state.warn::before { background: var(--warn); }
+    .status { font-size: 13px; color: var(--muted); margin: 0; }
+    .status:empty { display: none; }
+    .status.ok { color: var(--ok-text); }
+    .status.err { color: var(--warn-text); }
+    .saved { font-size: 12px; color: var(--ok-text); opacity: 0; transition: opacity .3s; white-space: nowrap; }
     .saved:empty { display: none; }
     .saved.show { opacity: 1; }
-    .saved.err { color: var(--warn); opacity: 1; }
-    /* A switch, not a loose checkbox: the input itself, so it stays one
-       focusable, label-clickable checkbox (role="switch"). */
-    input.switch {
-      -webkit-appearance: none; appearance: none; flex: none; width: 36px; height: 20px; margin: 0; padding: 0;
-      border: 1px solid var(--field-line); border-radius: 999px; cursor: pointer;
-      background: radial-gradient(circle 7px at 9px 50%, var(--muted) 96%, transparent 100%), var(--line);
+    .saved.err { color: var(--warn-text); opacity: 1; }
+    @media (prefers-reduced-motion: reduce) { .saved, input.switch { transition: none; } }
+    .notice {
+      background: var(--note-bg); border: 1px solid var(--note-line); border-radius: 12px; color: var(--note-text);
+      padding: 12px 16px; font-size: 13px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
     }
-    input.switch:checked {
-      border-color: var(--accent);
-      background: radial-gradient(circle 7px at calc(100% - 9px) 50%, var(--on-accent) 96%, transparent 100%), var(--accent);
+    .notice > div { flex: 1 1 240px; }
+    .deep-link-target { box-shadow: 0 0 0 2px var(--ring); }
+
+    /* Integrations: connected rows */
+    .icon-tile {
+      width: 40px; height: 40px; border-radius: 10px; background: var(--tile); color: var(--text);
+      display: inline-grid; place-items: center; flex: none;
     }
-    input.switch:focus-visible { border-radius: 999px; }
-    @media (prefers-reduced-motion: reduce) { .saved { transition: none; } }
-    .device-code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; font-size: 26px; user-select: all; }
+    .conn-row { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; }
+    .conn-row + .conn-row { border-top: 1px solid var(--divider); }
+    .conn-text { flex: 1 1 auto; min-width: 0; }
+    .conn-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin: 0; line-height: 20px; }
+    .acct-line { margin: 2px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+    .conn-default { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 12px 0 0; font-size: 13px; color: var(--label); }
+    .conn-default select { width: auto; min-width: 200px; max-width: 100%; height: 34px; }
+    .conn-row .acct-status { margin-top: 8px; }
+    .conn-side { display: flex; align-items: center; gap: 8px; flex: none; min-height: 40px; }
+    .menu-wrap { position: relative; }
+    .menu {
+      position: absolute; right: 0; top: 40px; z-index: 5; min-width: 248px; padding: 6px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+    }
+    .menu button {
+      display: flex; width: 100%; justify-content: flex-start; height: 34px; padding: 0 10px; border: 0; border-radius: 6px;
+      background: transparent; color: var(--text); font-weight: 500;
+    }
+    .menu button:hover:not(:disabled), .menu button:focus-visible { background: var(--hover); border: 0; }
+    .menu button.danger { color: var(--danger); }
+    .menu hr { border: 0; border-top: 1px solid var(--divider); margin: 6px 0; }
+    /* Narrow: status and ⋯ stay on the name line; the rest spans the row. */
+    @media (max-width: 520px) {
+      .conn-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; }
+      .conn-text { display: contents; }
+      .conn-row > .icon-tile { grid-column: 1; grid-row: 1; }
+      .conn-name { grid-column: 2; grid-row: 1; flex-wrap: wrap; }
+      .conn-side { grid-column: 3; grid-row: 1; min-height: 0; }
+      .conn-row .acct-line, .conn-row .conn-default, .conn-row .acct-status { grid-column: 1 / -1; }
+      .conn-row .acct-line { margin-top: 10px; }
+    }
+
+    /* Integrations: add tiles */
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 20px; }
+    .add-tile { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
+    .add-tile h3 { margin: 0; font-size: 14px; font-weight: 600; }
+    .add-tile p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    .add-tile .tile-top { display: flex; gap: 12px; align-items: flex-start; flex: 1 1 auto; }
+    .add-tile button { align-self: flex-start; }
+
+    /* Dialogs (native <dialog>: Esc, focus and the backdrop for free) */
+    dialog {
+      width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; overflow: auto;
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+    }
+    dialog::backdrop { background: rgba(17, 24, 39, .45); }
+    .dlg-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 20px 0; }
+    .dlg-head h2 { margin: 0; font-size: 17px; font-weight: 600; line-height: 24px; }
+    .dlg-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    .dlg-head > div { flex: 1 1 auto; min-width: 0; }
+    .dlg-head .icon-tile { width: 36px; height: 36px; }
+    .dlg-body { padding: 20px; }
+    .pane > * + * { margin-top: 16px; }
+    .dlg-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    .dlg-actions .spacer { margin-right: auto; }
+    .choice {
+      display: block; width: 100%; height: auto; padding: 14px 16px; text-align: left; white-space: normal;
+      background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; font-weight: 400;
+    }
+    .choice:hover:not(:disabled) { background: var(--hover); border-color: var(--field-line); }
+    .choice + .choice { margin-top: 10px; }
+    .choice strong { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; line-height: 20px; }
+    .choice span.desc { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .pill.rec { color: var(--ok-text); }
+    .confirm-box { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--hover); }
+    .confirm-box p { margin: 0 0 10px; font-size: 13px; color: var(--label); }
+    .confirm-box .dlg-actions { justify-content: flex-start; }
+    .device { padding: 16px; border: 1px solid var(--border); border-radius: 10px; text-align: center; }
+    .device .hint { margin-bottom: 6px; }
+    .device-code { display: block; font: 600 26px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; user-select: all; }
+    .device .dlg-actions { justify-content: center; margin-top: 12px; }
+    details.advanced summary { cursor: pointer; color: var(--link); font-size: 13px; }
+    details.advanced[open] summary { margin-bottom: 12px; }
+    details.advanced > * + * { margin-top: 12px; }
+    .link-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+    .link-row a { font-size: 13px; }
+
+    /* Lists */
+    .siterow { display: flex; align-items: center; gap: 12px; padding: 12px 20px; }
+    .siterow + .siterow { border-top: 1px solid var(--divider); }
+    .siteorigin { flex: 1 1 auto; min-width: 0; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+    .info {
+      width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 0; background: transparent; color: var(--muted);
+      vertical-align: middle;
+    }
+    .info:hover:not(:disabled), .info[aria-expanded="true"] { background: var(--tile); color: var(--text); border: 0; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1 class="brand"><svg width="28" height="28" viewBox="0 0 96 96" fill="none" aria-hidden="true"><rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/><rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/></svg>TraceBug settings</h1>
-    <p class="sub">Tokens and API keys are stored by the extension, not by the websites you test.</p>
+  <div class="page">
+    <aside class="side">
+      <div class="brand"><svg width="28" height="28" viewBox="0 0 96 96" fill="none" aria-hidden="true"><rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/><rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/></svg>TraceBug</div>
+      <nav class="nav" aria-label="Settings sections">
+        <a class="nav-item" href="#integrations" data-section="integrations"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8z"/></svg>Integrations<span class="nav-count" id="navIntCount" hidden></span></a>
+        <a class="nav-item" href="#ai" data-section="ai"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>AI Debugger</a>
+        <a class="nav-item" href="#recording" data-section="recording"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/></svg>Recording</a>
+        <a class="nav-item" href="#privacy" data-section="privacy"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Privacy</a>
+        <a class="nav-item" href="#account" data-section="account"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Account</a>
+        <a class="nav-item" href="#help" data-section="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a>
+      </nav>
+      <p class="side-note">Everything here stays in this browser. Nothing is sent to TraceBug.</p>
+    </aside>
 
-    <div class="privacy">
-      Nothing goes to TraceBug. Keys are kept in the extension's own storage and are sent only to the provider
-      you configure, when you choose to send a report.
-    </div>
-
-    <div id="migrationNotice" class="notice" style="display:none">
-      <div id="migrationNoticeText"></div>
-      <button class="ghost" id="migrationDismiss" type="button">Dismiss</button>
-    </div>
-
-    <div class="card">
-      <h2>AI Debugger <span class="pill" id="aiPill">Not configured</span></h2>
-      <p class="hint">Bring your own key. The report is scrubbed of secret shapes before it is sent.</p>
-      <label>Provider
-        <select id="aiProvider">
-          <option value="anthropic">Anthropic (Claude)</option>
-          <option value="openai">OpenAI</option>
-          <option value="ollama">Ollama (local)</option>
-        </select>
-      </label>
-      <label id="aiKeyWrap">API key
-        <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" />
-      </label>
-      <label>Model
-        <input id="aiModel" type="text" spellcheck="false" placeholder="claude-sonnet-4-6" />
-      </label>
-      <label id="aiBaseWrap" style="display:none">Base URL
-        <input id="aiBaseUrl" type="text" spellcheck="false" placeholder="http://localhost:11434" />
-      </label>
-      <div class="row">
-        <button id="aiSave" type="button">Save</button>
-        <button class="ghost" id="aiClear" type="button">Remove key</button>
+    <main class="content">
+      <!-- Shown above whichever section is open, until dismissed. -->
+      <div id="migrationNotice" class="notice" role="status" style="display:none">
+        <div id="migrationNoticeText"></div>
+        <button class="secondary small" id="migrationDismiss" type="button">Dismiss</button>
       </div>
-      <div class="status" id="aiStatus"></div>
-    </div>
 
-    <!-- Integrations (redesign step 5): one card per tracker, GitHub first, then
-         Preferences. The popup keeps the hub view (My connections / Add
-         platform); settings is where each connection is managed. Status words
-         match the hub and the ticket's ▾ tooltip: Connected / Needs reconnect /
-         Error / Not connected. -->
-    <div class="int-head">
-      <h2 id="integrations">Integrations</h2>
-      <p>Send bugs straight to your issue tracker.</p>
-    </div>
+      <!-- ══ Integrations ══ One row per connection; a tile per tracker not
+           connected yet. Each .tracker-acct row is the tracker's account:
+           mode line, default repository/team, ⋯ menu. Connecting happens in
+           #connectDialog. Status words match the hub and the ticket's ▾
+           tooltip: Connected / Needs reconnecting / Error / Not connected. -->
+      <section class="section" id="section-integrations" data-section="integrations" aria-labelledby="integrationsTitle">
+        <header class="sec-head">
+          <h1 id="integrationsTitle" tabindex="-1">Integrations</h1>
+          <p>Send bugs straight to your issue tracker.</p>
+        </header>
+        <p class="status" id="intStatus" role="status" aria-live="polite"></p>
 
-    <div class="card int-card">
-      <div class="int-card-head">
-        <span class="int-logo" data-logo="github"></span>
-        <h3>GitHub</h3>
-        <span class="pill" id="ghPill">Not connected</span>
-      </div>
-      <!-- ADR 010: sign-in first (shown only where this build supports it),
-           the pasted token as the advanced fallback. -->
-      <div class="tracker-acct" data-tracker="github">
-        <p class="acct-line"></p>
-        <div class="row acct-primary">
-          <button class="acct-connect" type="button" hidden>Connect GitHub</button>
+        <div class="card" id="connectedCard">
+          <div class="card-head">Connected</div>
+          <div id="connectedList">
+            <div class="conn-row tracker-acct" data-tracker="github" hidden>
+              <span class="icon-tile int-logo" data-logo="github"></span>
+              <div class="conn-text">
+                <p class="conn-name">GitHub <span class="pill default-pill" hidden>Default</span></p>
+                <p class="acct-line"></p>
+                <label class="conn-default acct-default-wrap" hidden><span>Default repository</span>
+                  <select class="acct-default"></select><span class="saved" aria-live="polite"></span>
+                </label>
+                <p class="status acct-status"></p>
+              </div>
+              <div class="conn-side">
+                <span class="state" id="ghPill">Not connected</span>
+                <div class="menu-wrap">
+                  <button class="iconbtn menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="GitHub options"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+                  <div class="menu" role="menu" aria-label="GitHub options" hidden>
+                    <button type="button" role="menuitem" class="acct-reconnect" hidden>Reconnect GitHub</button>
+                    <button type="button" role="menuitem" class="acct-manage" hidden>Choose repositories on GitHub</button>
+                    <button type="button" role="menuitem" class="acct-to-token" hidden>Switch to a personal token</button>
+                    <button type="button" role="menuitem" class="acct-switch" hidden>Switch to GitHub sign-in</button>
+                    <hr />
+                    <button type="button" role="menuitem" class="danger acct-disconnect">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="conn-row tracker-acct" data-tracker="linear" hidden>
+              <span class="icon-tile int-logo" data-logo="linear"></span>
+              <div class="conn-text">
+                <p class="conn-name">Linear <span class="pill default-pill" hidden>Default</span></p>
+                <p class="acct-line"></p>
+                <label class="conn-default acct-default-wrap" hidden><span>Default team</span>
+                  <select class="acct-default"></select><span class="saved" aria-live="polite"></span>
+                </label>
+                <p class="status acct-status"></p>
+              </div>
+              <div class="conn-side">
+                <span class="state" id="lnPill">Not connected</span>
+                <div class="menu-wrap">
+                  <button class="iconbtn menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Linear options"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+                  <div class="menu" role="menu" aria-label="Linear options" hidden>
+                    <button type="button" role="menuitem" class="acct-reconnect" hidden>Reconnect Linear</button>
+                    <hr class="acct-reconnect-hr" hidden />
+                    <button type="button" role="menuitem" class="danger acct-disconnect">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="conn-row" data-tracker="slack" id="slRow" hidden>
+              <span class="icon-tile int-logo" data-logo="slack"></span>
+              <div class="conn-text">
+                <p class="conn-name">Slack <span class="pill default-pill" hidden>Default</span></p>
+                <p class="acct-line">Posts reports to a channel through its incoming webhook.</p>
+              </div>
+              <div class="conn-side">
+                <span class="state" id="slPill">Not connected</span>
+                <div class="menu-wrap">
+                  <button class="iconbtn menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Slack options"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+                  <div class="menu" role="menu" aria-label="Slack options" hidden>
+                    <button type="button" role="menuitem" id="slChange">Change webhook URL</button>
+                    <hr />
+                    <button type="button" role="menuitem" class="danger" id="slClear">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="empty" id="connectedEmpty">No trackers connected yet. Add one below.</p>
         </div>
-        <!-- One GitHub connection (B11): in token mode, sign-in is a quiet link,
-             behind a "This replaces…" confirm. -->
-        <a href="#" class="acct-switch" hidden>Switch to GitHub sign-in (recommended)</a>
-        <div class="acct-confirm" hidden>
-          <p class="acct-confirm-text"></p>
+
+        <div class="card" id="addCard">
+          <div class="card-head">Add a tracker</div>
+          <div class="tiles">
+            <div class="add-tile" data-tracker="github">
+              <div class="tile-top"><span class="icon-tile int-logo" data-logo="github"></span>
+                <div><h3>GitHub</h3><p>Issues in your repositories.</p></div></div>
+              <button class="secondary tile-connect" type="button" data-tracker="github" aria-label="Connect GitHub">Connect</button>
+            </div>
+            <div class="add-tile" data-tracker="linear">
+              <div class="tile-top"><span class="icon-tile int-logo" data-logo="linear"></span>
+                <div><h3>Linear</h3><p>Issues in your Linear teams.</p></div></div>
+              <button class="secondary tile-connect" type="button" data-tracker="linear" aria-label="Connect Linear">Connect</button>
+            </div>
+            <div class="add-tile" data-tracker="slack">
+              <div class="tile-top"><span class="icon-tile int-logo" data-logo="slack"></span>
+                <div><h3>Slack</h3><p>Post reports to a channel.</p></div></div>
+              <button class="secondary tile-connect" type="button" data-tracker="slack" aria-label="Connect Slack">Connect</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- One row pattern: label + help on the left, the control on the right.
+             A change shows a small "Saved" beside its control, then fades. -->
+        <section class="card prefs" id="intGlobal" aria-labelledby="intGlobalTitle">
+          <div class="card-head" id="intGlobalTitle">Preferences</div>
+          <div class="row pref-row">
+            <div class="row-text">
+              <label class="row-label" for="defaultTracker" id="defaultTrackerLabel">Default tracker</label>
+              <p class="row-help" id="defaultTrackerHelp">Used by the Send button on a bug ticket.</p>
+            </div>
+            <div class="row-control">
+              <span class="saved" aria-live="polite"></span>
+              <select id="defaultTracker" aria-describedby="defaultTrackerHelp" hidden></select>
+              <span class="muted" id="defaultTrackerEmpty" hidden>Connect a tracker to choose a default</span>
+            </div>
+          </div>
+          <div class="row pref-row">
+            <div class="row-text">
+              <label class="row-label" for="openAfterCreate">Open the issue after creating</label>
+              <p class="row-help" id="openAfterCreateHelp">Opens the new issue in a new tab.</p>
+            </div>
+            <div class="row-control">
+              <span class="saved" aria-live="polite"></span>
+              <input class="switch" id="openAfterCreate" type="checkbox" role="switch" aria-describedby="openAfterCreateHelp" checked />
+            </div>
+          </div>
+          <div class="row pref-row">
+            <div class="row-text">
+              <span class="row-label" id="rememberedLabel">Remembered choices</span>
+              <p class="row-help" id="rememberedHelp" title="The repository and labels you last used on each site, by site address, in this browser only."><span id="rememberedCount">On 0 sites</span>, never from private windows</p>
+            </div>
+            <div class="row-control">
+              <span class="saved" aria-live="polite"></span>
+              <button class="secondary small" id="forgetChoices" type="button" aria-labelledby="forgetChoices rememberedLabel"
+                aria-describedby="rememberedHelp" disabled>Forget</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ AI Debugger ══ -->
+      <section class="section" id="section-ai" data-section="ai" aria-labelledby="aiTitle" hidden>
+        <header class="sec-head">
+          <h1 id="aiTitle" tabindex="-1">AI Debugger</h1>
+          <p>Bring your own key. The report is scrubbed of secret shapes before it is sent.</p>
+        </header>
+        <div class="card">
+          <div class="card-head">Provider <span class="pill" id="aiPill">Not configured</span></div>
+          <div class="card-body">
+            <div class="grid2">
+              <label class="field">Provider
+                <select id="aiProvider">
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="ollama">Ollama (local)</option>
+                </select>
+              </label>
+              <label class="field">Model
+                <input id="aiModel" type="text" spellcheck="false" placeholder="claude-sonnet-4-6" />
+              </label>
+            </div>
+            <label class="field" id="aiKeyWrap">API key
+              <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" />
+            </label>
+            <label class="field" id="aiBaseWrap" style="display:none">Base URL
+              <input id="aiBaseUrl" type="text" spellcheck="false" placeholder="http://localhost:11434" />
+            </label>
+            <div class="actions">
+              <p class="status" id="aiStatus" role="status"></p>
+              <button class="ghost" id="aiClear" type="button">Remove key</button>
+              <button id="aiSave" type="button">Save</button>
+            </div>
+          </div>
+        </div>
+        <section class="card" aria-labelledby="llmSitesTitle">
+          <div class="card-head" id="llmSitesTitle">Sites allowed to run analysis</div>
+          <div id="llmSites"></div>
+          <p class="empty" id="llmSitesEmpty">No sites approved yet. Each approved site is limited to 10 analyses a minute.</p>
+          <p class="status" id="llmSitesStatus" role="status" style="padding:0 20px 16px"></p>
+        </section>
+      </section>
+
+      <!-- ══ Recording ══ -->
+      <section class="section" id="section-recording" data-section="recording" aria-labelledby="recordingTitle" hidden>
+        <header class="sec-head">
+          <h1 id="recordingTitle" tabindex="-1">Recording</h1>
+          <p>What a recording may use besides the screen.</p>
+        </header>
+        <section class="card" id="micCard" aria-labelledby="micLabel">
           <div class="row">
+            <div class="row-text">
+              <p class="row-label" id="micLabel">Microphone <span class="pill" id="micPill">Not granted</span></p>
+              <p class="row-help">Only used when you turn it on for a recording.
+                <button class="info" type="button" id="micWhyBtn" aria-expanded="false" aria-controls="micWhy" aria-label="Why it's granted here"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></button></p>
+              <p class="row-help" id="micWhy" hidden>It has to be granted here, not from the toolbar popup: a popup closes the moment
+                the browser's permission prompt takes focus, which cancels the request. Nothing is recorded until you start
+                a recording, and the audio stays in the report on your device.</p>
+              <p class="status" id="micStatus" role="status" style="margin-top:4px"></p>
+            </div>
+            <div class="row-control">
+              <button class="secondary" id="micCheck" type="button">Re-check</button>
+              <button id="micGrant" type="button">Allow microphone</button>
+            </div>
+          </div>
+          <!-- Device labels only come back non-blank once permission is granted,
+               so this stays hidden until refreshMicDevices() has something real
+               to show — see options.js. -->
+          <div class="row" id="micDeviceRow" style="display:none">
+            <div class="row-text"><label class="row-label" for="micDeviceSelect">Use this microphone</label></div>
+            <div class="row-control"><select id="micDeviceSelect"></select></div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ Privacy ══ -->
+      <section class="section" id="section-privacy" data-section="privacy" aria-labelledby="privacyTitle" hidden>
+        <header class="sec-head">
+          <h1 id="privacyTitle" tabindex="-1">Privacy</h1>
+          <p>What TraceBug masks before anything leaves the page.</p>
+        </header>
+        <section class="card" id="redactCard" aria-labelledby="redactTitle">
+          <div class="card-head" id="redactTitle">Redaction rules <span class="pill" id="redactPill"></span></div>
+          <div class="card-body">
+            <p class="hint">App-specific PII masked at capture, on top of TraceBug's built-in token and secret patterns.</p>
+            <div>
+              <label class="field" for="redactFields">Sensitive field names</label>
+              <textarea id="redactFields" rows="2" spellcheck="false" placeholder="email, customer_id, phone" aria-describedby="redactFieldsHelp"></textarea>
+              <p class="hint" id="redactFieldsHelp" style="margin-top:6px">Comma or newline separated. Matches form fields, storage keys,
+                URL params and JSON keys in captured data — "email" also covers "customer_email".</p>
+            </div>
+            <div>
+              <label class="field" for="redactPatterns">Mask patterns</label>
+              <textarea id="redactPatterns" rows="2" spellcheck="false" placeholder="\d{3}-\d{2}-\d{4}" aria-describedby="redactPatternsHelp"></textarea>
+              <p class="hint" id="redactPatternsHelp" style="margin-top:6px">One regex per line, case-insensitive. Masked in console output,
+                network response bodies, error text and the DOM replay — not in URLs, screenshots or video.</p>
+            </div>
+            <div class="actions">
+              <p class="status" id="redactStatus" role="status"></p>
+              <button id="redactSave" type="button">Save rules</button>
+            </div>
+          </div>
+        </section>
+        <section class="card" id="allUrlsCard" style="display:none" aria-labelledby="allUrlsTitle">
+          <div class="row">
+            <div class="row-text">
+              <p class="row-label" id="allUrlsTitle">Access to all sites <span class="pill on">Granted</span></p>
+              <p class="row-help">Granted in an earlier version. It no longer does much on its own — a capture always ends
+                when you leave the site it started on — so there is nothing to lose by removing it.</p>
+              <p class="status" id="allUrlsStatus" role="status"></p>
+            </div>
+            <div class="row-control"><button class="secondary" id="allUrlsRemove" type="button">Remove</button></div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ Account ══ Site Audit (ADR 009): sign in, sign out, delete — all on signin.html. -->
+      <section class="section" id="section-account" data-section="account" aria-labelledby="accountTitle" hidden>
+        <header class="sec-head">
+          <h1 id="accountTitle" tabindex="-1">Account</h1>
+          <p>Only Site Audit needs one. Nothing else in TraceBug does.</p>
+        </header>
+        <section class="card" id="accountCard" aria-labelledby="accountLabel">
+          <div class="row">
+            <div class="row-text">
+              <p class="row-label" id="accountLabel">Site Audit account <span class="pill" id="accountPill">Not signed in</span></p>
+              <p class="row-help" id="accountHelp">Needed after 3 audits: email and a code, no password.</p>
+            </div>
+            <div class="row-control">
+              <a class="btn secondary" id="accountLink" href="signin.html" target="_blank" rel="noopener">Sign in</a>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ Help ══ TraceBug sends nothing anywhere, so the only route for a
+           bug report is the user's own clipboard — both buttons produce the SAME
+           scrubbed text (see diagnostics.js). -->
+      <section class="section" id="section-help" data-section="help" aria-labelledby="helpTitle" hidden>
+        <header class="sec-head">
+          <h1 id="helpTitle" tabindex="-1">Help</h1>
+          <p>Having trouble? Send us what we need to fix it.</p>
+        </header>
+        <section class="card" id="diagCard" aria-labelledby="diagLabel">
+          <div class="row">
+            <div class="row-text">
+              <p class="row-label" id="diagLabel">Diagnostics <span class="pill" id="diagPill"></span></p>
+              <p class="row-help">TraceBug's version, your browser and OS, the permissions you've granted, and TraceBug's
+                own recent errors. No URLs, no page content, nothing you've captured.</p>
+              <p class="status" id="diagStatus" role="status" style="margin-top:4px"></p>
+            </div>
+            <div class="row-control">
+              <button class="secondary" id="diagReport" type="button">Report a TraceBug bug</button>
+              <button id="diagCopy" type="button">Copy diagnostics</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-text">
+              <p class="row-label">Upgrading from before 1.11?</p>
+              <p class="row-help">Earlier versions stored tokens in each website's own storage, where scripts on that site
+                could read them. Revoke and re-create any token you configured before 1.11, then enter the new one here.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <!-- Connect a tracker. GitHub: choose sign-in or a token (Firefox and builds
+       without the GitHub App open straight on the token). Linear and Slack:
+       their connect forms as before, in this frame. -->
+  <dialog id="connectDialog" aria-labelledby="dlgTitle" aria-describedby="dlgSub">
+    <div class="dlg-head">
+      <span class="icon-tile int-logo" id="dlgLogo"></span>
+      <div><h2 id="dlgTitle">Connect GitHub</h2><p id="dlgSub">Choose how to connect</p></div>
+      <button class="iconbtn" type="button" id="dlgClose" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <!-- GitHub: choose -->
+      <div class="pane" data-pane="github-choose">
+        <div>
+          <button class="choice" type="button" id="ghChooseSignIn"><strong>Sign in with GitHub <span class="pill rec">Recommended</span></strong>
+            <span class="desc">Pick repositories on GitHub. Renews by itself.</span></button>
+          <button class="choice" type="button" id="ghChooseToken"><strong>Personal access token</strong>
+            <span class="desc">Paste a token you made on GitHub.</span></button>
+        </div>
+      </div>
+      <!-- GitHub: sign-in (device flow) -->
+      <div class="pane tracker-connect" data-pane="github-signin" data-tracker="github">
+        <!-- One GitHub connection (B11): a sign-in replacing a token asks first. -->
+        <div class="confirm-box acct-confirm" hidden>
+          <p class="acct-confirm-text"></p>
+          <div class="dlg-actions">
             <button class="small acct-confirm-yes" type="button">Replace</button>
-            <button class="ghost small acct-confirm-no" type="button">Cancel</button>
+            <button class="secondary small acct-confirm-no" type="button">Cancel</button>
           </div>
         </div>
         <div class="device" hidden>
-          <p class="hint">Your code: <b class="device-code"></b></p>
-          <div class="row">
-            <button class="ghost device-copy" type="button">Copy code</button>
-            <button class="ghost device-reopen" type="button" hidden>Reopen GitHub</button>
+          <p class="hint">Your code</p>
+          <b class="device-code"></b>
+          <div class="dlg-actions">
+            <button class="secondary small device-copy" type="button">Copy code</button>
+            <button class="secondary small device-reopen" type="button" hidden>Reopen GitHub</button>
           </div>
         </div>
-        <!-- Connected (signed in or token): where the Create panel starts. -->
-        <div class="acct-secondary">
-          <label class="acct-default-wrap" hidden><span>Default repository <span class="saved" aria-live="polite"></span></span>
-            <select class="acct-default"></select>
-          </label>
-          <button class="ghost small acct-disconnect" type="button" hidden>Disconnect</button>
+        <p class="status connect-status" role="status" aria-live="polite"></p>
+        <div class="dlg-actions">
+          <button class="secondary dlg-back spacer" type="button">Back</button>
+          <button class="acct-connect" type="button" hidden>Connect GitHub</button>
         </div>
-        <div class="status acct-status"></div>
       </div>
-      <details class="advanced" id="ghAdvanced">
-        <summary>Use a token instead</summary>
-        <p class="hint">A fine-grained token with Issues: Read and write (and Metadata: Read) on the repositories you
-          file into, or a classic token with the <code>repo</code> scope. Issues are created directly from your
-          browser; you pick the repository when you create one.</p>
-        <label>Token
-          <input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" />
-        </label>
-        <div class="row">
-          <button id="ghSave" type="button">Save</button>
+      <!-- GitHub: token -->
+      <div class="pane" data-pane="github-token">
+        <div>
+          <div class="link-row">
+            <label class="field" for="ghToken">Token</label>
+            <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Create one on GitHub ↗</a>
+          </div>
+          <input id="ghToken" type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" aria-describedby="ghTokenHelp" />
+          <p class="hint" id="ghTokenHelp" style="margin-top:6px">Fine-grained: Issues read and write. Classic: <code>repo</code> scope.</p>
         </div>
-        <div class="acct-confirm" id="ghReplace" hidden>
+        <div class="confirm-box acct-confirm" id="ghReplace" hidden>
           <p class="acct-confirm-text"></p>
-          <div class="row">
+          <div class="dlg-actions">
             <button class="small acct-confirm-yes" type="button">Replace</button>
-            <button class="ghost small acct-confirm-no" type="button">Cancel</button>
+            <button class="secondary small acct-confirm-no" type="button">Cancel</button>
           </div>
         </div>
-        <div class="status" id="ghStatus"></div>
-      </details>
-    </div>
-
-    <div class="card int-card">
-      <div class="int-card-head">
-        <span class="int-logo" data-logo="linear"></span>
-        <h3>Linear</h3>
-        <span class="pill" id="lnPill">Not connected</span>
+        <p class="status" id="ghStatus" role="status" aria-live="polite"></p>
+        <div class="dlg-actions">
+          <button class="secondary dlg-back spacer" type="button" id="ghTokenBack">Back</button>
+          <button id="ghSave" type="button">Verify and save</button>
+        </div>
       </div>
-      <div class="tracker-acct" data-tracker="linear">
-        <p class="acct-line"></p>
-        <div class="row acct-primary">
+      <!-- Linear: sign-in, or the API key (frozen: as before). -->
+      <div class="pane tracker-connect" data-pane="linear" data-tracker="linear">
+        <div class="dlg-actions" style="justify-content:flex-start">
           <button class="acct-connect" type="button" hidden>Connect Linear</button>
         </div>
-        <div class="acct-secondary">
-          <label class="acct-default-wrap" hidden><span>Default team <span class="saved" aria-live="polite"></span></span>
-            <select class="acct-default"></select>
+        <p class="status connect-status" role="status" aria-live="polite"></p>
+        <details class="advanced" id="lnAdvanced">
+          <summary>Use an API key instead</summary>
+          <p class="hint">A personal API key (Linear → Settings → Security &amp; access). You pick the team when you
+            create an issue.</p>
+          <label class="field">API key
+            <input id="lnKey" type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" />
           </label>
-          <button class="ghost small acct-disconnect" type="button" hidden>Disconnect</button>
-        </div>
-        <div class="status acct-status"></div>
+          <p class="status" id="lnStatus" role="status" aria-live="polite"></p>
+          <div class="dlg-actions"><button id="lnSave" type="button">Save</button></div>
+        </details>
       </div>
-      <details class="advanced" id="lnAdvanced">
-        <summary>Use an API key instead</summary>
-        <p class="hint">A personal API key (Linear → Settings → Security &amp; access). You pick the team when you
-          create an issue.</p>
-        <label>API key
-          <input id="lnKey" type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" />
+      <!-- Slack: the incoming webhook (frozen: as before). -->
+      <div class="pane" data-pane="slack">
+        <label class="field">Webhook URL
+          <input id="slHook" type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" />
         </label>
-        <div class="row">
-          <button id="lnSave" type="button">Save</button>
-        </div>
-        <div class="status" id="lnStatus"></div>
-      </details>
+        <p class="hint">Incoming-webhook URL for the channel reports should post to.</p>
+        <p class="status" id="slStatus" role="status" aria-live="polite"></p>
+        <div class="dlg-actions"><button id="slSave" type="button">Save</button></div>
+      </div>
     </div>
+  </dialog>
 
-    <div class="card int-card">
-      <div class="int-card-head">
-        <span class="int-logo" data-logo="slack"></span>
-        <h3>Slack</h3>
-        <span class="pill" id="slPill">Not connected</span>
+  <!-- Disconnect: exactly what is removed, and where to finish on GitHub (B7, B11). -->
+  <dialog id="disconnectDialog" aria-labelledby="discTitle" aria-describedby="discText">
+    <div class="dlg-head"><div><h2 id="discTitle">Disconnect GitHub?</h2></div></div>
+    <div class="dlg-body">
+      <p class="hint" id="discText" style="color:var(--label)"></p>
+      <div class="dlg-actions">
+        <button class="secondary" type="button" id="discCancel">Cancel</button>
+        <button class="danger" type="button" id="discYes">Disconnect</button>
       </div>
-      <p class="acct-line">Incoming-webhook URL for the channel reports should post to.</p>
-      <label>Webhook URL
-        <input id="slHook" type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" />
-      </label>
-      <div class="row">
-        <button id="slSave" type="button">Save</button>
-        <button class="ghost" id="slClear" type="button">Disconnect</button>
-      </div>
-      <div class="status" id="slStatus"></div>
     </div>
+  </dialog>
 
-    <!-- One row pattern: label + help on the left, the control on the right.
-         A change shows a small "Saved" beside its control, then fades. -->
-    <section class="card prefs" id="intGlobal" aria-labelledby="intGlobalTitle">
-      <h3 id="intGlobalTitle">Preferences</h3>
-      <div class="pref-row">
-        <div class="pref-text">
-          <label class="pref-label" for="defaultTracker" id="defaultTrackerLabel">Default tracker</label>
-          <p class="pref-help" id="defaultTrackerHelp">Used by the Send button on a bug ticket.</p>
-        </div>
-        <div class="pref-control">
-          <span class="saved" aria-live="polite"></span>
-          <select id="defaultTracker" aria-describedby="defaultTrackerHelp" hidden></select>
-          <span class="pref-empty" id="defaultTrackerEmpty" hidden>Connect a tracker above to choose a default</span>
-        </div>
-      </div>
-      <div class="pref-row">
-        <div class="pref-text">
-          <label class="pref-label" for="openAfterCreate">Open the issue after creating</label>
-          <p class="pref-help" id="openAfterCreateHelp">Opens the new issue in a new tab.</p>
-        </div>
-        <div class="pref-control">
-          <span class="saved" aria-live="polite"></span>
-          <input class="switch" id="openAfterCreate" type="checkbox" role="switch" aria-describedby="openAfterCreateHelp" checked />
-        </div>
-      </div>
-      <div class="pref-row">
-        <div class="pref-text">
-          <span class="pref-label" id="rememberedLabel">Remembered choices</span>
-          <p class="pref-help" id="rememberedHelp">TraceBug remembers the repository and labels you last used on each
-            site. Stored only in this browser, site address only, never from private windows.</p>
-        </div>
-        <div class="pref-control">
-          <span class="saved" aria-live="polite"></span>
-          <span class="pref-value" id="rememberedCount">On 0 sites</span>
-          <button class="ghost small" id="forgetChoices" type="button" aria-labelledby="forgetChoices rememberedLabel"
-            aria-describedby="rememberedHelp" disabled>Forget</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="card" id="micCard">
-      <h2>Microphone <span class="pill" id="micPill">Not granted</span></h2>
-      <p class="hint">
-        Only used if you turn the microphone on for a recording, to narrate what you are doing. Nothing
-        is recorded until you start a recording, and the audio stays in the report on your device.
-      </p>
-      <p class="hint">
-        It has to be granted <strong>here</strong> rather than from the toolbar popup: a popup closes the
-        moment Chrome's permission prompt takes focus, which cancels the request before you can answer it.
-        This page stays open, so the prompt works.
-      </p>
-      <div class="row">
-        <button id="micGrant" type="button">Allow microphone</button>
-        <button class="ghost" id="micCheck" type="button">Re-check</button>
-      </div>
-      <div class="status" id="micStatus"></div>
-      <!-- Device labels only come back non-blank once permission is granted,
-           so this stays hidden until refreshMicDevices() has something real
-           to show — see options.js. -->
-      <div class="row" id="micDeviceRow" style="display:none">
-        <label for="micDeviceSelect" class="hint" style="margin:0">Use this microphone:</label>
-        <select id="micDeviceSelect"></select>
-      </div>
-    </section>
-
-    <section class="card" id="allUrlsCard" style="display:none">
-      <h2>Access to all sites <span class="pill on">Granted</span></h2>
-      <p class="hint">
-        Granted in an earlier version. It no longer does much on its own — a capture always ends when you
-        leave the site it started on, with or without this — so there is nothing to lose by removing it.
-      </p>
-      <div class="row">
-        <button class="ghost" id="allUrlsRemove" type="button">Remove</button>
-      </div>
-      <div class="status" id="allUrlsStatus"></div>
-    </section>
-
-    <section class="card">
-      <h2>Sites allowed to run AI analysis</h2>
-      <p class="hint">
-        The first time a site asks TraceBug to analyze a report, you approve it and TraceBug remembers. After
-        that each site is limited to 10 analyses a minute, so a page cannot quietly spend your API credits.
-        Remove a site here to be asked again.
-      </p>
-      <div id="llmSites"></div>
-      <p class="hint" id="llmSitesEmpty" style="margin:0">No sites approved yet.</p>
-      <div class="status" id="llmSitesStatus"></div>
-    </section>
-
-    <!-- Site Audit account (ADR 009): sign in, sign out, delete — all on signin.html. -->
-    <section class="card" id="accountCard">
-      <h2>Site Audit account</h2>
-      <p class="hint">
-        Site Audit needs a free account after 3 audits (email + code, no password). Nothing else in TraceBug does.
-        <a href="signin.html" target="_blank" rel="noopener">Sign in, sign out or delete your account</a>.
-      </p>
-    </section>
-
-    <!-- Moved here from the popup (2026-10-27) — a settings-shaped control that
-         was taking up scroll space on the popup's hero capture flow every time
-         it opened, whether or not anyone touched it. -->
-    <section class="card" id="redactCard">
-      <h2>Redaction rules <span class="pill" id="redactPill"></span></h2>
-      <p class="hint">
-        App-specific PII masked at capture, on top of TraceBug's built-in token/secret patterns.
-      </p>
-      <label for="redactFields">Sensitive field names</label>
-      <textarea id="redactFields" rows="2" spellcheck="false" placeholder="email, customer_id, phone"></textarea>
-      <p class="hint" style="margin-top:6px">
-        Comma or newline separated. Matches form fields, storage keys, URL params, and JSON keys in captured
-        data — "email" also covers "customer_email".
-      </p>
-      <label for="redactPatterns">Mask patterns</label>
-      <textarea id="redactPatterns" rows="2" spellcheck="false" placeholder="\d{3}-\d{2}-\d{4}"></textarea>
-      <p class="hint" style="margin-top:6px">
-        One regex per line, case-insensitive. Masked in console output, network response bodies, error text and
-        the DOM replay — not in URLs, screenshots or video.
-      </p>
-      <div class="row">
-        <button id="redactSave" type="button">Save rules</button>
-      </div>
-      <div class="status" id="redactStatus"></div>
-    </section>
-
-    <!-- Moved here from the popup (2026-10-27), same reason as Redaction rules
-         above. TraceBug sends nothing anywhere, so the only route for a bug
-         report is the user's own clipboard — both buttons produce the SAME
-         scrubbed text (no URLs, no page content, no stored values; see
-         diagnostics.js). Not tied to any one tab the way the popup's version
-         was (diagPageState() there read the tab the popup opened for) — this
-         page isn't opened from a specific tab, so that one field is omitted
-         here rather than guessed at.  -->
-    <section class="card" id="diagCard">
-      <h2>Having trouble? <span class="pill" id="diagPill"></span></h2>
-      <p class="hint">
-        Copies TraceBug's version, your browser and OS, which permissions you've granted, and TraceBug's own
-        recent errors. No URLs, no page content, nothing you've captured.
-      </p>
-      <div class="row">
-        <button id="diagCopy" type="button">Copy diagnostics</button>
-        <button class="ghost" id="diagReport" type="button">Report a TraceBug bug</button>
-      </div>
-      <div class="status" id="diagStatus"></div>
-    </section>
-
-    <p class="rotate">
-      <strong>Upgrading from before 1.11?</strong> Earlier versions stored these tokens in each website's own
-      storage, where scripts on that site could read them. Revoke and re-create any token you configured before
-      1.11, then enter the new one here.
-    </p>
-  </div>
   <script src="diagnostics.js"></script>
   <script src="tracker-connect.js"></script>
   <!-- For the tracker logos only (TraceBugIntegrationsHub.logo); nothing mounts here. -->

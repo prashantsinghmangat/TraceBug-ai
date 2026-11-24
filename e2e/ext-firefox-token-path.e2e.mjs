@@ -151,10 +151,18 @@ try {
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/options.html`);
   await sleep(600);
-  check("settings: no Connect GitHub button", !(await opt.isVisible('.tracker-acct[data-tracker="github"] .acct-connect')));
-  check("settings: the token form is open (it's the main path here)",
-    await opt.evaluate(() => document.getElementById("ghAdvanced").open));
+  check("settings: GitHub is a connected row, with no sign-in in its menu",
+    await opt.isVisible('.tracker-acct[data-tracker="github"]') && (await opt.textContent("#ghPill")) === "Connected" &&
+    await opt.evaluate(() => document.querySelector('.tracker-acct[data-tracker="github"] .acct-switch').hidden));
   const status = await opt.evaluate(() => new Promise((res) => chrome.runtime.sendMessage({ type: "tb:tracker:status" }, res)));
+  // As a fresh install sees it: nothing connected, Connect on the GitHub tile.
+  await sw.evaluate(() => chrome.storage.local.remove("tb_integrations_v1"));
+  await opt.reload();
+  await opt.waitForSelector('.add-tile[data-tracker="github"]:not([hidden])', { timeout: 5000 }).catch(() => {});
+  await opt.click('.add-tile[data-tracker="github"] .tile-connect');
+  check("settings: Connect GitHub opens straight on the token (no sign-in choice, no Back)",
+    await opt.isVisible("#ghToken") && !(await opt.isVisible("#ghChooseSignIn")) && !(await opt.isVisible("#ghTokenBack")) &&
+    (await opt.textContent("#dlgSub")) === "Personal access token");
   check("the worker reports no sign-in UI", status && status.oauthUi === false, JSON.stringify(status && status.oauthUi));
 } finally {
   await ctx.close();

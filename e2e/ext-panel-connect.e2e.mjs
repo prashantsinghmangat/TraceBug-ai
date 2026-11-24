@@ -213,6 +213,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
       (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "none")).trim());
     check('…offering "Connect GitHub" in the panel, with focus on it', (await frame.textContent("#connect")).trim() === "Connect GitHub" &&
       await frame.evaluate(() => document.activeElement && document.activeElement.id === "connect"));
+    check("…a centred Connect screen: no footer (Cancel/Create), no ⋯ menu, the status line says \"Not connected\"",
+      !(await frame.isVisible("#footer")) && !(await frame.isVisible("#more")) && (await frame.textContent("#account")).trim() === "Not connected");
     await watchPermissionRequests(frame);
     const opened = [];
     ctx.on("page", (p) => opened.push(p.url()));
@@ -229,12 +231,15 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
       pops[0].url === "https://github.com/login/device", JSON.stringify(pops));
     check("…no extension window or tab opens", !opened.some((u) => u.includes("confirm-send.html") || u.includes("options.html")), JSON.stringify(opened));
     check("…the code shows in the panel", (await frame.textContent("#userCode")).trim() === "WXYZ-6789");
+    check("…on its own screen: the Connect screen gone, \"Waiting for GitHub…\", the header says \"Connecting…\"",
+      !(await frame.isVisible("#connectBox")) && (await frame.textContent("#deviceWait")).trim() === "Waiting for GitHub…" &&
+      (await frame.textContent("#account")).trim() === "Connecting…" && await frame.isVisible("#cancelDevice"));
     state.installed = false;
     state.approve = true;
     await frame.waitForSelector("#installBox:not([hidden])", { timeout: 12000 }).catch(() => {});
     check("A3b. signed in, app on no repository: the panel offers \"Install TraceBug on GitHub\" + Refresh",
       await frame.isVisible("#installApp") && await frame.isVisible("#refreshRepos") &&
-      (await frame.textContent("#installApp")).trim() === "Install TraceBug on GitHub");
+      (await frame.textContent("#installApp")).trim() === "Install on GitHub");
     await frame.click("#installApp");
     await sleep(800);
     const pops2 = await sw.evaluate(() => self.__popups);
@@ -259,6 +264,18 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("A4. after GitHub approves, the same panel is connected and lists the repo",
       /Connected/.test(await frame.textContent("#panelMsg")) || (await frame.inputValue("#container")) === REPO,
       (await frame.textContent("#panelMsg")).trim());
+    // ⋯ → "Switch to a personal token": the token form in place; "Keep the sign-in" goes back.
+    await frame.click("#more");
+    const menu = await frame.$$eval("#moreMenu button", (bs) => bs.filter((b) => !b.hidden).map((b) => b.textContent.trim()));
+    check("A4b. signed in: ⋯ offers Manage integrations, Switch to a personal token, Disconnect GitHub",
+      JSON.stringify(menu) === '["Manage integrations","Switch to a personal token","Disconnect GitHub"]', JSON.stringify(menu));
+    await frame.click("#switchToken");
+    check("…which shows the token form in place (no Connect, no footer)", await frame.isVisible("#tokenInput") &&
+      !(await frame.isVisible("#connect")) && !(await frame.isVisible("#footer")) && await frame.isVisible("#tokenBack"));
+    await frame.click("#tokenBack");
+    await frame.waitForSelector("#footer:not([hidden])", { timeout: 8000 }).catch(() => {});
+    check("…and \"Keep the sign-in\" goes back to the form", await frame.isVisible("#footer") && !(await frame.isVisible("#tokenInput")) &&
+      /Signed in as octo/.test(await frame.textContent("#account")));
     if ((await frame.inputValue("#container")) !== REPO) {
       await frame.fill("#container", REPO);
       await frame.dispatchEvent("#container", "change");
@@ -266,7 +283,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     const armed = await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 8000 }).then(() => true, () => false);
     if (armed) await frame.click("#send");
     await frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
-    check("A5. …and Create files the issue there", state.posts === 1 && /Created/.test(await frame.textContent("#doneBox")), `posts=${state.posts}`);
+    check("A5. …and Create files the issue there", state.posts === 1 && /created/i.test(await frame.textContent("#doneBox")), `posts=${state.posts}`);
     check("…the ticket never left the page", await page.locator("#tracebug-quick-bug-modal").isVisible());
   } finally {
     await ctx.close();
@@ -311,6 +328,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await page.evaluate(() => { window.__pageMsgs = []; window.addEventListener("message", (e) => { try { window.__pageMsgs.push(JSON.stringify(e.data)); } catch (x) {} }); });
     check("C1. no sign-in in this build: Connect is hidden and the token box starts open",
       off === "TODO_OWNER_CLIENT_ID" && !(await frame.isVisible("#connect")) && await frame.evaluate(() => document.getElementById("tokenBox").open), off);
+    check("…the token form is the whole screen: no \"instead\" toggle", !(await frame.isVisible("#tokenSummary")));
     check("…a password field with autocomplete off",
       (await frame.getAttribute("#tokenInput", "type")) === "password" && (await frame.getAttribute("#tokenInput", "autocomplete")) === "off");
     const tryToken = async (tok) => {
@@ -341,6 +359,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("C5. no token reached the page: messages, DOM, localStorage",
       ![PAT, PAT_NOSCOPE, PAT_BAD].some((t) => msgs.some((m) => m.includes(t)) || dom.includes(t) || ls.includes(t)) &&
       msgs.every((m) => /"type":"tb-panel-(ready|size|close)"/.test(m) || !/tb-panel/.test(m)), `${msgs.length} messages`);
+    await frame.click("#more"); // Disconnect is in the ⋯ menu
     await frame.click("#disconnect");
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
     const after = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
@@ -367,6 +386,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     await frame.waitForFunction(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "team-1"), null, { timeout: 8000 }).catch(() => {});
     check("…and its teams load", await frame.evaluate(() => [...document.querySelectorAll("#containerList option")].some((o) => o.value === "team-1")));
     check("…the key never reached the page", !(await page.evaluate(() => document.documentElement.outerHTML + JSON.stringify(window.__pageMsgs) + JSON.stringify(localStorage))).includes("lin_api_"));
+    await frame.click("#more"); // Disconnect is in the ⋯ menu
     await frame.click("#disconnect");
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
     check("…Disconnect removes it", !((((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).linear || {}).apiKey));
@@ -496,6 +516,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     state.createFail = null;
 
     // Disconnect: the token is deleted here; GitHub's record needs the user.
+    await frame.click("#more"); // Disconnect is in the ⋯ menu
     await frame.click("#disconnect");
     await frame.waitForSelector("#revokeNote:not([hidden])", { timeout: 8000 }).catch(() => {});
     const authLeft = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_auth_v1")).tb_tracker_auth_v1 || {});
@@ -510,14 +531,23 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     const extId = new URL(sw.url()).host;
     const opt = await ctx.newPage();
     await opt.goto(`chrome-extension://${extId}/options.html`);
-    await opt.waitForSelector('.tracker-acct[data-tracker="github"] .acct-disconnect:not([hidden])', { timeout: 8000 }).catch(() => {});
-    await opt.click('.tracker-acct[data-tracker="github"] .acct-disconnect');
-    await opt.waitForSelector('.tracker-acct[data-tracker="github"] .revoke-link', { timeout: 5000 }).catch(() => {});
-    check("…and so does Settings, linking Authorized GitHub Apps (B7)", (await opt.getAttribute('.tracker-acct[data-tracker="github"] .revoke-link', "href").catch(() => "")) === "https://github.com/settings/apps/authorizations" &&
-      /^Signed out\. TraceBug deleted its GitHub sign-in from this browser/.test(await opt.textContent('.tracker-acct[data-tracker="github"] .acct-status')));
+    const GH = '.tracker-acct[data-tracker="github"]';
+    const disconnectGitHub = async () => {
+      await opt.click(GH + " .menu-btn");
+      await opt.click(GH + " .acct-disconnect");
+    };
+    await opt.waitForSelector(GH + ":not([hidden])", { timeout: 8000 }).catch(() => {});
+    await disconnectGitHub();
+    check("…Settings asks first, naming what goes and linking Authorized GitHub Apps (B7, B11)",
+      (await opt.textContent("#discTitle")) === "Disconnect GitHub?" &&
+      /^TraceBug deletes its GitHub sign-in from this browser\. To remove its access on GitHub too: Authorized GitHub Apps\.$/.test((await opt.textContent("#discText")).trim()) &&
+      (await opt.getAttribute("#discText a", "href")) === "https://github.com/settings/apps/authorizations");
+    await opt.click("#discYes");
+    await opt.waitForSelector("#intStatus .revoke-link", { timeout: 5000 }).catch(() => {});
+    check("…and so does Settings once done, linking Authorized GitHub Apps (B7)", (await opt.getAttribute("#intStatus .revoke-link", "href").catch(() => "")) === "https://github.com/settings/apps/authorizations" &&
+      /^Signed out\. TraceBug deleted its GitHub sign-in from this browser/.test(await opt.textContent("#intStatus")));
 
     // ── B11: one GitHub connection ──
-    const GH = '.tracker-acct[data-tracker="github"]';
     const lineOf = () => opt.textContent(GH + " .acct-line").then((t) => t.trim());
     await sw.evaluate((t) => chrome.storage.local.set({
       tb_tracker_auth_v1: { github: { tokens: { accessToken: t.a, refreshToken: t.r, expiresAt: Date.now() + 8 * 3600e3 }, account: "octo", connectedAt: Date.now() } },
@@ -528,23 +558,43 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     const ints11 = (await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {};
     check("B11. older storage with a sign-in AND a token keeps one — the sign-in — and says its mode",
       !(ints11.github && ints11.github.token) && (await lineOf()) === "Signed in as octo · GitHub App", await lineOf());
+    // Signed in → "Switch to a personal token": the token step, and saving asks first.
+    await opt.click(GH + " .menu-btn");
+    await opt.click(GH + " .acct-to-token");
+    check("…signed in, the menu offers \"Switch to a personal token\": the dialog's token step, no Back",
+      (await opt.textContent("#dlgTitle")) === "Switch to a personal token" && await opt.isVisible("#ghToken") && !(await opt.isVisible("#ghTokenBack")));
+    await opt.fill("#ghToken", PAT);
+    await opt.click("#ghSave");
+    check("…saving it asks first: \"This replaces your GitHub sign-in (octo) with this token.\"",
+      await opt.isVisible("#ghReplace") && (await opt.textContent("#ghReplace .acct-confirm-text")).trim() === "This replaces your GitHub sign-in (octo) with this token.");
+    await opt.click("#ghReplace .acct-confirm-no");
+    await opt.keyboard.press("Escape");
     await sw.evaluate((pat) => chrome.storage.local.set({ tb_tracker_auth_v1: {}, tb_integrations_v1: { github: { token: pat } } }), PAT);
     await opt.reload();
     await opt.waitForFunction((g) => /Using a personal token/.test(document.querySelector(g + " .acct-line").textContent), GH, { timeout: 8000 }).catch(() => {});
-    check("…token mode: \"Using a personal token ghp_…ABCD\", no Connect button, a quiet \"Switch to GitHub sign-in (recommended)\"",
-      (await lineOf()) === "Using a personal token ghp_…ABCD" && !(await opt.isVisible(GH + " .acct-connect")) &&
-      (await opt.textContent(GH + " .acct-switch")).trim() === "Switch to GitHub sign-in (recommended)" && await opt.isVisible(GH + " .acct-switch"), await lineOf());
+    await opt.click(GH + " .menu-btn");
+    check("…token mode: \"Using a personal token ghp_…ABCD\", no GitHub tile, the menu's \"Switch to GitHub sign-in\"",
+      (await lineOf()) === "Using a personal token ghp_…ABCD" && !(await opt.isVisible('.add-tile[data-tracker="github"]')) &&
+      (await opt.textContent(GH + " .acct-switch")).trim() === "Switch to GitHub sign-in" && await opt.isVisible(GH + " .acct-switch") &&
+      !(await opt.isVisible(GH + " .acct-to-token")), await lineOf());
     await opt.click(GH + " .acct-switch");
+    const confirm = '#connectDialog [data-pane="github-signin"] .acct-confirm';
     check("…switching asks first: \"This replaces your token ghp_…ABCD\"",
-      await opt.isVisible(GH + " .acct-confirm") && /^This replaces your token ghp_…ABCD\./.test((await opt.textContent(GH + " .acct-confirm-text")).trim()));
-    await opt.click(GH + " .acct-confirm-no");
-    check("…Cancel leaves the token as it was", !(await opt.isVisible(GH + " .acct-confirm")) &&
+      await opt.isVisible(confirm) && (await opt.textContent("#dlgTitle")) === "Switch to GitHub sign-in" &&
+      /^This replaces your token ghp_…ABCD\./.test((await opt.textContent(confirm + " .acct-confirm-text")).trim()));
+    await opt.click(confirm + " .acct-confirm-no");
+    check("…Cancel closes it and leaves the token as it was", !(await opt.isVisible(confirm)) &&
+      !(await opt.evaluate(() => document.getElementById("connectDialog").open)) &&
       ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1.github || {}).token === PAT);
-    await opt.click(GH + " .acct-disconnect");
-    await opt.waitForSelector(GH + " .revoke-link", { timeout: 5000 }).catch(() => {});
+    await disconnectGitHub();
+    check("…Disconnect in token mode names the token and links Personal access tokens",
+      /^TraceBug removes the token ghp_…ABCD from this browser\./.test(await opt.textContent("#discText")) &&
+      (await opt.getAttribute("#discText a", "href")) === "https://github.com/settings/tokens");
+    await opt.click("#discYes");
+    await opt.waitForSelector("#intStatus .revoke-link", { timeout: 5000 }).catch(() => {});
     check("…Disconnect in token mode says the token went, not a sign-in",
-      /^Token removed from this browser\. You can delete it on GitHub:/.test(await opt.textContent(GH + " .acct-status")) &&
-      (await opt.getAttribute(GH + " .revoke-link", "href")) === "https://github.com/settings/tokens");
+      /^Token removed from this browser\. You can delete it on GitHub:/.test(await opt.textContent("#intStatus")) &&
+      (await opt.getAttribute("#intStatus .revoke-link", "href")) === "https://github.com/settings/tokens");
   } finally {
     await ctx.close();
   }

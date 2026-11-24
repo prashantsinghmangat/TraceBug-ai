@@ -354,7 +354,7 @@ in a collapsed block, nothing is submitted, and the URL is not so long the brows
 
 ### 21. Tracker Create panel (Phase 13, ADR 010) — real accounts, Chrome
 
-Chrome build, a real GitHub fine-grained or classic token saved under **Advanced: use a token** with no
+Chrome build, a real GitHub fine-grained or classic token saved through **Connect → Personal access token** with no
 default repository. Capture a bug, click **Send to GitHub**. **Pass:** the window titled "Create an issue"
 lists your real repositories (including organisation ones), labels load after picking one, **Create issue**
 files it, the issue opens in a new tab, and the ticket shows "GitHub issue created #N". Send again:
@@ -372,8 +372,8 @@ installed on your account for at least one repository. Capture a bug → **Send 
 after Continue + Authorize the popup closes itself and the window comes back saying "as <your login>" (closing
 the popup before Authorize shows "Reopen GitHub", and the same code still works), lists exactly the repos the app is installed on, loads labels,
 assignees and milestones ("bug" ticked), and **Create issue** shows "Created #N" and opens the issue in a new tab
-(Settings → Integrations "Open the issue after creating", default on), with them set. Settings → GitHub then reads "Connected as <login>" with a Default
-repository picker; **Disconnect** returns it to "Connect GitHub". Also: welcome page step 5 → Connect GitHub →
+(Settings → Integrations "Open the issue after creating", default on), with them set. Settings → Integrations then shows a GitHub row "Signed in as <login> · GitHub App" with a Default
+repository picker; ⋯ → **Disconnect** (after its confirm) puts GitHub back under Add a tracker. Also: welcome page step 5 → Connect GitHub →
 pick a default repository. Repeat once 8+ hours later without
 reconnecting: the issue still files (the token renewed itself).
 

@@ -345,20 +345,20 @@ try {
   const sess = await deviceState();
   check("the device code is gone from session storage", !sess || !sess.deviceCode, JSON.stringify(sess));
 
-  // ── Settings: account, Disconnect, token form folded away ──
+  // ── Settings: the connected row, Disconnect (menu + confirm), then Connect again ──
   const opt = await ctx.newPage();
   await opt.goto(`chrome-extension://${extId}/options.html`);
   await opt.waitForFunction(() => /octo/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-line').textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const line = await opt.textContent('.tracker-acct[data-tracker="github"] .acct-line');
   check('settings: "Signed in as octo · GitHub App" (the mode, B11)', (line || "").trim() === "Signed in as octo · GitHub App", line);
   check("settings: no token in the page", !(await opt.content()).includes(ACCESS));
-  check("settings: the token form is folded away", !(await opt.evaluate(() => document.getElementById("ghAdvanced").open)));
+  check("settings: no GitHub tile to connect again while connected", !(await opt.isVisible('.add-tile[data-tracker="github"]')));
   const defSel = '.tracker-acct[data-tracker="github"] .acct-default';
   await opt.waitForFunction((sel) => document.querySelectorAll(sel + " option").length > 1, defSel, { timeout: 5000 }).catch(() => {});
   check("settings: a Default repository picker lists the app's repos, set to the last one",
     (await opt.isVisible(defSel)) && (await opt.inputValue(defSel)) === REPO);
   await opt.selectOption(defSel, REPO);
-  await opt.waitForFunction(() => /Saved/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-status').textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  await opt.waitForFunction(() => /Saved/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-default-wrap .saved').textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const pref = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1);
   check("settings: picking it saves the default and keeps that repo's labels",
     pref && pref.github && pref.github.container === REPO && JSON.stringify(pref.github.fields.labels) === '["bug"]', JSON.stringify(pref));
@@ -368,40 +368,45 @@ try {
   check("welcome page: connected, with the repository picker",
     !(await welcome.isVisible("#trConnect")) && (await welcome.isVisible("#trPick")) &&
     /Connected as octo/.test(await welcome.textContent("#trStatus")));
+  await opt.click('.tracker-acct[data-tracker="github"] .menu-btn');
   await opt.click('.tracker-acct[data-tracker="github"] .acct-disconnect');
-  await opt.waitForFunction(() => /Signed out/.test(document.querySelector('.tracker-acct[data-tracker="github"] .acct-status').textContent || ""), null, { timeout: 5000 }).catch(() => {});
+  await opt.click("#discYes");
+  await opt.waitForFunction(() => /Signed out/.test(document.getElementById("intStatus").textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const after = await sw.evaluate(() => chrome.storage.local.get(["tb_tracker_auth_v1", "tb_tracker_prefs_v1"]));
   check("Disconnect forgets the sign-in and the remembered picks",
     !(after.tb_tracker_auth_v1 && after.tb_tracker_auth_v1.github) && !(after.tb_tracker_prefs_v1 && after.tb_tracker_prefs_v1.github),
     JSON.stringify(after));
-  check("settings offers Connect GitHub again",
-    await opt.isVisible('.tracker-acct[data-tracker="github"] .acct-connect'));
+  check("settings offers Connect GitHub again (its tile)",
+    await opt.isVisible('.add-tile[data-tracker="github"] .tile-connect'));
 
-  const acct = '.tracker-acct[data-tracker="github"]';
-  const statusText = () => opt.textContent(acct + " .acct-status");
+  const pane = '#connectDialog [data-pane="github-signin"]';
+  const statusText = () => opt.textContent(pane + " .connect-status");
   // Regression: a status message used to overwrite the line's classes, and
   // Connect from settings then silently did nothing.
-  check("settings: the GitHub status line survives its own messages",
-    await opt.evaluate((a) => !!document.querySelector(a + " .acct-status.status"), acct));
+  check("settings: the GitHub status lines keep their hooks",
+    await opt.evaluate((p) => !!document.querySelector(p + " .connect-status.status") &&
+      !!document.querySelector('.tracker-acct[data-tracker="github"] .acct-status.status'), pane));
   // 9. access_denied → "Cancelled", Connect again; the popup is closed.
   tokenMode = "deny";
-  await opt.click(acct + " .acct-connect");
-  await opt.waitForFunction((a) => /Cancelled/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 10000 }).catch(() => {});
+  await opt.click('.add-tile[data-tracker="github"] .tile-connect');
+  await opt.click("#ghChooseSignIn");
+  await opt.waitForFunction((p) => /Cancelled/.test(document.querySelector(p + " .connect-status").textContent || ""), pane, { timeout: 10000 }).catch(() => {});
   const popDeny = (await popups()).length;
   check('9. declined on GitHub → "Cancelled", Connect GitHub offered again',
-    /Cancelled/.test(await statusText()) && (await opt.textContent(acct + " .acct-connect")).trim() === "Connect GitHub" &&
-    !(await opt.isVisible(acct + " .device")), await statusText());
+    /Cancelled/.test(await statusText()) && (await opt.textContent(pane + " .acct-connect")).trim() === "Connect GitHub" &&
+    await opt.isVisible(pane + " .acct-connect") && !(await opt.isVisible(pane + " .device")), await statusText());
   check("…the sign-in state is cleared", (await deviceState()) === null);
   const lastPop = await sw.evaluate(async () => (await chrome.windows.getAll({ populate: true })).filter((w) => w.type === "popup" && w.tabs.some((t) => t.url === "about:blank")).length);
   check("…and the GitHub popup was closed", lastPop === 0, `${popDeny} popups opened, ${lastPop} left`);
 
   // 10. expired_token → "Code expired", Get a new code.
   tokenMode = "expire";
-  await opt.click(acct + " .acct-connect");
-  await opt.waitForFunction((a) => /Code expired/.test(document.querySelector(a + " .acct-status").textContent || ""), acct, { timeout: 10000 }).catch(() => {});
+  await opt.click(pane + " .acct-connect");
+  await opt.waitForFunction((p) => /Code expired/.test(document.querySelector(p + " .connect-status").textContent || ""), pane, { timeout: 10000 }).catch(() => {});
   check('10. an expired code → "Code expired" and "Get a new code"',
-    /Code expired/.test(await statusText()) && (await opt.textContent(acct + " .acct-connect")).trim() === "Get a new code", await statusText());
+    /Code expired/.test(await statusText()) && (await opt.textContent(pane + " .acct-connect")).trim() === "Get a new code", await statusText());
   check("…the sign-in state is cleared", (await deviceState()) === null);
+  await opt.keyboard.press("Escape");
 
   // ── Connect from onboarding, then pick the default repository there ──
   await welcome.reload();
