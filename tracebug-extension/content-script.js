@@ -706,7 +706,7 @@ function placeCreatePanel(p) {
   else { place = "over"; edge = "bottom:" + Math.round(fp.bottom - Math.min(bottom, top + h)) + "px;"; }
   p.slot.setAttribute("data-place", place);
   p.slot.style.cssText = "position:absolute;margin:0;z-index:30;left:" + Math.round(left) + "px;" + edge +
-    "width:" + Math.round(width) + "px;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,0.45);";
+    "width:" + Math.round(width) + "px;border-radius:14px;box-shadow:0 12px 32px rgba(17,24,39,0.10);";
 }
 
 function panelFallback(id, nonce) {
@@ -756,7 +756,7 @@ function mountCreatePanel(id, nonce) {
   // scroll box, and its Create button might never be fully on screen.
   frame.style.cssText = "display:block !important;width:100% !important;max-width:none !important;" +
     "height:150px !important;min-height:0 !important;max-height:none !important;border:0 !important;" +
-    "border-radius:10px;background:transparent;color-scheme:normal;";
+    "border-radius:14px;background:transparent;color-scheme:normal;";
   slot.appendChild(frame);
   anchor.parentNode.insertBefore(slot, anchor);
 

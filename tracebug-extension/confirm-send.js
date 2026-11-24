@@ -113,6 +113,8 @@ function fmtSize(n) {
 function renderAttachNote(trackerId) {
   const el = $("attachNote");
   if (!el) return;
+  // The panel's line has an ⓘ icon; its words go in their own span.
+  const out = $("attachText") || el;
   const t = panel.current;
   // U4 (GitHub): only once there is something to file. Linear is frozen as is.
   if (!REQ_ATTACH.length || (EMBED && trackerId === "github" && !(t && t.connected))) { el.hidden = true; return; }
@@ -120,14 +122,15 @@ function renderAttachNote(trackerId) {
   const ask = trackerId === "linear" && t && t.uploadOrigins && t.uploadOrigins.length && !t.uploadGranted
     ? " · Linear stores attachments on " + t.uploadWhere + "; Chrome asks once when you create."
     : "";
-  if (trackerId === "linear") el.textContent = "Attaches: " + list + ask;
+  if (trackerId === "linear") out.textContent = "Attaches: " + list + ask;
   else if (EMBED) {
-    // One short line under Create.
+    // One short line above the footer.
     const img = REQ_ATTACH.some((a) => /^image\//.test(a.type));
     const vid = REQ_ATTACH.some((a) => /^video\//.test(a.type));
-    el.textContent = "GitHub can't take files — after Create, copy or download " +
-      (img && vid ? "the screenshot and recording" : vid ? "the recording" : "the screenshot") + ".";
-  } else el.textContent = "Not attached (GitHub can't take files): " + list;
+    out.textContent = img && vid ? "Screenshot and recording aren't uploaded; you can copy or download them after Create."
+      : vid ? "Recording isn't uploaded; you can download it after Create."
+      : "Screenshot isn't uploaded; you can copy or download it after Create.";
+  } else out.textContent = "Not attached (GitHub can't take files): " + list;
   el.hidden = false;
 }
 
@@ -146,6 +149,8 @@ const panel = {
   busy: false,           // a create is in flight
   armed: !EMBED,         // EMBED: fully visible for ARM_MS
   armedBy: "",           // "io" (v2 said visible) | "probe" (content script's check)
+  connecting: false,     // a sign-in is under way (the header says "Connecting…")
+  switching: false,      // "Switch to a personal token": the token replaces the sign-in
 };
 
 function show(id, on) {
@@ -192,13 +197,78 @@ function setTitle(t) {
   document.title = text;
 }
 
+// ── Panel frame (direction A): header status, ⋯ menu, footer ──────────────
+// The window has none of these elements; each helper is a no-op there.
+
+/** The header's status line under "Send to …". */
+function statusText(t) {
+  if (!t) return "";
+  if (panel.connecting) return "Connecting…";
+  if (!t.connected) return t.needsReconnect ? "Needs you to sign in again" : "Not connected";
+  return accountText(t);
+}
+
+function setStatus(t) {
+  put("account", EMBED ? statusText(t) : accountText(t));
+}
+
+/** The tile shows the selected tracker's mark. */
+function setMark(t) {
+  if (!$("markGithub")) return;
+  show("markGithub", !t || t.id !== "linear");
+  show("markLinear", !!t && t.id === "linear");
+}
+
+function menuOpen() {
+  return !!$("moreMenu") && !$("moreMenu").hidden;
+}
+
+function closeMenu(refocus) {
+  if (!menuOpen()) return;
+  show("moreMenu", false);
+  $("more").setAttribute("aria-expanded", "false");
+  if (refocus) $("more").focus();
+}
+
+function openMenu() {
+  show("moreMenu", true);
+  $("more").setAttribute("aria-expanded", "true");
+  const first = [...$("moreMenu").querySelectorAll("button")].find((b) => !b.hidden);
+  if (first) first.focus();
+}
+
+/** What the ⋯ menu offers for this connection (connected only). */
+function syncMenu(t) {
+  if (!$("more")) return;
+  const on = !!t && t.connected && !decided;
+  show("more", on);
+  if (!on) closeMenu(false);
+  const gh = !!t && t.id === "github";
+  show("switchToken", on && gh && t.via === "oauth");
+  show("switchSignIn", on && gh && t.via === "token" && !!t.canConnect);
+  if (t) put("disconnect", "Disconnect " + t.label);
+}
+
+/** The footer (Cancel, Create) only while there is something to create —
+ *  or, after Create, as the full-width Done. */
+function syncFooter() {
+  const f = $("footer");
+  if (!f) return;
+  const t = panel.current;
+  const done = decided && !$("doneBox").hidden;
+  const form = !!t && t.connected && !$("pickBox").hidden && !$("repoField").hidden;
+  f.classList.toggle("done", done);
+  f.hidden = !(done || form);
+}
+
 function renderTrackerSelect(selectedId) {
   const sel = $("tracker");
   sel.textContent = "";
   panel.trackers.forEach((t) => {
     const o = document.createElement("option");
     o.value = t.id;
-    o.textContent = t.label + (t.connected ? "" : t.needsReconnect ? " (reconnect)" : " (not connected)");
+    // The panel's status line says how it's connected; the window's option does.
+    o.textContent = t.label + (EMBED || t.connected ? "" : t.needsReconnect ? " (reconnect)" : " (not connected)");
     sel.appendChild(o);
   });
   sel.value = selectedId;
@@ -228,16 +298,20 @@ async function selectTracker(id) {
   // U9: only the current message — nothing from before this (re)render.
   panelMsg("");
   ["deviceBox", "accessBox", "replaceBox", "revokeNote", "ssoBox"].forEach((id) => show(id, false));
+  panel.connecting = false;
+  panel.switching = false;
   if (!t) return;
   setTitle(t);
+  setMark(t);
   renderAttachNote(t.id);
 
-  put("account", accountText(t));
+  setStatus(t);
   // The panel can also remove a token; the window leaves that to settings —
   // except GitHub, whose one connection Disconnect removes whichever it is.
   show("disconnect", t.via === "oauth" || (t.via === "token" && (EMBED || t.id === "github")));
-  // Token mode: sign-in is a quiet link, where this build can sign in.
+  // Token mode: sign-in is a quiet link (the panel: a ⋯ item), where this build can sign in.
   show("switchSignIn", t.id === "github" && t.connected && t.via === "token" && !!t.canConnect);
+  syncMenu(t);
   show("installBox", false);
   show("repoNote", false);
 
@@ -245,13 +319,22 @@ async function selectTracker(id) {
     show("pickBox", false);
     show("connectBox", true);
     show("tokenBox", true);
-    put("connectText", t.canConnect
-      ? (t.needsReconnect ? t.label + " needs you to sign in again." : "Connect " + t.label + " to pick where this goes.")
-      : $("tokenBox")
-        ? "Connect " + t.label + " with " + (t.id === "linear" ? "an API key" : "a token") + " to pick where this goes."
-        : t.label + " isn't connected. Add a token in TraceBug settings, then send again.");
+    show("tokenBack", false);
+    syncFooter();
+    put("connectTitle", t.needsReconnect ? "Sign in to " + t.label + " again"
+      : t.canConnect || t.id === "linear" ? "Connect your " + t.label + " account" : "Connect " + t.label + " with a token");
+    put("connectText", EMBED && t.id === "github"
+      ? (t.needsReconnect ? "GitHub needs you to sign in again. Your sign-in stays in this browser."
+        : t.canConnect ? "Sign in once to pick a repository. Your sign-in stays in this browser."
+        : "Paste a personal access token to pick a repository. It stays in this browser.")
+      : t.canConnect
+        ? (t.needsReconnect ? t.label + " needs you to sign in again." : "Connect " + t.label + " to pick where this goes.")
+        : $("tokenBox")
+          ? "Connect " + t.label + " with " + (t.id === "linear" ? "an API key" : "a token") + " to pick where this goes."
+          : t.label + " isn't connected. Add a token in TraceBug settings, then send again.");
     show("connect", t.canConnect);
-    $("connect").textContent = (t.needsReconnect ? "Reconnect " : "Connect ") + t.label;
+    show("connectMark", t.id === "github");
+    put($("connectLabel") ? "connectLabel" : "connect", (t.needsReconnect ? "Reconnect " : "Connect ") + t.label);
     setupTokenBox(t);
     syncCreateButton();
     return;
@@ -260,6 +343,7 @@ async function selectTracker(id) {
   show("connectBox", false);
   show("pickBox", true);
   show("repoField", true);
+  syncFooter();
   renderSuggest(false);
   put("containerLabel", t.containerNoun);
   show("manageLink", !!t.manageUrl);
@@ -465,6 +549,7 @@ async function loadContainers() {
   // U4: not installed → Install + Refresh only; the repository field, its
   // link and the files line come back once there is something to pick.
   show("repoField", !noInstall);
+  syncFooter();
   if (noInstall) { clearFields(); show("attachNote", false); } else renderAttachNote(t.id);
   if (suggestOpen()) renderSuggest(true);
   if (noInstall) {
@@ -473,7 +558,7 @@ async function loadContainers() {
     put("installText", res.installPending
       ? "Waiting for your organisation owner to approve TraceBug. Its repositories appear here once they do — use Refresh after they approve."
       : "TraceBug isn't installed on any of your GitHub repositories yet. Install it on the ones you want to file into, then come back here.");
-    put("installApp", res.installPending ? "Install on another account" : "Install TraceBug on GitHub");
+    put("installApp", res.installPending ? "Install on another account" : "Install on GitHub");
   }
   panelMsg(panel.items.length || noInstall ? "" : "Nothing to pick from — type the " + t.containerNoun.toLowerCase() + " instead.");
   await checkPrefill(t);
@@ -604,7 +689,16 @@ function renderField(spec) {
   const fs = document.createElement("fieldset");
   fs.dataset.field = spec.key;
   const lg = document.createElement("legend");
-  lg.textContent = spec.label;
+  const name = document.createElement("span");
+  name.textContent = spec.label;
+  // "N selected", right-aligned on the heading; follows panel.picks.
+  const count = document.createElement("span");
+  count.className = "count";
+  const recount = () => {
+    const n = (spec.options || []).filter((op) => PF.isPicked(panel.picks, spec.key, String(op.id))).length;
+    count.textContent = n ? n + " selected" : "";
+  };
+  lg.append(name, count);
   fs.appendChild(lg);
   const box = document.createElement("div");
   box.className = "chips";
@@ -625,13 +719,23 @@ function renderField(spec) {
     chip.type = "button";
     chip.className = "chip";
     chip.value = String(op.id);
-    chip.textContent = String(op.label);
+    // GitHub's label colour as a dot (six hex digits only; anything else: none).
+    if (typeof op.color === "string" && /^[0-9a-f]{6}$/i.test(op.color)) {
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.setAttribute("aria-hidden", "true");
+      dot.style.background = "#" + op.color;
+      chip.appendChild(dot);
+    }
+    chip.appendChild(document.createTextNode(String(op.label)));
     chip.setAttribute("aria-pressed", PF.isPicked(panel.picks, spec.key, chip.value) ? "true" : "false");
     chip.addEventListener("click", () => {
       chip.setAttribute("aria-pressed", PF.toggle(panel.picks, spec.key, chip.value) ? "true" : "false");
+      recount();
     });
     box.appendChild(chip);
   });
+  recount();
   if (!(spec.options || []).length) {
     const none = document.createElement("span");
     none.className = "muted";
@@ -645,7 +749,7 @@ function renderField(spec) {
 
 function noteEl(text) {
   const n = document.createElement("div");
-  n.className = "muted";
+  n.className = "muted field-note";
   n.textContent = String(text);
   return n;
 }
@@ -761,7 +865,7 @@ function setupTokenBox(t) {
   const box = $("tokenBox");
   if (!box) return;
   const help = TOKEN_HELP[t.id] || TOKEN_HELP.github;
-  put("tokenSummary", "Use " + (t.id === "linear" ? "an API key" : "a token") + " instead");
+  put("tokenSummary", "Use " + (t.id === "linear" ? "an API key" : EMBED ? "a personal token" : "a token") + " instead");
   put("tokenLabel", t.id === "linear" ? "Linear API key" : "GitHub personal access token");
   put("tokenHelpText", help.text);
   put("tokenHelp", t.id === "linear" ? "Create one in Linear" : "Create one on GitHub");
@@ -771,6 +875,8 @@ function setupTokenBox(t) {
   // No sign-in in this build (a store build without its GitHub App yet): the
   // token is the way in, so it starts open — never a dead Connect button.
   box.open = !t.canConnect;
+  // …and then it is the whole form, with no "instead" toggle.
+  box.classList.toggle("only", !t.canConnect);
 }
 
 function tokenMsg(text, isErr) {
@@ -785,7 +891,8 @@ async function onTokenSave(e, replaceOk) {
   const secret = ($("tokenInput").value || "").trim();
   if (!secret) { tokenMsg("Paste " + (t.id === "linear" ? "an API key" : "a token") + " first.", true); $("tokenInput").focus(); return; }
   // One GitHub connection: a token replaces the sign-in — ask first.
-  if (t.id === "github" && hasSignIn(t) && replaceOk !== true) {
+  // (Not after "Switch to a personal token": that was the question.)
+  if (t.id === "github" && hasSignIn(t) && replaceOk !== true && !panel.switching) {
     askReplace("This replaces your GitHub sign-in" + (t.account ? " (" + t.account + ")" : "") + " with this token.",
       () => onTokenSave(null, true));
     return;
@@ -890,15 +997,21 @@ async function onConnect() {
   $("connect").disabled = true;
   show("revokeNote", false);
   panelMsg("Connecting to " + t.label + "…");
+  panel.connecting = true;
+  setStatus(t);
   // open:false — copy the code while this page still has focus, then open
   // GitHub's window (it takes focus, and the clipboard refuses an unfocused page).
   const res = await send("tb:tracker:connect", { tracker: t.id, open: false });
   $("connect").disabled = false;
+  const failed = !res || res.error || needsAccess(res);
+  if (failed || res.flow !== "device") { panel.connecting = false; setStatus(t); }
   if (!res || res.error) { panelMsg((res && res.error) || "Could not connect.", true); return; }
   if (needsAccess(res)) { panelMsg(""); return; }
   if (res.flow === "device") {
     put("userCode", res.userCode || "");
     $("openDevice").dataset.url = res.verificationUri || "";
+    // The panel: the code is its own screen. The window keeps it in the Connect box.
+    if (EMBED) { show("connectBox", false); waitMsg("Waiting for GitHub…"); }
     show("deviceBox", true);
     // The code is selectable and has its own Copy button if this fails.
     const copied = await copyText(res.userCode || "");
@@ -908,16 +1021,33 @@ async function onConnect() {
     const opened = shown && shown.ok ? shown.opened : null;
     show("openDevice", !opened);
     const where = opened === "tab" ? "GitHub tab" : "GitHub window";
-    panel.deviceHint = copied
-      ? "Code copied — in the " + where + ", press " + pasteKeys() + ", then Continue and Authorize."
-      : "Select the code and copy it, then paste it in the " + where + " and Continue and Authorize.";
+    panel.deviceHint = EMBED
+      ? (copied ? "It's copied. Paste it in the " + where + ", then Authorize."
+        : "Select the code and copy it, then paste it in the " + where + " and Authorize.")
+      : copied
+        ? "Code copied — in the " + where + ", press " + pasteKeys() + ", then Continue and Authorize."
+        : "Select the code and copy it, then paste it in the " + where + " and Continue and Authorize.";
     put("deviceHint", panel.deviceHint);
-    panelMsg("This window carries on by itself once you authorize.");
+    if (EMBED) panelMsg("");
+    else panelMsg("This window carries on by itself once you authorize.");
     schedulePoll(t.id, res.interval || 5);
     return;
   }
   panelMsg("Connected" + (res.account ? " as " + res.account : "") + ".");
   await refreshAfterAuthChange(t.id);
+}
+
+/** While waiting for the device code: the panel's amber "Waiting…" line, else the message slot. */
+function waitMsg(text) {
+  if ($("deviceWait")) put("deviceWait", text);
+  else panelMsg(text);
+}
+
+/** The panel's Cancel on the code screen: stop waiting, back to Connect. */
+function cancelDevice() {
+  const t = panel.current;
+  stopPolling();
+  if (t) selectTracker(t.id);
 }
 
 function schedulePoll(id, seconds) {
@@ -927,21 +1057,29 @@ function schedulePoll(id, seconds) {
     const res = await send("tb:tracker:connect-poll", { tracker: id });
     if (!res || res.error) {
       show("deviceBox", false);
+      panel.connecting = false;
+      setStatus(panel.current);
+      // The panel: back to the Connect screen — or, after "Switch to GitHub
+      // sign-in", to the token connection that is still there.
+      if (EMBED && panel.current && panel.current.connected) await selectTracker(id);
+      else if (EMBED) show("connectBox", true);
       const code = res && res.code;
       // The code ended: cancelled on GitHub, expired, or refused.
-      $("connect").textContent = code === "expired_token" ? "Get a new code" : "Connect " + (panel.current ? panel.current.label : "");
+      put($("connectLabel") ? "connectLabel" : "connect", code === "expired_token" ? "Get a new code" : "Connect " + (panel.current ? panel.current.label : ""));
       panelMsg((res && res.error) || "Sign-in failed. Click Connect to try again.", true);
       return;
     }
     if (res.status === "pending") {
       show("openDevice", !!res.popupClosed);
-      panelMsg(res.popupClosed
+      waitMsg(res.popupClosed
         ? "The GitHub window is closed. Reopen it to finish — your code still works."
-        : res.retrying ? "Can't reach GitHub — still trying…" : "This window carries on by itself once you authorize.");
+        : res.retrying ? "Can't reach GitHub — still trying…"
+        : EMBED ? "Waiting for GitHub…" : "This window carries on by itself once you authorize.");
       schedulePoll(id, res.interval || seconds);
       return;
     }
     show("deviceBox", false);
+    panel.connecting = false;
     bringToFront();
     panelMsg("Connected" + (res.account ? " as " + res.account : "") + ".");
     await refreshAfterAuthChange(id);
@@ -984,16 +1122,42 @@ function onSwitchSignIn(e) {
   e.preventDefault();
   const t = panel.current;
   if (!t || !t.canConnect) return;
+  closeMenu(false);
   askReplace("This replaces your token" + (t.tokenHint ? " " + t.tokenHint : "") + ". TraceBug signs in with GitHub instead.", () => {
     // The device code shows in the Connect box; the token form isn't wanted here.
     show("switchSignIn", false);
     show("pickBox", false);
+    show("attachNote", false);
+    show("more", false);
+    syncFooter();
     show("connectBox", true);
     show("connect", false);
     show("tokenBox", false);
+    put("connectTitle", "Switch to GitHub sign-in");
     put("connectText", "Sign in on GitHub to replace your token.");
     onConnect();
   });
+}
+
+/** Signed in → "Switch to a personal token": the token form in place; saving
+ *  it replaces the sign-in (the worker forgets the sign-in after a verified save). */
+function onSwitchToken() {
+  const t = panel.current;
+  if (!t) return;
+  closeMenu(false);
+  panelMsg("");
+  ["pickBox", "attachNote", "more", "connect", "revokeNote"].forEach((id) => show(id, false));
+  syncFooter();
+  show("connectBox", true);
+  put("connectTitle", "Switch to a personal token");
+  put("connectText", "The token replaces your GitHub sign-in" + (t.account ? " (" + t.account + ")" : "") + " in this browser.");
+  setupTokenBox(t);
+  $("tokenBox").open = true;
+  $("tokenBox").classList.add("only");
+  show("tokenBox", true);
+  show("tokenBack", true);
+  panel.switching = true;
+  $("tokenInput").focus();
 }
 
 function wirePanel() {
@@ -1013,6 +1177,25 @@ function wirePanel() {
   }
   if ($("revokeLink")) $("revokeLink").addEventListener("click", (e) => { e.preventDefault(); openExternal($("revokeLink").dataset.url || ""); });
   if ($("switchSignIn")) $("switchSignIn").addEventListener("click", onSwitchSignIn);
+  if ($("more")) {
+    $("more").addEventListener("click", () => (menuOpen() ? closeMenu(true) : openMenu()));
+    // Any item closes it (each handler then does its own work).
+    $("moreMenu").addEventListener("click", () => closeMenu(false), true);
+    $("moreMenu").addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const items = [...$("moreMenu").querySelectorAll("button")].filter((b) => !b.hidden);
+      const i = items.indexOf(document.activeElement);
+      const next = items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+      if (next) next.focus();
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (menuOpen() && !$("moreMenu").contains(e.target) && !$("more").contains(e.target)) closeMenu(false);
+    });
+    $("switchToken").addEventListener("click", onSwitchToken);
+    $("tokenBack").addEventListener("click", () => { if (panel.current) selectTracker(panel.current.id); });
+    $("cancelDevice").addEventListener("click", cancelDevice);
+  }
   if ($("installApp")) {
     $("installApp").addEventListener("click", openInstall);
     $("configureRepo").addEventListener("click", (e) => { e.preventDefault(); openInstall(); });
@@ -1137,26 +1320,35 @@ function showDone(tracker, r) {
   decided = true;
   // U9: after Create, only "Created #N".
   ["connectBox", "accessBox", "pickBox", "disconnect", "revokeNote", "ssoBox", "replaceBox", "switchSignIn"].forEach((id) => show(id, false));
+  syncMenu(panel.current);
   $("tracker").disabled = true;
   panelMsg("");
   const link = $("issueLink");
   link.textContent = r.ref || "the issue";
   link.dataset.url = r.url || "";
   link.dataset.tracker = tracker;
+  // The panel: "Issue #N created" over "<repo> #N · Open on GitHub".
+  if ($("doneTitle")) {
+    put("doneTitle", r.ref ? "Issue " + r.ref + " created" : "Issue created");
+    const repo = tracker === "github" && /^[\w.-]+\/[\w.-]+$/.test(selectedContainer()) ? selectedContainer() + " " : "";
+    put("issueWhere", repo);
+    put("issueOpenText", tracker === "linear" ? "Open in Linear" : "Open on GitHub");
+  }
   const missing = Array.isArray(r.notAttached) && r.notAttached.length
     ? " Not attached: " + r.notAttached.map((m) => m.name + " — " + m.reason).join("; ") + "."
     : "";
   const attached = r.attached ? " " + r.attached + (r.attached === 1 ? " file" : " files") + " attached." : "";
   put("doneNote", (r.found
     ? "It had already been created — TraceBug found it rather than filing it twice."
-    : (r.label || "") + (r.label ? " · " : "") + "Your ticket in TraceBug is unchanged.") + attached + missing);
+    : (!EMBED && r.label ? r.label + " · " : "") + "Your ticket in TraceBug is unchanged.") + attached + missing);
   show("attachNote", false);
   show("copyShot", tracker === "github" && canCopyShot());
   if (tracker === "github") showDownloads();
   show("doneBox", true);
   $("send").hidden = true;
-  $("cancel").textContent = "Close";
+  $("cancel").textContent = EMBED ? "Done" : "Close";
   $("cancel").disabled = false;
+  syncFooter();
   $("cancel").focus();
 }
 
@@ -1566,7 +1758,9 @@ $("cancel").addEventListener("click", () => {
   if (decided && panel.active) { window.close(); return; }
   decide(false);
 });
-$("issueLink").addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
+// The panel's link wraps "#N" (the #issueLink inside it); the window's is the link itself.
+($("issueOpen") || $("issueLink")).addEventListener("click", (e) => { e.preventDefault(); openIssue(); });
+if ($("close")) $("close").addEventListener("click", () => { if (!panel.busy) cancelEmbedded(); });
 if ($("copyShot")) $("copyShot").addEventListener("click", copyShot);
 if ($("toWindow")) $("toWindow").addEventListener("click", moveToWindow);
 
@@ -1588,6 +1782,8 @@ document.addEventListener("keydown", (e) => {
     }
   }
   if (e.key !== "Escape" || panel.busy) return;
+  // The ⋯ menu is a layer of its own: Esc closes it, not the panel.
+  if (menuOpen()) { e.preventDefault(); e.stopPropagation(); closeMenu(true); return; }
   if (EMBED) { e.stopPropagation(); cancelEmbedded(); return; }
   if (decided && panel.active) { window.close(); return; }
   decide(false);

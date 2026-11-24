@@ -33370,7 +33370,7 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     const attrs = `data-tb-split-main data-target="${panel}" aria-keyshortcuts="Alt+ArrowDown"` + (target === "github" || target === "linear" || !s2.trackerConnected ? ` aria-haspopup="dialog" aria-expanded="false"` : "");
     const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs }) : _sendButtonHtml(panel, true, {
       attrs,
-      inner: `<span class="tb-qb-split-logos">${["github", "linear"].filter((t2) => hasIntegration(t2)).map((t2) => brandLogo(t2, 14)).join("")}</span> Connect a tracker`
+      inner: "Connect a tracker"
     });
     const withTip = main.replace(/ title="[^"]*"/, "").replace(/^<button /, `<button title="${escapeHtml(tip + " (Alt+\u2193: choose where to send)")}" `).replace(/<\/button>$/, `${dot}</button>`);
     return `<div class="tb-qb-split" data-tb-send-split>${withTip}</div>`;
@@ -36584,8 +36584,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-footer { position:relative; }
     #${MODAL_ID} .tb-qb-split { display:inline-flex; align-items:stretch; }
     #${MODAL_ID} .tb-qb-split > [data-tb-split-main] { position:relative; }
-    #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid var(--tb-accent); outline-offset:2px; z-index:1; }
-    #${MODAL_ID} .tb-qb-split-logos { display:inline-flex; gap:3px; }
+    #${MODAL_ID} .tb-qb-split > button:focus-visible { outline:2px solid #2563EB; outline-offset:2px; z-index:1; }
+    /* Styled like the Create panel's primary (near-black; near-white on dark), the height and radius of its neighbours. */
+    #${MODAL_ID} .tb-qb-split > .tb-qb-btn-primary { background:#111827; color:#fff; border-color:#111827; padding:9px 14px; box-shadow:var(--tb-shadow-sm); }
+    #${MODAL_ID} .tb-qb-split > .tb-qb-btn-primary:hover { background:#000; border-color:#000; filter:none; box-shadow:var(--tb-shadow-sm); }
+    #tracebug-root[data-tb-theme="dark"] #${MODAL_ID} .tb-qb-split > .tb-qb-btn-primary { background:#F3F4F6; color:#111827; border-color:#F3F4F6; }
+    #tracebug-root[data-tb-theme="dark"] #${MODAL_ID} .tb-qb-split > .tb-qb-btn-primary:hover { background:#fff; border-color:#fff; }
     #${MODAL_ID} .tb-qb-status-dot { position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--tb-warning, #E0A040); box-shadow:0 0 0 2px var(--tb-bg-secondary, #141823); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }

@@ -30,6 +30,8 @@ export interface Container {
 export interface FieldOption {
   id: string;
   label: string;
+  /** GitHub's label colour, six hex digits (display only). */
+  color?: string;
 }
 
 export interface FieldSpec {
@@ -268,7 +270,7 @@ export const github: TrackerAdapter = {
     if (!/^[\w.-]+\/[\w.-]+$/.test(container)) return [];
     const base = `${GH_API}/repos/${container}`;
     const [labels, people, milestones, repo] = await Promise.all([
-      ghPages<{ name?: string }>(auth, `${base}/labels?per_page=100`, MAX_LABELS, signal),
+      ghPages<{ name?: string; color?: string }>(auth, `${base}/labels?per_page=100`, MAX_LABELS, signal),
       optionalList(ghPages<{ login?: string }>(auth, `${base}/assignees?per_page=100`, MAX_PEOPLE, signal)),
       optionalList(ghPages<{ number?: number; title?: string }>(
         auth, `${base}/milestones?state=open&per_page=100`, MAX_LABELS, signal)),
@@ -281,7 +283,8 @@ export const github: TrackerAdapter = {
       key: "labels",
       label: "Labels",
       kind: "multi",
-      options: labels.filter((l) => typeof l.name === "string").map((l) => ({ id: l.name!, label: l.name! })),
+      options: labels.filter((l) => typeof l.name === "string").map((l) => (
+        typeof l.color === "string" && /^[0-9a-f]{6}$/i.test(l.color) ? { id: l.name!, label: l.name!, color: l.color } : { id: l.name!, label: l.name! })),
     }];
     if (people.length) {
       fields.push({

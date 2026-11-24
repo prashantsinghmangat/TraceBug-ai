@@ -10,222 +10,360 @@
        the worker accepts it (background.js panelRequestFor). Same logic as the
        extension window: confirm-send.js, in its EMBED mode. Everything
        rendered comes from the worker or the user and is written with
-       textContent only. -->
+       textContent only. Look: direction A "Quiet" (2026-11-24) — near-black
+       primary, TraceBug red only for Disconnect and errors. -->
   <style>
     :root {
-      --bg: #0B0D14;
-      --panel: #141823;
-      --text: #EEF0F5;
-      --muted: #A8AEBE;
-      --line: #252A38;
-      --accent: #FF5C6C;
-      --on-accent: #0B0D14;
-      --danger: #F05257;
-      color-scheme: dark;
+      --panel: #FFFFFF; --field: #FFFFFF; --tile: #F3F4F6; --hover: #F9FAFB;
+      --text: #111827; --muted: #6B7280; --label: #374151;
+      --border: #E5E7EB; --divider: #F1F2F4; --footer: #FCFCFD;
+      --primary: #111827; --primary-hover: #000000; --on-primary: #FFFFFF;
+      --danger: #DC2626; --ring: #2563EB; --link: #1D4ED8;
+      --ok: #16A34A; --ok-soft: #DCFCE7; --wait: #F59E0B;
+      color-scheme: light;
     }
-    @media (prefers-color-scheme: light) {
-      :root:not([data-theme="dark"]) {
-        --bg: #FFFFFF; --panel: #F5F6F9; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
-        --accent: #D93A4C; --on-accent: #FFFFFF; --danger: #C62834; color-scheme: light;
+    /* Dark: the ticket's dark theme, same contrast steps. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --panel: #141823; --field: #0F121A; --tile: #1F2430; --hover: #1A1F2C;
+        --text: #EEF0F5; --muted: #A8AEBE; --label: #D1D5DB;
+        --border: #2A2F3D; --divider: #1F2430; --footer: #10131B;
+        --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
+        --danger: #F87171; --ring: #60A5FA; --link: #93C5FD;
+        --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24;
+        color-scheme: dark;
       }
     }
-    :root[data-theme="light"] {
-      --bg: #FFFFFF; --panel: #F5F6F9; --text: #141823; --muted: #5B6275; --line: #DCE0E8;
-      --accent: #D93A4C; --on-accent: #FFFFFF; --danger: #C62834; color-scheme: light;
+    :root[data-theme="dark"] {
+      --panel: #141823; --field: #0F121A; --tile: #1F2430; --hover: #1A1F2C;
+      --text: #EEF0F5; --muted: #A8AEBE; --label: #D1D5DB;
+      --border: #2A2F3D; --divider: #1F2430; --footer: #10131B;
+      --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
+      --danger: #F87171; --ring: #60A5FA; --link: #93C5FD;
+      --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24;
+      color-scheme: dark;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; background: transparent; }
     body {
       color: var(--text);
-      font: 13px/1.45 "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font: 13px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-    .panel[hidden], .panel [hidden], [hidden] { display: none !important; }
-    .prow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .pblock { margin-top: 10px; }
-    .lead { font-weight: 600; }
-    .plabel { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
-    .grow { flex: 1 1 auto; }
+    [hidden] { display: none !important; }
+    :focus { outline: none; }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    svg { flex: none; }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: clip; }
+
+    /* Header */
+    .phead { display: flex; align-items: center; gap: 12px; padding: 14px 12px 14px 20px; border-bottom: 1px solid var(--divider); position: relative; }
+    .tile { width: 32px; height: 32px; border-radius: 8px; background: var(--tile); color: var(--text); display: grid; place-items: center; flex: none; }
+    .ptitle { flex: 1 1 auto; min-width: 0; }
+    .ttl { display: flex; align-items: center; gap: 4px; font-size: 15px; font-weight: 600; line-height: 20px; }
+    .ttl label { font: inherit; white-space: nowrap; }
+    #tracker {
+      font: inherit; color: var(--text); background: transparent; border: 0; border-radius: 6px; height: auto; width: auto;
+      field-sizing: content; max-width: 100%;
+      padding: 0 18px 0 2px; margin: 0; cursor: pointer; appearance: none; -webkit-appearance: none; min-width: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 2px center;
+    }
+    #tracker option { color: initial; background: initial; font-weight: 400; }
+    #account { display: block; font-size: 12px; color: var(--muted); line-height: 16px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .iconbtn {
+      width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: var(--muted);
+      display: grid; place-items: center; cursor: pointer; padding: 0; flex: none;
+    }
+    button.iconbtn:hover:not(:disabled), button.iconbtn[aria-expanded="true"] { background: var(--tile); border-color: transparent; color: var(--text); }
+    .menu {
+      position: absolute; right: 12px; top: 52px; z-index: 5; min-width: 232px; padding: 6px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 12px 32px rgba(17, 24, 39, .14);
+    }
+    .menu button {
+      display: block; width: 100%; height: auto; text-align: left; padding: 8px 10px; border: 0; border-radius: 6px;
+      background: transparent; color: var(--text); font: 500 13px/1.4 inherit; font-family: inherit; cursor: pointer;
+    }
+    .menu button:hover:not(:disabled), .menu button:focus-visible { background: var(--hover); border-color: transparent; }
+    .menu button.danger { color: var(--danger); }
+    .menu hr { border: 0; border-top: 1px solid var(--divider); margin: 6px 0; }
+
+    /* Body */
+    .pbody { padding: 20px; }
+    .pbody > * + * { margin-top: 16px; }
+    .pbody > [hidden] + * { margin-top: 0; }
+    .center { text-align: center; display: flex; flex-direction: column; align-items: center; }
+    .center h2 { font-size: 17px; font-weight: 600; line-height: 24px; margin: 0; }
+    .center .sub { font-size: 13px; color: var(--muted); margin: 6px auto 0; max-width: 300px; }
+    .stack { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 20px; }
     .muted { color: var(--muted); font-size: 12px; }
+    .notice { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--hover); }
+    .notice p { margin: 0 0 10px; color: var(--label); }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* Buttons */
+    button, a.btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 38px; padding: 0 14px; border-radius: 8px; cursor: pointer; text-decoration: none;
+      font: 600 13px/1 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; white-space: nowrap;
+      background: var(--primary); color: var(--on-primary); border: 1px solid var(--primary);
+    }
+    button:hover:not(:disabled), a.btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    button.secondary, a.btn.secondary { background: var(--panel); color: var(--text); border-color: var(--border); }
+    button.secondary:hover:not(:disabled), a.btn.secondary:hover { background: var(--hover); border-color: var(--border); }
+    button.ghost { background: transparent; color: var(--label); border-color: transparent; }
+    button.ghost:hover:not(:disabled) { background: var(--tile); border-color: transparent; }
+    button.big { height: 44px; border-radius: 10px; width: 100%; font-size: 14px; }
+    button.full, a.btn.full { width: 100%; }
+    button:disabled { opacity: .45; cursor: default; }
+    button.small { height: 30px; padding: 0 10px; font-size: 12px; }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Fields */
+    .plabel, legend { display: block; font-size: 12px; font-weight: 600; color: var(--label); margin: 0 0 6px; padding: 0; }
     select, input[type="text"], input[type="search"], input[type="password"] {
-      background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
-      padding: 6px 8px; font: inherit; min-width: 0;
+      height: 38px; width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0 12px; font: 400 13px Inter, ui-sans-serif, system-ui, sans-serif; min-width: 0;
     }
-    #container { width: 100%; }
+    select:not(#tracker), #container {
+      appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+    }
+    #container { font-weight: 500; }
     #containerSuggest {
-      list-style: none; margin: 4px 0 0; padding: 4px; max-height: 168px; overflow-y: auto; overscroll-behavior: contain;
-      background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+      list-style: none; margin: 6px 0 0; padding: 4px; max-height: 176px; overflow-y: auto; overscroll-behavior: contain;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
     }
-    #containerSuggest li { padding: 5px 8px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+    #containerSuggest li { padding: 7px 10px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
     #containerSuggest li .muted { margin-left: 6px; }
-    #containerSuggest li[aria-selected="true"], #containerSuggest li:hover { background: var(--panel); outline: 1px solid var(--line); }
+    #containerSuggest li[aria-selected="true"], #containerSuggest li:hover { background: var(--tile); }
     #containerSuggest li[aria-disabled="true"] { color: var(--muted); }
-    #manageLink { display: inline-block; margin-top: 6px; }
-    .attach-line { margin: 6px 0 0; }
-    button {
-      padding: 7px 14px; border: 0; border-radius: 8px; cursor: pointer;
-      font: 600 13px "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-      background: var(--accent); color: var(--on-accent);
-    }
-    button.ghost, a.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
-    button.small, a.btn.small { padding: 5px 10px; font-size: 12px; }
-    a.btn { border-radius: 8px; font-weight: 600; text-decoration: none; display: inline-block; }
-    button:disabled { opacity: .5; cursor: default; }
-    .code {
-      font: 600 26px/1.2 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em;
-      background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px;
-      user-select: all; -webkit-user-select: all; cursor: text;
-    }
-    fieldset { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
-    legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; padding: 2px; }
-    .chips .filter { flex: 1 0 100%; margin-bottom: 2px; }
+    #manageLink { display: inline-block; margin-top: 8px; font-size: 12px; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    legend { display: flex; width: 100%; justify-content: space-between; }
+    legend .count { font-weight: 400; color: var(--muted); }
+    #fields > * + * { margin-top: 18px; }
+    #fields:not(:empty) { margin-top: 18px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 112px; overflow-y: auto; padding: 2px; }
+    .chips .filter { flex: 1 0 100%; height: 34px; margin-bottom: 2px; }
     button.chip {
-      padding: 3px 10px; border-radius: 999px; font-weight: 500; font-size: 12px;
-      background: var(--bg); color: var(--text); border: 1px solid var(--line);
+      height: 28px; padding: 0 10px; border-radius: 999px; font-weight: 500; font-size: 12px; gap: 6px;
+      background: var(--panel); color: var(--label); border: 1px solid var(--border);
     }
-    button.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-    .fields-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .fields-row > * { flex: 1 1 160px; }
-    .msg { font-size: 12px; margin: 8px 0 0; min-height: 1em; }
+    button.chip:hover:not(:disabled) { background: var(--hover); border-color: var(--border); }
+    button.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    button.chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+    button.chip[aria-pressed="true"] .dot { box-shadow: 0 0 0 1.5px var(--on-primary); }
+    .field-note { margin-top: 6px; }
+
+    /* Token form (expands in place) */
+    #tokenBox { width: 100%; text-align: left; }
+    #tokenBox > summary {
+      list-style: none; display: flex; align-items: center; justify-content: center; height: 38px; border-radius: 8px;
+      color: var(--label); font-weight: 600; cursor: pointer;
+    }
+    #tokenBox > summary::-webkit-details-marker { display: none; }
+    #tokenBox > summary:hover { background: var(--tile); }
+    #tokenBox[open] > summary { margin-bottom: 12px; }
+    #tokenBox.only > summary { display: none; }
+    #tokenInput { flex: 1 1 200px; width: auto; }
+    .hint { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+
+    /* Device code */
+    .codebox { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 20px; padding: 10px 10px 10px 16px; background: var(--tile); border-radius: 10px; }
+    .code {
+      flex: 1 1 auto; text-align: left; font: 600 26px/1.2 ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; letter-spacing: .16em;
+      user-select: all; -webkit-user-select: all; cursor: text; overflow-wrap: anywhere;
+    }
+    .waiting { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+    .waiting .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--wait); }
+
+    /* Created */
+    .okmark { width: 48px; height: 48px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; margin-bottom: 12px; }
+    .done-link { margin-top: 6px; font-size: 13px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 20px; }
+    .grid2 > [hidden] { display: none !important; }
+
+    /* Info line, then the one slot for errors and notes */
+    .info { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); font-size: 12px; margin: 0; }
+    .info svg { margin-top: 1px; }
+    .msg { font-size: 12px; margin: 0; min-height: 1em; color: var(--label); }
     .msg:empty { display: none; }
     .msg.err { color: var(--danger); }
-    .done { font-size: 14px; font-weight: 600; margin: 2px 0; }
-    a { color: var(--accent); }
-    .actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-    /* A short window caps the panel's height and it scrolls inside: Create stays in view. */
-    .panel > .actions { position: sticky; bottom: 0; background: var(--panel); padding: 8px 0 2px; margin-bottom: -2px; z-index: 1; }
-    #manageInt { font-size: 12px; }
-    #tokenBox summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-    #tokenInput { flex: 1 1 220px; min-width: 0; }
-    .countdown { font-size: 11px; color: var(--muted); }
-    .fatal { padding: 10px 12px; color: var(--muted); font-size: 12px; }
+    .note { margin: 0; color: var(--muted); font-size: 12px; }
+
+    /* Footer: sticky, only while there is something to create (or Done) */
+    .actions {
+      display: flex; gap: 8px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--divider);
+      background: var(--footer); position: sticky; bottom: 0; z-index: 1;
+    }
+    .actions .grow { flex: 1 1 auto; }
+    .countdown { font-size: 12px; color: var(--muted); }
+    /* Created: the footer is just the full-width Done, part of the centred frame. */
+    .actions.done { border-top: 0; background: var(--panel); padding: 0 20px 20px; }
+    .actions.done #cancel { width: 100%; background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+    .actions.done #cancel:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .actions.done .grow, .actions.done .countdown { display: none; }
+
+    .fatal { padding: 12px 16px; color: var(--muted); font-size: 12px; }
+    @media (max-width: 380px) {
+      .pbody { padding: 16px; }
+      .phead { padding-left: 16px; gap: 8px; }
+      .tile { display: none; }
+      .actions { padding: 12px 16px; }
+      .actions.done { padding: 0 16px 16px; }
+      .grid2 { grid-template-columns: 1fr; }
+      .code { font-size: 22px; letter-spacing: .12em; }
+    }
   </style>
 </head>
 <body>
   <h1 id="heading" hidden>Create an issue</h1>
   <section class="panel" id="panel" hidden aria-label="Create an issue">
-    <div class="prow">
-      <label for="tracker" class="lead">Create a</label>
-      <select id="tracker"></select>
-      <span class="lead">issue</span>
-      <span class="muted" id="account"></span>
-      <span class="grow"></span>
-      <button type="button" class="ghost small" id="disconnect" hidden>Disconnect</button>
-    </div>
-    <!-- One GitHub connection (B11): in token mode, sign-in is a quiet link
-         (only where this build can sign in), behind a "This replaces…" confirm. -->
-    <a href="#" class="muted" id="switchSignIn" hidden>Switch to GitHub sign-in (recommended)</a>
-    <div class="pblock" id="replaceBox" hidden>
-      <p class="muted" id="replaceText"></p>
-      <div class="prow">
-        <button type="button" class="small" id="replaceYes">Replace</button>
-        <button type="button" class="ghost small" id="replaceNo">Cancel</button>
+    <header class="phead">
+      <span class="tile" aria-hidden="true">
+        <svg id="markGithub" width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+        <svg id="markLinear" width="18" height="18" viewBox="0 0 24 24" hidden><path fill="#5E6AD2" d="M1.2 13.9a11 11 0 0 0 8.9 8.9L1.2 13.9Zm-.2-3 12.1 12.1c.9-.1 1.8-.3 2.6-.6L1.6 8.3c-.3.8-.5 1.7-.6 2.6Zm1.4-4.3 15 15c.7-.4 1.3-.9 1.9-1.4L3.8 4.7c-.5.6-1 1.2-1.4 1.9ZM5.3 3.4A11 11 0 1 1 20.6 18.7L5.3 3.4Z"/></svg>
+      </span>
+      <div class="ptitle">
+        <div class="ttl"><label for="tracker">Send to</label> <select id="tracker"></select></div>
+        <span id="account" role="status"></span>
       </div>
-    </div>
+      <button type="button" class="iconbtn" id="more" aria-label="More" aria-haspopup="menu" aria-expanded="false" aria-controls="moreMenu" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
+      </button>
+      <button type="button" class="iconbtn" id="close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <!-- ⋯ (connected only). One GitHub connection (B11): the switch is
+           behind a "This replaces…" confirm; sign-in only where this build can. -->
+      <div class="menu" id="moreMenu" role="menu" aria-label="Connection" hidden>
+        <button type="button" role="menuitem" id="manageInt">Manage integrations</button>
+        <button type="button" role="menuitem" id="switchToken" hidden>Switch to a personal token</button>
+        <button type="button" role="menuitem" id="switchSignIn" hidden>Switch to GitHub sign-in</button>
+        <hr id="menuRule" />
+        <button type="button" role="menuitem" class="danger" id="disconnect" hidden>Disconnect GitHub</button>
+      </div>
+    </header>
 
-    <div class="pblock" id="connectBox" hidden>
-      <p class="muted" id="connectText"></p>
-      <div class="prow">
-        <button type="button" class="small" id="connect">Connect</button>
+    <div class="pbody">
+      <div class="notice" id="replaceBox" hidden>
+        <p id="replaceText"></p>
+        <div class="row">
+          <button type="button" class="small" id="replaceYes">Replace</button>
+          <button type="button" class="secondary small" id="replaceNo">Cancel</button>
+        </div>
       </div>
-      <div class="pblock" id="deviceBox" hidden>
-        <span class="plabel" id="deviceHint"></span>
-        <div class="prow">
+
+      <div class="center" id="connectBox" hidden>
+        <h2 id="connectTitle">Connect your GitHub account</h2>
+        <p class="sub" id="connectText"></p>
+        <div class="stack">
+          <button type="button" class="big" id="connect">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" id="connectMark"><path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+            <span id="connectLabel">Connect GitHub</span>
+          </button>
+          <!-- The token lives in this extension frame only: never in the page,
+               never in a message to it. Checked against the API, then saved. -->
+          <details id="tokenBox">
+            <summary id="tokenSummary">Use a personal token instead</summary>
+            <label class="plabel" for="tokenInput" id="tokenLabel">Personal access token</label>
+            <div class="row">
+              <input type="password" id="tokenInput" autocomplete="off" spellcheck="false" autocapitalize="off" />
+              <button type="button" id="tokenSave">Save</button>
+            </div>
+            <p class="hint"><span id="tokenHelpText"></span> <a href="#" id="tokenHelp"></a></p>
+            <p class="msg" id="tokenMsg" role="status" aria-live="polite"></p>
+            <button type="button" class="ghost full" id="tokenBack" hidden>Keep the sign-in</button>
+          </details>
+        </div>
+      </div>
+
+      <div class="center" id="deviceBox" hidden>
+        <h2>Enter this code on GitHub</h2>
+        <p class="sub" id="deviceHint"></p>
+        <div class="codebox">
           <span class="code" id="userCode"></span>
-          <button type="button" class="ghost small" id="copyCode">Copy</button>
-          <button type="button" class="ghost small" id="openDevice" hidden>Reopen GitHub</button>
+          <button type="button" class="secondary small" id="copyCode">Copy</button>
+        </div>
+        <div class="waiting"><span class="pulse" aria-hidden="true"></span><span id="deviceWait">Waiting for GitHub…</span>
+          <button type="button" class="secondary small" id="openDevice" hidden>Reopen GitHub</button></div>
+        <div class="stack"><button type="button" class="ghost full" id="cancelDevice">Cancel</button></div>
+      </div>
+
+      <div class="notice" id="accessBox" hidden>
+        <p id="accessText"></p>
+        <button type="button" class="small" id="allowAccess">Allow access</button>
+      </div>
+
+      <div id="pickBox" hidden>
+        <div class="center" id="installBox" hidden>
+          <h2>Install TraceBug on your repositories</h2>
+          <p class="sub" id="installText">TraceBug isn't installed on any of your GitHub repositories yet. Install it on the
+            ones you want to file into, then come back here.</p>
+          <div class="stack">
+            <button type="button" class="big" id="installApp">Install on GitHub</button>
+            <button type="button" class="ghost full" id="refreshRepos">Refresh</button>
+          </div>
+        </div>
+        <!-- U7/U10: the suggestions are our own list, in the panel's flow
+             under the field — inside its width, scrolling past a max height,
+             never over "Don't see it?". The datalist is only the data. -->
+        <div id="repoField">
+          <label class="plabel" for="container" id="containerLabel">Repository</label>
+          <input type="text" id="container" autocomplete="off" spellcheck="false" role="combobox" placeholder="owner/repo"
+            aria-autocomplete="list" aria-expanded="false" aria-controls="containerSuggest" />
+          <ul id="containerSuggest" role="listbox" aria-labelledby="containerLabel" hidden></ul>
+          <datalist id="containerList"></datalist>
+          <a href="#" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
+        </div>
+        <p class="note" id="repoNote" hidden>TraceBug isn't allowed on <strong id="repoNoteName"></strong> yet.
+          <a href="#" id="configureRepo">Configure repository access on GitHub</a></p>
+        <!-- SAML single sign-on: links are github.com only, opened by the worker. -->
+        <div class="notice" id="ssoBox" hidden>
+          <p id="ssoText"></p>
+          <div class="row" id="ssoLinks"></div>
+        </div>
+        <div id="fields"></div>
+      </div>
+
+      <!-- After Disconnect: exactly what was removed, and where to finish on GitHub. -->
+      <p class="note" id="revokeNote" hidden><span id="revokeText"></span> <a href="#" id="revokeLink"></a></p>
+
+      <div class="center" id="doneBox" hidden>
+        <span class="okmark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        <h2 id="doneTitle">Issue created</h2>
+        <p class="done-link"><a href="#" id="issueOpen"><span id="issueWhere"></span><span id="issueLink"></span> · <span id="issueOpenText">Open on GitHub</span></a></p>
+        <p class="sub" id="doneNote"></p>
+        <!-- GitHub can't take files through its API: copy the screenshot, or
+             download it and the recording (blob: URLs of this frame). -->
+        <div class="grid2" id="doneFiles">
+          <button type="button" class="secondary" id="copyShot" hidden>Copy screenshot</button>
+          <a class="btn secondary" id="downloadShot" hidden>Download screenshot</a>
+          <a class="btn secondary" id="downloadVideo" hidden>Download recording</a>
         </div>
       </div>
-      <!-- The token lives in this extension frame only: never in the page,
-           never in a message to it. Checked against the API, then saved. -->
-      <details class="pblock" id="tokenBox">
-        <summary id="tokenSummary">Use a token instead</summary>
-        <label class="plabel" for="tokenInput" id="tokenLabel">Personal access token</label>
-        <div class="prow">
-          <input type="password" id="tokenInput" autocomplete="off" spellcheck="false" autocapitalize="off" />
-          <button type="button" class="small" id="tokenSave">Check and save</button>
-        </div>
-        <p class="muted"><span id="tokenHelpText"></span> <a href="#" id="tokenHelp"></a></p>
-        <p class="msg" id="tokenMsg" role="status" aria-live="polite"></p>
-      </details>
-    </div>
 
-    <div class="pblock" id="accessBox" hidden>
-      <p class="muted" id="accessText"></p>
-      <button type="button" class="small" id="allowAccess">Allow access</button>
-    </div>
-
-    <div class="pblock" id="pickBox" hidden>
-      <!-- U4: shown once there is something to pick from (not while the app is
-           installed nowhere). U7/U10: the suggestions are our own list, in the
-           panel's flow under the field — inside its width, scrolling past a
-           max height, never over "Don't see it?". The datalist is only the
-           data (not attached to the field). -->
-      <div id="repoField">
-        <label class="plabel" for="container" id="containerLabel">Repository</label>
-        <input type="text" id="container" autocomplete="off" spellcheck="false" role="combobox"
-          aria-autocomplete="list" aria-expanded="false" aria-controls="containerSuggest" />
-        <ul id="containerSuggest" role="listbox" aria-labelledby="containerLabel" hidden></ul>
-        <datalist id="containerList"></datalist>
-        <a href="#" class="muted" id="manageLink" hidden>Don't see it? Add repositories to TraceBug on GitHub</a>
+      <!-- Shown when Chrome says this panel is drawn covered, faded or filtered. -->
+      <div class="notice" id="toWindowBox" hidden>
+        <p id="toWindowWhy">This page changes how the panel is drawn, so Create is paused here for your safety.</p>
+        <button type="button" class="small" id="toWindow">Open in a window</button>
       </div>
-      <p class="muted" id="repoNote" hidden>TraceBug isn't allowed on <strong id="repoNoteName"></strong> yet.
-        <a href="#" id="configureRepo">Configure repository access on GitHub</a></p>
-      <!-- SAML single sign-on: an organisation hides repositories (or refused a
-           call) until TraceBug is authorised for it. Links are github.com only,
-           opened by the worker. -->
-      <div class="pblock" id="ssoBox" hidden>
-        <p class="muted" id="ssoText"></p>
-        <div class="prow" id="ssoLinks"></div>
-      </div>
-      <div class="pblock" id="installBox" hidden>
-        <p class="muted" id="installText">TraceBug isn't installed on any of your GitHub repositories yet. Install it on the
-          ones you want to file into, then come back here.</p>
-        <div class="prow">
-          <button type="button" class="small" id="installApp">Install TraceBug on GitHub</button>
-          <button type="button" class="ghost small" id="refreshRepos">Refresh</button>
-        </div>
-      </div>
-      <div id="fields"></div>
+
+      <p class="info" id="attachNote" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span id="attachText"></span></p>
+      <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
     </div>
 
-    <!-- After Disconnect: exactly what was removed, and where to finish on GitHub
-         (revoking needs a server secret TraceBug doesn't have). -->
-    <p class="muted" id="revokeNote" hidden><span id="revokeText"></span> <a href="#" id="revokeLink"></a></p>
-
-    <div class="pblock" id="doneBox" hidden>
-      <p class="done">✓ Created <a href="#" id="issueLink"></a></p>
-      <p class="muted" id="doneNote"></p>
-      <!-- GitHub can't take files through its API: copy the ticket's screenshot
-           and paste it into a comment, or download it and the recording
-           (blob: URLs of this frame; no downloads permission). -->
-      <div class="prow">
-        <button type="button" class="small" id="copyShot" hidden>Copy screenshot</button>
-        <a class="btn ghost small" id="downloadShot" hidden>Download screenshot</a>
-        <a class="btn ghost small" id="downloadVideo" hidden>Download recording</a>
-      </div>
-    </div>
-
-    <p class="msg" id="panelMsg" role="status" aria-live="polite"></p>
-
-    <!-- Shown when Chrome says this panel is drawn covered, faded or filtered
-         (a decoy — or just a page/extension that filters everything). -->
-    <div class="pblock" id="toWindowBox" hidden>
-      <p class="muted" id="toWindowWhy">This page changes how the panel is drawn, so Create is paused here for your safety.</p>
-      <button type="button" class="small" id="toWindow">Open in a window</button>
-    </div>
-
-    <div class="actions">
-      <a href="#" id="manageInt" class="small">Manage integrations</a>
+    <div class="actions" id="footer" hidden>
       <span class="countdown" id="countdown"></span>
       <span class="grow"></span>
-      <button type="button" class="ghost" id="cancel">Cancel</button>
+      <button type="button" class="secondary" id="cancel">Cancel</button>
       <button type="button" id="send" disabled aria-keyshortcuts="Control+Enter Meta+Enter" title="Create (Ctrl/⌘+Enter)">Create issue</button>
     </div>
-    <!-- U4: one short line under Create about the files. -->
-    <p class="muted attach-line" id="attachNote" hidden></p>
   </section>
 
   <script src="panel-fields.js"></script>

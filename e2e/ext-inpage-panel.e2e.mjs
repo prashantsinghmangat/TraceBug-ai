@@ -86,7 +86,7 @@ await ctx.route("https://api.github.com/**", async (route) => {
     return ok(dropApiRepo ? [{ full_name: "acme/web" }] : [{ full_name: REPO }, { full_name: "acme/web" }]);
   }
   if (p === `/repos/${REPO}` && dropApiRepo) return route.fulfill({ status: 404, headers: cors, contentType: "application/json", body: '{"message":"Not Found"}' });
-  if (p === `/repos/${REPO}/labels`) return ok([{ name: "bug" }, { name: "ui" }]);
+  if (p === `/repos/${REPO}/labels`) return ok([{ name: "bug", color: "d73a4a" }, { name: "ui" }]);
   if (p === "/repos/acme/web/labels" || p === "/repos/acme/web/assignees" || p === "/repos/acme/web/milestones") return ok([]);
   if (p === "/repos/acme/web") return ok({ permissions: { push: true } });
   if (p === `/repos/${REPO}/assignees`) return ok([{ login: "tester" }, { login: "octo" }]);
@@ -180,7 +180,7 @@ try {
   const srcHost = new URL(await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").getAttribute("src"))).host;
   check("…framed by its dynamic URL (the page never sees the extension id)", srcHost !== extId && /^[0-9a-f-]{36}$/.test(srcHost),
     `${srcHost} vs ${extId}`);
-  check('…reading "Create a [GitHub] issue"', (await frame.textContent(".prow")).replace(/\s+/g, " ").includes("Create a")
+  check('…reading "Send to [GitHub]"', (await frame.textContent(".ttl")).replace(/\s+/g, " ").includes("Send to")
     && (await frame.inputValue("#tracker")) === "github");
 
   // ══ 2. The page can't see into it ════════════════════════════════════════
@@ -411,7 +411,7 @@ try {
     const ul = document.getElementById("containerSuggest"), input = document.getElementById("container");
     const p = document.getElementById("panel").getBoundingClientRect(), r = ul.getBoundingClientRect(), i = input.getBoundingClientRect();
     return { open: !ul.hidden, n: ul.children.length, below: r.top >= i.bottom - 1, inside: r.left >= p.left && r.right <= p.right + 0.5,
-      capped: ul.clientHeight <= 170 && ul.scrollHeight > ul.clientHeight, noDatalist: !input.hasAttribute("list"),
+      capped: ul.clientHeight <= 180 && ul.scrollHeight > ul.clientHeight, noDatalist: !input.hasAttribute("list"),
       expanded: input.getAttribute("aria-expanded"), active: input.getAttribute("aria-activedescendant") };
   });
   check("…repository suggestions: the panel's own list, below the field, inside the panel, scrolling past a max height (U7/U10)",
@@ -546,7 +546,7 @@ try {
   if (armed7c) await r7d.frame.click("#send");
   await r7d.frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
   check("…and a real click creates the issue in the panel", posts.length === before7c + 1 &&
-    /Created/.test(await r7d.frame.textContent("#doneBox")));
+    /created/i.test(await r7d.frame.textContent("#doneBox")));
   await r7d.frame.click("#cancel"); // "Close"
   await page.evaluate(() => { document.getElementById("__filter").remove(); document.getElementById("__under").remove(); });
   await page.keyboard.press("Escape");
@@ -661,7 +661,7 @@ try {
   };
   const dark = await panelBg("dark");
   const light = await panelBg("light");
-  check("8. the panel follows the ticket's dark and light themes", dark === "rgb(20, 24, 35)" && light === "rgb(245, 246, 249)", `${dark} / ${light}`);
+  check("8. the panel follows the ticket's dark and light themes", dark === "rgb(20, 24, 35)" && light === "rgb(255, 255, 255)", `${dark} / ${light}`);
 
   // ══ 8b. One "Send to GitHub" button (U1/U2), the panel as its dropdown ═══
   const SPLIT = "#tracebug-quick-bug-modal [data-tb-send-split]";
@@ -759,13 +759,36 @@ try {
   await page.click(`${SPLIT} [data-tb-split-main]`);
   const fm = await panelFrame();
   if (fm) {
+    // Direction A: the connection's actions live in the header's ⋯ menu.
+    await fm.waitForSelector("#more:not([hidden])", { timeout: 8000 }).catch(() => {});
+    check("8b-ui. connected: a ⋯ button in the header, its menu closed", await fm.isVisible("#more") && !(await fm.isVisible("#moreMenu")));
+    await fm.click("#more");
+    const items = await fm.$$eval("#moreMenu button", (bs) => bs.filter((b) => !b.hidden).map((b) => b.textContent.trim()));
+    check("…holding Manage integrations, Switch to GitHub sign-in (token mode, this build can sign in), Disconnect GitHub",
+      JSON.stringify(items) === '["Manage integrations","Switch to GitHub sign-in","Disconnect GitHub"]' && (await fm.getAttribute("#more", "aria-expanded")) === "true",
+      JSON.stringify(items));
+    await fm.press("#manageInt", "Escape");
+    check("…Esc closes the menu only, not the panel", !(await fm.isVisible("#moreMenu")) &&
+      await page.evaluate(() => !!document.querySelector("[data-tb-create-panel]")) &&
+      await fm.evaluate(() => document.activeElement && document.activeElement.id === "more"));
+    const labels = await fm.$eval("#fields fieldset", (fs) => ({
+      count: fs.querySelector("legend .count").textContent,
+      pressed: fs.querySelectorAll('button.chip[aria-pressed="true"]').length,
+      noDot: !fs.querySelector('button.chip[value="ui"] .dot'),
+      dot: (() => { const d = fs.querySelector('button.chip[value="bug"] .dot'); return d ? getComputedStyle(d).backgroundColor : ""; })(),
+    })).catch(() => ({}));
+    check("…labels show GitHub's colour as a dot, and \"N selected\" on the heading", labels.dot === "rgb(215, 58, 74)" && labels.noDot &&
+      labels.count === (labels.pressed ? labels.pressed + " selected" : ""),
+      JSON.stringify(labels));
     const tabP = ctx.waitForEvent("page", { predicate: (pg) => pg.url().includes("options.html#integrations"), timeout: 5000 }).catch(() => null);
+    await fm.click("#more");
     await fm.click("#manageInt");
     const opt = await tabP;
     check("…'Manage integrations' in the panel opens Settings → Integrations", !!opt);
     if (opt) await opt.close();
-    await fm.click("#cancel");
+    await fm.click("#close");
     await sleep(400);
+    check("…the header's ✕ closes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
   }
 
   // ══ 8c. Room below the button → the panel drops down ══════════════════════
