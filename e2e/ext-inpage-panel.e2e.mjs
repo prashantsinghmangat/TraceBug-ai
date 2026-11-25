@@ -137,6 +137,29 @@ async function openTicket(page, clickSel, title) {
 }
 
 /** Click Send to GitHub; resolve the panel frame (or null) and any window. */
+/** Where the docked panel sits (run in the page). */
+function dockGeometry() {
+  const q = (sel) => document.querySelector("#tracebug-quick-bug-modal " + sel);
+  const f = document.querySelector("[data-tb-create-panel] iframe").getBoundingClientRect();
+  const right = q(".tb-qb-right").getBoundingClientRect();
+  const left = q(".tb-qb-left");
+  const lr = left.getBoundingClientRect();
+  const shot = q(".tb-qb-preview");
+  const sr = shot ? shot.getBoundingClientRect() : null;
+  const strip = q(".tb-qb-tabstrip").getBoundingClientRect();
+  const foot = q(".tb-qb-footer").getBoundingClientRect();
+  const meets = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  const leftHidden = getComputedStyle(left).display === "none";
+  return {
+    inside: f.left >= right.left - 0.5 && f.right <= right.right + 0.5 && f.top >= strip.bottom - 0.5 && f.bottom <= right.bottom + 0.5,
+    clearOfLeft: leftHidden || !meets(f, lr),
+    clearOfShot: !sr || !sr.width || !meets(f, sr),
+    aboveFooter: f.bottom <= foot.top + 0.5,
+    flush: Math.abs(f.left - right.left) < 1 && Math.abs(f.right - right.right) < 1,
+    leftHidden, width: Math.round(f.width),
+  };
+}
+
 async function sendToGitHub(page) {
   const winP = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 5000 }).catch(() => null);
   await page.locator('#tracebug-quick-bug-modal [data-action="open-github"]').first().click();
@@ -175,7 +198,11 @@ try {
   const { frame, winP } = await sendToGitHub(page);
   check("1. Send to GitHub opens the Create panel inside the ticket", !!frame);
   if (!frame) throw new Error("no panel frame");
-  check("…in the ticket's footer", await page.evaluate(() => !!document.querySelector("#tracebug-quick-bug-modal .tb-qb-footer [data-tb-create-panel] iframe")));
+  check("…docked in the ticket's right column, on its own GitHub tab (active)", await page.evaluate(() => {
+    const tab = document.querySelector("#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tb-tracker-tab] [data-tab]");
+    return !!document.querySelector("#tracebug-quick-bug-modal .tb-qb-right [data-tb-create-panel] iframe") &&
+      !!tab && tab.textContent.trim() === "GitHub" && tab.classList.contains("tb-qb-tab-active");
+  }));
   check("…and no extension window", (await Promise.race([winP, sleep(600).then(() => "none")])) === "none");
   const srcHost = new URL(await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").getAttribute("src"))).host;
   check("…framed by its dynamic URL (the page never sees the extension id)", srcHost !== extId && /^[0-9a-f-]{36}$/.test(srcHost),
@@ -547,6 +574,9 @@ try {
   await r7d.frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
   check("…and a real click creates the issue in the panel", posts.length === before7c + 1 &&
     /created/i.test(await r7d.frame.textContent("#doneBox")));
+  check("…Done takes focus without a ring after a click (pointer user)", await r7d.frame.evaluate(() =>
+    document.activeElement && document.activeElement.id === "cancel" && document.documentElement.classList.contains("quiet") &&
+    getComputedStyle(document.activeElement).outlineStyle === "none"));
   await r7d.frame.click("#cancel"); // "Close"
   await page.evaluate(() => { document.getElementById("__filter").remove(); document.getElementById("__under").remove(); });
   await page.keyboard.press("Escape");
@@ -559,13 +589,13 @@ try {
   await r7e.frame.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
   await page.evaluate(() => {
     document.querySelector("[data-tb-create-panel]").scrollIntoView({ block: "center" });
-    document.querySelector("#tracebug-quick-bug-modal .tb-qb-footer").style.opacity = "0.05";
+    document.querySelector("#tracebug-quick-bug-modal .tb-qb-right").style.opacity = "0.05";
   });
   await r7e.frame.waitForSelector("#toWindowBox:not([hidden])", { timeout: 6000 }).catch(() => {});
   check("7d. a near-invisible panel stays paused", !(await armed(r7e.frame)));
   check("…and says why", /fades or hides/.test(await r7e.frame.textContent("#toWindowWhy")),
     (await r7e.frame.textContent("#toWindowWhy")).trim());
-  await page.evaluate(() => { document.querySelector("#tracebug-quick-bug-modal .tb-qb-footer").style.opacity = ""; });
+  await page.evaluate(() => { document.querySelector("#tracebug-quick-bug-modal .tb-qb-right").style.opacity = ""; });
   check("…and arms once the page stops fading it",
     await r7e.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
   await r7e.frame.click("#cancel");
@@ -684,21 +714,19 @@ try {
   check('…it says aria-haspopup="dialog", collapsed, Alt+Down in its shortcuts and tooltip',
     (await page.$$eval(`${SPLIT} [aria-haspopup]`, (b) => b.map((x) => x.getAttribute("aria-haspopup")).join(","))) === "dialog" &&
     (await expanded()) === "false" && (await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "aria-keyshortcuts")) === "Alt+ArrowDown" &&
-    /GitHub · connected \(Alt\+↓: choose where to send\)/.test(await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "title")));
+    /GitHub · connected \(Alt\+↓: choose where to send\)/.test(await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "title")),
+    JSON.stringify({ exp: await expanded(), title: await page.getAttribute(`${SPLIT} [data-tb-split-main]`, "title"), panel: await page.evaluate(() => !!document.querySelector("[data-tb-create-panel]")) }));
 
-  // Keyboard: Enter on the main part → panel above it, focus inside, Create focused once armed → Enter files.
+  // Keyboard: Enter on the main part → the docked panel, focus inside, Create focused once armed → Enter files.
   await page.focus(`${SPLIT} [data-tb-split-main]`);
   await page.keyboard.press("Enter");
   const fk = await panelFrame();
   check("…Enter on the main part opens the panel", !!fk);
   if (fk) {
     await sleep(300);
-    const geo = await page.evaluate((sel) => {
-      const sl = document.querySelector("[data-tb-create-panel]");
-      const r = sl.getBoundingClientRect(), b = document.querySelector(sel).getBoundingClientRect();
-      return { place: sl.getAttribute("data-place"), above: r.bottom <= b.top + 1 };
-    }, SPLIT);
-    check("…as a dropdown that opens upward (no room below the footer)", geo.place === "up" && geo.above, JSON.stringify(geo));
+    const geo = await page.evaluate(dockGeometry);
+    check("…docked: inside the right column under its tabs, clear of the screenshot and the footer",
+      geo.inside && geo.clearOfLeft && geo.clearOfShot && geo.aboveFooter && geo.flush, JSON.stringify(geo));
     check("…aria-expanded is true", (await expanded()) === "true");
     check("…focus moved into the panel", (await pageFocus()) === "frame");
     const onSend = await fk.waitForFunction(() => document.activeElement && document.activeElement.id === "send", null, { timeout: 5000 }).then(() => true, () => false);
@@ -707,6 +735,8 @@ try {
     await page.keyboard.press("Enter");
     await fk.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
     check("…Enter files the issue", posts.length === before + 1);
+    check("…and Done, reached by keyboard, keeps its focus ring", await fk.evaluate(() =>
+      document.activeElement && document.activeElement.id === "cancel" && !document.documentElement.classList.contains("quiet")));
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
     check("…Esc closes it and focus returns to the button", (await pageFocus()) === "main", await pageFocus());
@@ -780,6 +810,36 @@ try {
     check("…labels show GitHub's colour as a dot, and \"N selected\" on the heading", labels.dot === "rgb(215, 58, 74)" && labels.noDot &&
       labels.count === (labels.pressed ? labels.pressed + " selected" : ""),
       JSON.stringify(labels));
+    // Pass 2 #4: a selected chip under the pointer keeps its own colours.
+    await fm.hover('button.chip[aria-pressed="true"]');
+    const hov = await fm.$eval('button.chip[aria-pressed="true"]', (c) => ({ bg: getComputedStyle(c).backgroundColor, fg: getComputedStyle(c).color }));
+    check("…a selected label stays dark with white text under the pointer (#4)", hov.bg === "rgb(0, 0, 0)" && hov.fg === "rgb(255, 255, 255)", JSON.stringify(hov));
+    check("…every label dot has a 1 px ring (a white label stays visible)", await fm.$eval('button.chip[value="bug"] .dot', (d) => /inset/.test(getComputedStyle(d).boxShadow)));
+    // Pass 2 #1: another tab hides the frame and keeps its state; its tab brings it back.
+    await fm.selectOption('select[data-field="assignee"]', "octo");
+    await page.click('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"]');
+    await sleep(200);
+    const hidden = await page.evaluate(() => ({
+      slot: getComputedStyle(document.querySelector("[data-tb-create-panel]")).display,
+      info: !document.querySelector('#tracebug-quick-bug-modal [data-panel="info"]').hidden,
+      tab: document.querySelector("[data-tb-tracker-tab] [data-tab]").getAttribute("aria-selected"),
+    }));
+    check("…Info hides the panel (Info shows, the GitHub tab stays)", hidden.slot === "none" && hidden.info && hidden.tab === "false", JSON.stringify(hidden));
+    await page.click("#tracebug-quick-bug-modal [data-tb-tracker-tab] [data-tab]");
+    await sleep(200);
+    check("…the GitHub tab shows it again with what was picked", await page.evaluate(() =>
+      getComputedStyle(document.querySelector("[data-tb-create-panel]")).display === "block") &&
+      (await fm.inputValue('select[data-field="assignee"]')) === "octo");
+    // Send to GitHub in the footer while the panel is behind another tab: the same panel comes back.
+    await page.click('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"]');
+    await sleep(200);
+    const reqBefore = (await pending()).map((r) => r.id).join();
+    await page.click(`${SPLIT} [data-tb-split-main]`);
+    await sleep(400);
+    check("…Send to GitHub with the panel hidden brings the same panel back (no new request, picks kept)",
+      await page.evaluate(() => getComputedStyle(document.querySelector("[data-tb-create-panel]")).display === "block") &&
+      (await pending()).map((r) => r.id).join() === reqBefore && (await fm.inputValue('select[data-field="assignee"]')) === "octo");
+    await fm.selectOption('select[data-field="assignee"]', "");
     const tabP = ctx.waitForEvent("page", { predicate: (pg) => pg.url().includes("options.html#integrations"), timeout: 5000 }).catch(() => null);
     await fm.click("#more");
     await fm.click("#manageInt");
@@ -791,24 +851,19 @@ try {
     check("…the header's ✕ closes the panel", await page.evaluate(() => !document.querySelector("[data-tb-create-panel]")));
   }
 
-  // ══ 8c. Room below the button → the panel drops down ══════════════════════
-  await page.addStyleTag({ content: "#tracebug-quick-bug-modal .tb-qb-footer { order: -1 !important; }" }).then((h) => h.evaluate((el) => { el.id = "__footerTop"; }));
-  await sleep(300);
+  // ══ 8c. The tab's ✕ closes the panel ═════════════════════════════════════
   await page.click(`${SPLIT} [data-tb-split-main]`);
   const fd = await panelFrame();
   if (fd) {
-    await sleep(400);
-    const g = await page.evaluate((sel) => {
-      const sl = document.querySelector("[data-tb-create-panel]");
-      return { place: sl.getAttribute("data-place"), below: sl.getBoundingClientRect().top >= document.querySelector(sel).getBoundingClientRect().bottom - 1 };
-    }, SPLIT);
-    check("8c. with the button near the top, the panel opens downward", g.place === "down" && g.below, JSON.stringify(g));
-    check("…and Create still arms there",
-      await fd.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false));
-    await page.keyboard.press("Escape");
+    await page.click("#tracebug-quick-bug-modal [data-tb-tracker-tab] .tb-qb-tab-x");
     await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
-  } else check("8c. with the button near the top, the panel opens downward", false, "no panel");
-  await page.evaluate(() => document.getElementById("__footerTop").remove());
+    const after = await page.evaluate(() => ({
+      gone: !document.querySelector("[data-tb-create-panel]") && !document.querySelector("[data-tb-tracker-tab]"),
+      back: !!document.querySelector('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"].tb-qb-tab-active'),
+    }));
+    check("8c. the GitHub tab's ✕ closes the panel and the tab, back on the tab that was open", after.gone && after.back, JSON.stringify(after));
+    check("…nothing was filed by closing it", await (async () => { await sleep(400); return (await pending()).length === 0; })());
+  } else check("8c. the GitHub tab's ✕ closes the panel", false, "no panel");
 
   // ══ 8d. A ~400 px tall window: the panel scrolls inside, Create stays reachable ═
   await page.setViewportSize({ width: 1280, height: 400 });
@@ -823,9 +878,9 @@ try {
       return { top: Math.round(r.top), bottom: Math.round(r.bottom), vh: innerHeight };
     });
     check("8d. at 400 px tall the panel stays inside the window", g4.top >= 0 && g4.bottom <= g4.vh, JSON.stringify(g4));
-    check("…and scrolls inside (content taller than the panel)",
-      await fs4.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 4),
-      await fs4.evaluate(() => `${document.documentElement.scrollHeight} > ${window.innerHeight}`));
+    check("…and its form scrolls inside, header and Create row fixed",
+      await fs4.evaluate(() => { const b = document.querySelector(".pbody"); return b.scrollHeight > b.clientHeight + 4 && document.documentElement.scrollHeight <= window.innerHeight + 1; }),
+      await fs4.evaluate(() => { const b = document.querySelector(".pbody"); return `${b.scrollHeight} > ${b.clientHeight}`; }));
     check("…with Create reachable: it arms and takes focus",
       await fs4.waitForFunction(() => !document.getElementById("send").disabled && document.activeElement && document.activeElement.id === "send", null, { timeout: 6000 }).then(() => true, () => false));
     await page.keyboard.press("Escape");
@@ -842,11 +897,14 @@ try {
   const box = f9 ? await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").getBoundingClientRect().width) : 0;
   const fits = f9 ? await f9.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1) : false;
   check("9. at 360 px the panel fits its width without sideways scrolling", !!f9 && box > 0 && box <= 360 && fits, `frame ${box}px`);
+  const g9 = f9 ? await page.evaluate(dockGeometry) : {};
+  check("…docked full width in the right column's place, never over the footer buttons",
+    g9.inside && g9.aboveFooter && g9.leftHidden && g9.flush, JSON.stringify(g9));
   if (f9) {
     await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
     await f9.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 5000 }).catch(() => {});
     check("…and Create arms once it is scrolled fully into view", await armed(f9),
-      JSON.stringify(await page.evaluate(() => { const sl = document.querySelector("[data-tb-create-panel]"); const r = sl.querySelector("iframe").getBoundingClientRect(); const sh = document.querySelector("#tracebug-quick-bug-modal .tb-qb-shell").getBoundingClientRect(); return { place: sl.getAttribute("data-place"), top: r.top, bottom: r.bottom, h: r.height, shellTop: sh.top, shellBottom: sh.bottom, vh: innerHeight }; })) +
+      JSON.stringify(await page.evaluate(dockGeometry)) +
       " " + (await f9.isVisible("#toWindowBox") ? await f9.textContent("#toWindowWhy") : ""));
   }
   await page.setViewportSize({ width: 1280, height: 800 });

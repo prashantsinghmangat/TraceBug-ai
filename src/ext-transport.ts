@@ -56,6 +56,13 @@ const EMPTY: IntegrationStatus = { github: false, linear: false, slack: false, a
 const DEFAULT_TRACKERS: readonly DefaultTracker[] = ["github", "linear", "slack"];
 
 let _status: IntegrationStatus = { ...EMPTY };
+const _statusListeners = new Set<() => void>();
+
+/** Called after every status update (an open ticket redraws its send button). */
+export function onIntegrationStatusChange(cb: () => void): () => void {
+  _statusListeners.add(cb);
+  return () => { _statusListeners.delete(cb); };
+}
 
 /**
  * Called from the page bridge (`window.TraceBugSDK.setIntegrationStatus`) with
@@ -65,6 +72,7 @@ let _status: IntegrationStatus = { ...EMPTY };
 export function setIntegrationStatus(status: Partial<IntegrationStatus> | null | undefined): void {
   if (!status || typeof status !== "object") {
     _status = { ...EMPTY };
+    _notifyStatus();
     return;
   }
   _status = {
@@ -78,6 +86,11 @@ export function setIntegrationStatus(status: Partial<IntegrationStatus> | null |
     trackerAttention: status.trackerAttention === true,
     trackerConnected: status.trackerConnected === true,
   };
+  _notifyStatus();
+}
+
+function _notifyStatus(): void {
+  _statusListeners.forEach((cb) => { try { cb(); } catch { /* one listener can't stop the rest */ } });
 }
 
 export function getIntegrationStatus(): IntegrationStatus {

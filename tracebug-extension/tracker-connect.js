@@ -83,7 +83,7 @@
    * ui.code(userCode)      — show the code, large and selectable (null hides it)
    * ui.reopen(on)          — show/hide the "Reopen GitHub" button
    * ui.final(code)         — the code ended (access_denied, expired_token, …): relabel Connect
-   * ui.done(account)       — connected
+   * ui.done(account, res)  — connected (res.installing: GitHub's window went on to Install)
    */
   function connect(t, ui) {
     return requestPermissions(t.connectPermissions).then(async (granted) => {
@@ -128,7 +128,7 @@
       }
       ui.code(null);
       ui.reopen(false);
-      ui.done(res.account || "");
+      ui.done(res.account || "", res);
     }, Math.max(1, seconds) * 1000);
   }
 

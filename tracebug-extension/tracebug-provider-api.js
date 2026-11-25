@@ -953,6 +953,11 @@ var TraceBugProviderAPI = (() => {
       const d = await parseJsonOrThrow(res, "GitHub", "tracker");
       return d.login || "";
     },
+    async hasInstallation(auth, signal) {
+      const res = await ghFetch(auth, `${GH_API}/user/installations?per_page=1`, signal);
+      const d = await parseJsonOrThrow(res, "GitHub", "tracker");
+      return (typeof d.total_count === "number" ? d.total_count : (d.installations || []).length) > 0;
+    },
     async listContainers(auth, signal) {
       const notes = { orgIds: /* @__PURE__ */ new Set() };
       let list;

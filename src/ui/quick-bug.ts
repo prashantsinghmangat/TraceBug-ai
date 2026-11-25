@@ -50,7 +50,7 @@ import {
   createTrackerIssue, hasIntegration,
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
 } from "../integrations/tracker-client";
-import { isExtensionMode, getBoundShortcut, getIntegrationStatus } from "../ext-transport";
+import { isExtensionMode, getBoundShortcut, getIntegrationStatus, onIntegrationStatusChange } from "../ext-transport";
 import { brandLogo } from "./brand-logos";
 import { runExportPlugins } from "../plugin-system";
 import { isFailedRequest, requestStatusLabel } from "../request-status";
@@ -125,7 +125,7 @@ function _sendButtonHtml(target: _SendTarget, primary: boolean, extra: { attrs?:
   if (target === "github") {
     const action = _githubConfigured() ? "open-github" : "github";
     const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
-    return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${extra.inner ?? `${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}`}</button>`;
+    return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${extra.inner ?? `${brandLogo("github", 14)} ${_githubButtonLabel()}`}</button>`;
   }
   if (target === "linear") return `<button data-action="linear" class="${cls}"${role}${attrs}>${extra.inner ?? `${brandLogo("linear", 14)} ${_linearButtonLabel()}`}</button>`;
   return `<button data-action="slack" class="${cls}"${role}${attrs}>${extra.inner ?? `${brandLogo("slack", 14)} ${_slackButtonLabel()}`}</button>`;
@@ -153,6 +153,12 @@ function _panelTarget(primary: _SendTarget): "github" | "linear" | null {
  * to it.
  */
 function _primarySendHtml(): string {
+  const html = _primarySendInner();
+  // Marked so _refreshPrimarySend can find and redraw it.
+  return html.replace(/^<(\w+) /, `<$1 data-tb-primary-send data-tb-sig="${_sendSig(html)}" `);
+}
+
+function _primarySendInner(): string {
   const target = _primaryTarget();
   const panel = isExtensionMode() ? _panelTarget(target) : null;
   if (!panel) return _sendButtonHtml(target, true);
@@ -167,7 +173,7 @@ function _primarySendHtml(): string {
     ? _sendButtonHtml(target, true, { attrs })
     : _sendButtonHtml(panel, true, {
       attrs,
-      inner: "Connect a tracker",
+      inner: `${_ic("plug")} Connect a tracker`,
     });
   // The status (tooltip, attention dot) rides on the one button.
   const withTip = main.replace(/ title="[^"]*"/, "").replace(/^<button /, `<button title="${escapeHtml(tip + " (Alt+↓: choose where to send)")}" `)
@@ -1252,9 +1258,7 @@ function _openModal(
   // Open in GitHub — real send when configured (BYO-token, page/SDK
   // localStorage or the extension's own settings), else the page/SDK-mode
   // prefilled-URL flow (no token needed, requires `_githubRepo` from config).
-  const openGhBtn = modal.querySelector('[data-action="open-github"]');
-  if (openGhBtn && _githubConfigured()) {
-    openGhBtn.addEventListener("click", async () => {
+  const openGhHandler = async () => {
       const { title, description } = getFilingDraft();
       const report = _reportFromDraft(title, description);
       if (!report) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
@@ -1278,8 +1282,7 @@ function _openModal(
       } else {
         showToast("Failed to open GitHub \u2014 use Copy instead", root);
       }
-    });
-  }
+  };
 
   // Copy actions. Only present when the primary button isn't already bound to
   // this data-action (unconfigured state), or via the more-menu's own
@@ -1819,20 +1822,21 @@ ${report.steps}` : userDesc)
   });
 
   // Tab switching — show one panel at a time. role=tabpanel via [hidden].
-  const tabButtons = modal.querySelectorAll<HTMLButtonElement>("[data-tab]");
-  const tabPanels = modal.querySelectorAll<HTMLElement>("[data-panel]");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const which = btn.dataset.tab!;
-      tabButtons.forEach((b) => b.classList.toggle("tb-qb-tab-active", b === btn));
-      tabPanels.forEach((p) => {
-        const active = p.dataset.panel === which;
-        p.classList.toggle("tb-qb-panel-active", active);
-        if (active) p.removeAttribute("hidden"); else p.setAttribute("hidden", "");
-      });
-      // Clear the new-content dot once a tab is opened.
-      btn.querySelector(".tb-qb-tab-dot")?.remove();
+  // Delegated, with the tabs looked up on each click: the extension adds a tab
+  // of its own (the docked Create panel), which has no panel here — while it
+  // is active every panel is hidden and its frame covers the area.
+  modal.querySelector(".tb-qb-tabstrip")?.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest?.<HTMLButtonElement>("[data-tab]");
+    if (!btn) return;
+    const which = btn.dataset.tab!;
+    modal.querySelectorAll<HTMLButtonElement>(".tb-qb-tabstrip [data-tab]").forEach((b) => b.classList.toggle("tb-qb-tab-active", b === btn));
+    modal.querySelectorAll<HTMLElement>("[data-panel]").forEach((p) => {
+      const active = p.dataset.panel === which;
+      p.classList.toggle("tb-qb-panel-active", active);
+      if (active) p.removeAttribute("hidden"); else p.setAttribute("hidden", "");
     });
+    // Clear the new-content dot once a tab is opened.
+    btn.querySelector(".tb-qb-tab-dot")?.remove();
   });
 
   // ── Network tab filters ───────────────────────────────────────────────
@@ -1889,7 +1893,7 @@ ${report.steps}` : userDesc)
   }
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
-  modal.querySelector('[data-action="linear"]')!.addEventListener("click", async () => {
+  const linearHandler = async () => {
     const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
@@ -1905,10 +1909,10 @@ ${report.steps}` : userDesc)
     } else {
       showToast("Failed to open Linear", root);
     }
-  });
+  };
 
   // Slack — copy Slack-formatted bug summary to clipboard.
-  modal.querySelector('[data-action="slack"]')!.addEventListener("click", async () => {
+  const slackHandler = async () => {
     const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
@@ -1920,6 +1924,28 @@ ${report.steps}` : userDesc)
     // Deliberately NOT closing, and NOT clearing the draft. Copying is not
     // filing: the user may paste it, decide it needs an edit, and copy again -
     // or copy AND export. Closing here destroyed an unsaved ticket.
+  };
+
+  // The send buttons, delegated: the footer's main one is redrawn when a
+  // tracker connects (_refreshPrimarySend). Each action is in the footer once.
+  modal.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest?.('[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
+    if (!btn || !modal.contains(btn)) return;
+    const action = btn.getAttribute("data-action");
+    // The docked Create panel is already open (maybe behind another tab):
+    // bring its tab forward, with what was picked, rather than start over.
+    if (action !== "slack" && _showDockedPanel()) return;
+    if (action === "open-github") { if (_githubConfigured()) void openGhHandler(); }
+    else if (action === "linear") void linearHandler();
+    else void slackHandler();
+  });
+
+  // Connected from the panel, Settings or another tab: the ticket's main
+  // button follows without reopening (the status arrives via data-tb-caps).
+  const offStatus = onIntegrationStatusChange(() => {
+    if (!modal.isConnected) { offStatus(); return; }
+    const fresh = _refreshPrimarySend(modal);
+    if (fresh?.getAttribute("data-action") === "github") fresh.addEventListener("click", copyGhBtnHandler);
   });
 
   // AI tab — Configure (BYO-key modal) + Generate (run analysis). Delegated so
@@ -2508,20 +2534,58 @@ function _wireSendSplit(modal: HTMLElement): void {
     const btn = (e.target as HTMLElement).closest?.('[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
     if (btn && e.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
   }, true);
-  modal.querySelectorAll<HTMLElement>("[data-tb-split-main]").forEach((b) => {
-    b.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown" && e.altKey) {
-        e.preventDefault();
-        _openSendPanel(modal, "picker");
-      }
-    });
+  modal.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" && e.altKey && (e.target as HTMLElement).closest?.("[data-tb-split-main]")) {
+      e.preventDefault();
+      _openSendPanel(modal, "picker");
+    }
   });
+}
+
+/** The extension's Create panel is open: show its tab, focus it → true. */
+function _showDockedPanel(): boolean {
+  const frame = document.querySelector<HTMLIFrameElement>("[data-tb-create-panel] iframe");
+  if (!frame) return false;
+  document.querySelector<HTMLElement>("[data-tb-tracker-tab] [data-tab]")?.click();
+  try { frame.focus(); } catch { /* ignore */ }
+  return true;
+}
+
+/**
+ * Redraw the footer's main send button from the current integration status
+ * (nothing connected → "Connect a tracker"; connected → "Send to GitHub").
+ * Unchanged markup is left alone. Focus and the open panel's aria-expanded
+ * carry over. Returns the new main button, or null when nothing changed.
+ */
+function _refreshPrimarySend(modal: HTMLElement): HTMLElement | null {
+  const old = modal.querySelector<HTMLElement>("[data-tb-primary-send]");
+  if (!old) return null;
+  if (old.dataset.tbSig === _sendSig(_primarySendInner())) return null;
+  const html = _primarySendHtml();
+  const hadFocus = old.contains(document.activeElement);
+  const tmp = document.createElement("div");
+  setInnerHTML(tmp, html);
+  const fresh = tmp.firstElementChild as HTMLElement | null;
+  if (!fresh) return null;
+  old.replaceWith(fresh);
+  if (document.querySelector("[data-tb-create-panel]")) {
+    fresh.querySelectorAll("[aria-haspopup]").forEach((b) => b.setAttribute("aria-expanded", "true"));
+  }
+  const main = (fresh.matches("button") ? fresh : fresh.querySelector("button")) as HTMLElement | null;
+  if (hadFocus && main) { try { main.focus(); } catch { /* ignore */ } }
+  return main;
+}
+
+/** A short signature of the main button's markup, to skip no-op redraws. */
+function _sendSig(html: string): string {
+  let h = 0;
+  for (let i = 0; i < html.length; i++) h = (h * 31 + html.charCodeAt(i)) | 0;
+  return String(h);
 }
 
 /** Alt+Down: open the panel tracker's Create panel on the picker (or focus it if open). */
 function _openSendPanel(modal: HTMLElement, focus: "create" | "picker"): void {
-  const open = document.querySelector<HTMLIFrameElement>("[data-tb-create-panel] iframe");
-  if (open) { open.focus(); return; }
+  if (_showDockedPanel()) return;
   const target = modal.querySelector<HTMLElement>("[data-tb-split-main]")?.dataset.target;
   const btn = target === "github" ? modal.querySelector<HTMLButtonElement>('[data-action="open-github"]')
     : target === "linear" ? modal.querySelector<HTMLButtonElement>('[data-action="linear"]') : null;
@@ -3625,7 +3689,7 @@ function _injectStyles(): void {
     }
     /* The dim + blur sit on a layer BEHIND the dialog, not on the overlay
        itself: a filter on an ancestor makes IntersectionObserver v2 report the
-       in-page Create panel (an extension frame in the footer) as "not
+       in-page Create panel (an extension frame in the ticket) as "not
        visible", and its Create button only arms when visible. Same look. */
     #${MODAL_ID}.tb-qb-overlay::before {
       content: ""; position: absolute; inset: 0; z-index: 0;
@@ -3893,6 +3957,25 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-net-detail-url { font-size:11px; color:var(--tb-text-secondary); word-break:break-all; padding-bottom:6px; }
     #${MODAL_ID} .tb-qb-net-snippet pre { margin:0; padding:8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); font-size:10px; color:var(--tb-code-text); max-height:120px; overflow:auto; white-space:pre-wrap; }
     /* Tab notification dots */
+    /* The extension's Create panel, docked as a tab of the right column. */
+    #${MODAL_ID} .tb-qb-tab-tracker { display:inline-flex; align-items:center; flex:none; }
+    #${MODAL_ID} .tb-qb-tab-tracker .tb-qb-tab { padding-right:6px; }
+    #${MODAL_ID} .tb-qb-tab-x { display:inline-grid; place-items:center; width:22px; height:22px; margin:0 6px 0 0; padding:0; border:0; border-radius:6px; background:transparent; color:var(--tb-text-muted); cursor:pointer; }
+    #${MODAL_ID} .tb-qb-tab-x:hover { background:var(--tb-bg-primary); color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-tab-x:focus-visible { outline:2px solid #2563EB; outline-offset:1px; }
+    /* One more tab: tighter tabs, and the strip scrolls without a scrollbar. */
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip { padding:0 6px; scrollbar-width:none; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip::-webkit-scrollbar { display:none; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tab { padding:14px 9px 12px; gap:5px; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tab-tracker .tb-qb-tab { padding-right:4px; }
+    /* Narrow: the columns stack, so the right one takes the body while the
+       panel is open, at nearly the window's height; the ticket scrolls, and
+       its footer stays below the panel (never under it). */
+    @media (max-width: 920px) {
+      #${MODAL_ID}[data-tb-docked] .tb-qb-shell { overflow-y:auto; overscroll-behavior:contain; }
+      #${MODAL_ID}[data-tb-docked] .tb-qb-left { display:none; }
+      #${MODAL_ID}[data-tb-docked] .tb-qb-body { flex:0 0 auto; height:calc(92vh - 40px); min-height:360px; grid-template-rows:minmax(0, 1fr); }
+    }
     #${MODAL_ID} .tb-qb-tab-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--tb-accent); margin-left:4px; vertical-align:middle; }
     #${MODAL_ID} .tb-qb-net-time { font-size:11px; color:var(--tb-text-muted); margin-left:auto; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-net-url { font-size:12px; color:var(--tb-text-secondary); font-family:var(--tb-font-mono); word-break:break-all; line-height:1.5; }

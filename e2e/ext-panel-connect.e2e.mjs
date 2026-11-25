@@ -117,6 +117,7 @@ async function launch(ext, label) {
     if (req.method() === "POST" && p === `/repos/${REPO}/issues`) {
       if (state.createFail) return route.fulfill(state.createFail);
       state.posts++;
+      state.lastBody = JSON.parse(req.postData() || "{}");
       return json(route, { html_url: `https://github.com/${REPO}/issues/7`, number: 7 });
     }
     return json(route, { message: "Not Found" }, 404);
@@ -151,6 +152,8 @@ async function launch(ext, label) {
 async function panelOnPage(ctx, sw) {
   const page = await ctx.newPage();
   await page.goto(SITE, { waitUntil: "load" });
+  // A fresh profile opens welcome.html in a new tab; keep this one in front.
+  await page.bringToFront();
   await sleep(300);
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob });
@@ -208,8 +211,9 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("A1. not connected: Send to GitHub opens the in-page panel (no window)", !!frame && !(await Promise.race([winP, sleep(500).then(() => null)])));
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
-    check('…from a "Connect a tracker" button (nothing connected yet)',
-      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "?")).trim().endsWith("Connect a tracker"),
+    check('…from a "Connect a tracker" button with a plug icon (nothing connected yet)',
+      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "?")).trim().endsWith("Connect a tracker") &&
+      !!(await page.$("#tracebug-quick-bug-modal [data-tb-split-main] svg.tb-lu")),
       (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]").catch(() => "none")).trim());
     check('…offering "Connect GitHub" in the panel, with focus on it', (await frame.textContent("#connect")).trim() === "Connect GitHub" &&
       await frame.evaluate(() => document.activeElement && document.activeElement.id === "connect"));
@@ -234,11 +238,37 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("…on its own screen: the Connect screen gone, \"Waiting for GitHub…\", the header says \"Connecting…\"",
       !(await frame.isVisible("#connectBox")) && (await frame.textContent("#deviceWait")).trim() === "Waiting for GitHub…" &&
       (await frame.textContent("#account")).trim() === "Connecting…" && await frame.isVisible("#cancelDevice"));
+    check("…with the two steps, \"1 Sign in\" current", await frame.isVisible("#deviceSteps") &&
+      /^1\s*Sign in$/.test((await frame.textContent("#deviceSteps .cur")).trim()));
+    await frame.click("#copyCode");
+    await sleep(300);
+    check("…Copy doesn't add a second \"Code copied\" line under the subtitle (#5)",
+      (await frame.textContent("#panelMsg")).trim() === "" && /It's copied/.test(await frame.textContent("#deviceHint")),
+      (await frame.textContent("#panelMsg")).trim());
     state.installed = false;
     state.approve = true;
-    await frame.waitForSelector("#installBox:not([hidden])", { timeout: 12000 }).catch(() => {});
-    check("A3b. signed in, app on no repository: the panel offers \"Install TraceBug on GitHub\" + Refresh",
-      await frame.isVisible("#installApp") && await frame.isVisible("#refreshRepos") &&
+    // Pass 2 #2: the app is on no repository → the SAME window goes on to Install.
+    await frame.waitForSelector("#installingBox:not([hidden])", { timeout: 12000 }).catch(() => {});
+    check("A3b. signed in, app on no repository: step 2 \"Choose repositories\" in the panel (✓ Sign in)",
+      await frame.isVisible("#installingBox") && /Choose repositories/.test(await frame.textContent("#installingBox .steps .cur")) &&
+      /Sign in/.test(await frame.textContent("#installingBox .steps .done")) && !(await frame.isVisible("#installBox")));
+    const chain = await sw.evaluate(async () => {
+      const id = self.__popupIds[0];
+      const win = await chrome.windows.get(id, { populate: true }).catch(() => null);
+      const t = win && win.tabs && win.tabs[0];
+      return { opened: self.__popups.length, open: !!win, url: t ? (t.pendingUrl || t.url) : "" };
+    });
+    check("…in the same GitHub window, sent on to the install page (no second window)",
+      chain.opened === 1 && chain.open && chain.url === "https://github.com/apps/tracebug-dev/installations/new", JSON.stringify(chain));
+    check("…and the ticket's button switched to \"Send to GitHub\" with the GitHub mark, without reopening (#3)",
+      /Send to GitHub/.test(await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]")) &&
+      !!(await page.$("#tracebug-quick-bug-modal [data-tb-split-main] svg.tb-brand")),
+      (await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]")).trim());
+    // The user closes GitHub's window before choosing: the Install screen is the fallback.
+    await sw.evaluate(() => chrome.windows.remove(self.__popupIds[0]));
+    await frame.waitForSelector("#installBox:not([hidden])", { timeout: 8000 }).catch(() => {});
+    check("A3c. window closed between the steps: the fallback offers \"Install on GitHub\" + Refresh",
+      await frame.isVisible("#installApp") && await frame.isVisible("#refreshRepos") && !(await frame.isVisible("#installingBox")) &&
       (await frame.textContent("#installApp")).trim() === "Install on GitHub");
     await frame.click("#installApp");
     await sleep(800);
@@ -284,7 +314,88 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     if (armed) await frame.click("#send");
     await frame.waitForSelector("#doneBox:not([hidden])", { timeout: 10000 }).catch(() => {});
     check("A5. …and Create files the issue there", state.posts === 1 && /created/i.test(await frame.textContent("#doneBox")), `posts=${state.posts}`);
+    check("…with Assignee \"—\", no assignee is sent (#6)", !!state.lastBody && !("assignees" in state.lastBody) &&
+      JSON.stringify(state.lastBody.labels) === '["bug"]', JSON.stringify(state.lastBody && { labels: state.lastBody.labels, assignees: state.lastBody.assignees }));
     check("…the ticket never left the page", await page.locator("#tracebug-quick-bug-modal").isVisible());
+
+    // Disconnect → the ticket's button goes back to "Connect a tracker" by itself.
+    await frame.click("#cancel"); // Done
+    await sleep(300);
+    // Create opened the issue in a new tab: back to the ticket's tab (a
+    // background tab draws no frames, so clicks into a new frame go astray).
+    await page.bringToFront();
+    const again = await (async () => {
+      await page.locator("#tracebug-quick-bug-modal [data-tb-split-main]").click();
+      for (let i = 0; i < 50; i++) {
+        const f = page.frames().find((x) => x.url().includes("/create-issue.html"));
+        if (f) return f;
+        await sleep(100);
+      }
+      return null;
+    })();
+    if (!again) throw new Error("no panel frame (A6)");
+    await again.waitForSelector("#more:not([hidden])", { timeout: 8000 });
+    await again.waitForSelector("#fields fieldset", { timeout: 8000 }).catch(() => {});
+    await sleep(300);
+    await again.click("#more");
+
+    await again.waitForSelector("#disconnect:not([hidden])", { state: "visible", timeout: 5000 });
+    await again.click("#disconnect");
+    await again.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
+    await page.waitForFunction(() => /Connect a tracker/.test(document.querySelector("#tracebug-quick-bug-modal [data-tb-split-main]").textContent), null, { timeout: 5000 }).catch(() => {});
+    check("A6. after Disconnect the open ticket says \"Connect a tracker\" again (live)",
+      /Connect a tracker/.test(await page.textContent("#tracebug-quick-bug-modal [data-tb-split-main]")));
+    // Already installed (a returning user): the window closes after Authorize — one step.
+    state.approve = false;
+    await again.click("#connect");
+    await again.waitForSelector("#deviceBox:not([hidden])", { timeout: 8000 });
+    // GitHub's window for this code (opened once the code is copied).
+    await sw.evaluate(async (n) => { for (let i = 0; i < 50 && self.__popups.length <= n; i++) await new Promise((r) => setTimeout(r, 100)); },
+      2);
+    const popsBefore = await sw.evaluate(() => self.__popups.length);
+    state.approve = true;
+    await again.waitForFunction(() => !document.getElementById("pickBox").hidden && !document.getElementById("repoField").hidden &&
+      /Signed in/.test(document.getElementById("account").textContent), null, { timeout: 12000 }).catch(() => {});
+    await sleep(500);
+    const shortcut = await sw.evaluate(async (n) => {
+      const id = self.__popupIds[n - 1];
+      const win = await chrome.windows.get(id).catch(() => null);
+      return { open: !!win, opened: self.__popups.length };
+    }, popsBefore);
+    check("A6b. already installed: GitHub's window closes after Authorize, straight to the form (no step 2)",
+      !shortcut.open && shortcut.opened === popsBefore && await again.isVisible("#repoField") &&
+      !(await again.isVisible("#installingBox")) && !(await again.isVisible("#installBox")), JSON.stringify(shortcut));
+  } finally {
+    await ctx.close();
+  }
+}
+
+// ═══ A7. One window: Authorize, then Install, then it closes by itself ════
+{
+  const { ctx, sw, state } = await launch(withGrantedHostAccess(EXT_SRC, "panel-connect-chain"), "a7");
+  try {
+    const { frame } = await panelOnPage(ctx, sw);
+    if (!frame) throw new Error("no panel frame");
+    await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
+    state.installed = false;
+    await frame.click("#connect");
+    await frame.waitForSelector("#deviceBox:not([hidden])", { timeout: 8000 });
+    state.approve = true;
+    await frame.waitForSelector("#installingBox:not([hidden])", { timeout: 12000 }).catch(() => {});
+    check("A7. sign-in → install chain: step 2 shows while GitHub's window is on the install page", await frame.isVisible("#installingBox"));
+    // The user installs; GitHub sends the window to the app's Setup URL.
+    state.installed = true;
+    const tabId = await sw.evaluate(async () => {
+      const [t] = await chrome.tabs.query({ windowId: self.__popupIds[0] });
+      return t ? t.id : null;
+    });
+    await sw.evaluate((id) => chrome.tabs.update(id, { url: "https://github.com/apps/tracebug-dev?setup_action=install&installation_id=9" }), tabId);
+    await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 12000 }).catch(() => {});
+    const left = await sw.evaluate(() => chrome.windows.get(self.__popupIds[0]).then(() => true, () => false));
+    check("…GitHub reports the install: the worker closes that window, the panel lists the repository",
+      !left && !(await frame.isVisible("#installingBox")) &&
+      await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO));
+    check("…and only one GitHub window was ever opened", (await sw.evaluate(() => self.__popups.length)) === 1);
   } finally {
     await ctx.close();
   }
@@ -358,7 +469,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     const ls = await page.evaluate(() => JSON.stringify(localStorage));
     check("C5. no token reached the page: messages, DOM, localStorage",
       ![PAT, PAT_NOSCOPE, PAT_BAD].some((t) => msgs.some((m) => m.includes(t)) || dom.includes(t) || ls.includes(t)) &&
-      msgs.every((m) => /"type":"tb-panel-(ready|size|close)"/.test(m) || !/tb-panel/.test(m)), `${msgs.length} messages`);
+      msgs.every((m) => /^\{"type":"tb-panel-(ready|close)"\}$|^\{"type":"tb-panel-tracker","tracker":"(github|linear)"\}$/.test(m) || !/tb-panel/.test(m)),
+      `${msgs.length} messages: ${msgs.filter((m) => /tb-panel/.test(m)).join(" ")}`);
     await frame.click("#more"); // Disconnect is in the ⋯ menu
     await frame.click("#disconnect");
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});

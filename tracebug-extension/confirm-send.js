@@ -151,7 +151,26 @@ const panel = {
   armedBy: "",           // "io" (v2 said visible) | "probe" (content script's check)
   connecting: false,     // a sign-in is under way (the header says "Connecting…")
   switching: false,      // "Switch to a personal token": the token replaces the sign-in
+  installing: false,     // step 2: GitHub's window is on the install page
 };
+
+// ── Focus without a ring for pointer users ────────────────────────────────
+// A screen that opens after a click (Connect, Done) still takes focus, so the
+// keyboard carries on from there, but shows no ring until a key is pressed.
+// Keyboard users keep the ring.
+let lastInput = "keyboard";
+document.addEventListener("pointerdown", () => { lastInput = "pointer"; }, true);
+document.addEventListener("keydown", () => {
+  lastInput = "keyboard";
+  document.documentElement.classList.remove("quiet");
+}, true);
+
+function quietFocus(el) {
+  if (!el) return;
+  if (lastInput !== "pointer") { el.focus(); return; }
+  document.documentElement.classList.add("quiet");
+  try { el.focus({ focusVisible: false }); } catch { el.focus(); }
+}
 
 function show(id, on) {
   const el = $(id);
@@ -313,7 +332,10 @@ async function selectTracker(id) {
   show("switchSignIn", t.id === "github" && t.connected && t.via === "token" && !!t.canConnect);
   syncMenu(t);
   show("installBox", false);
+  if (!panel.installing) show("installingBox", false);
   show("repoNote", false);
+  // The ticket's tab is named after the tracker (an id, nothing else).
+  if (EMBED) postParent({ type: "tb-panel-tracker", tracker: t.id });
 
   if (!t.connected) {
     show("pickBox", false);
@@ -545,7 +567,11 @@ async function loadContainers() {
   });
   // Signed in to the GitHub App but it's on no repository: offer the install.
   const noInstall = !panel.items.length && t.id === "github" && t.via === "oauth" && !!$("installBox");
-  show("installBox", noInstall);
+  if (panel.items.length) panel.installing = false;
+  // Step 2 is still open in GitHub's window: wait there; the Install screen
+  // is only the fallback once that window has gone.
+  show("installingBox", noInstall && !!panel.installing);
+  show("installBox", noInstall && !panel.installing);
   // U4: not installed → Install + Refresh only; the repository field, its
   // link and the files line come back once there is something to pick.
   show("repoField", !noInstall);
@@ -967,7 +993,7 @@ function watchGitHubWindow() {
   const tick = async () => {
     if (decided || !panel.installWatch) return;
     const st = await send("tb:tracker:install-state", { tracker: "github" });
-    if (st && st.open === false) { await loadContainers(); return; }
+    if (st && st.open === false) { panel.installing = false; await loadContainers(); return; }
     if (Date.now() - started < 10 * 60 * 1000) panel.installTimer = setTimeout(tick, 1500);
   };
   panel.installTimer = setTimeout(tick, 1500);
@@ -1012,6 +1038,9 @@ async function onConnect() {
     $("openDevice").dataset.url = res.verificationUri || "";
     // The panel: the code is its own screen. The window keeps it in the Connect box.
     if (EMBED) { show("connectBox", false); waitMsg("Waiting for GitHub…"); }
+    // GitHub: sign in, then (if the app is on no repository yet) choose
+    // repositories in the same window.
+    show("deviceSteps", t.id === "github");
     show("deviceBox", true);
     // The code is selectable and has its own Copy button if this fails.
     const copied = await copyText(res.userCode || "");
@@ -1047,6 +1076,7 @@ function waitMsg(text) {
 function cancelDevice() {
   const t = panel.current;
   stopPolling();
+  panel.installing = false;
   if (t) selectTracker(t.id);
 }
 
@@ -1080,9 +1110,13 @@ function schedulePoll(id, seconds) {
     }
     show("deviceBox", false);
     panel.connecting = false;
-    bringToFront();
-    panelMsg("Connected" + (res.account ? " as " + res.account : "") + ".");
+    // Step 2: the worker sent GitHub's window on to the install page. Stay out
+    // of its way; the list loads when it closes.
+    panel.installing = !!res.installing && EMBED && !!$("installingBox");
+    if (!res.installing) bringToFront();
+    panelMsg(panel.installing ? "" : "Connected" + (res.account ? " as " + res.account : "") + ".");
     await refreshAfterAuthChange(id);
+    if (panel.installing) watchGitHubWindow();
   }, Math.max(1, seconds) * 1000);
 }
 
@@ -1161,7 +1195,7 @@ function onSwitchToken() {
 }
 
 function wirePanel() {
-  $("tracker").addEventListener("change", () => selectTracker($("tracker").value));
+  $("tracker").addEventListener("change", () => { panel.installing = false; selectTracker($("tracker").value); });
   $("connect").addEventListener("click", onConnect);
   $("disconnect").addEventListener("click", onDisconnect);
   if ($("settingsLink")) $("settingsLink").addEventListener("click", (e) => {
@@ -1211,7 +1245,11 @@ function wirePanel() {
     try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#integrations") }); } catch {}
   });
   $("copyCode").addEventListener("click", async () => {
-    if (await copyText($("userCode").textContent || "")) { panelMsg("Code copied — press " + pasteKeys() + " on GitHub."); return; }
+    if (await copyText($("userCode").textContent || "")) {
+      // The panel's subtitle already says it's copied; the window says it here.
+      if (!EMBED) panelMsg("Code copied — press " + pasteKeys() + " on GitHub.");
+      return;
+    }
     selectCode();
     panelMsg(copyFailedText("The code is selected: press " + (pasteKeys() === "⌘V" ? "⌘C" : "Ctrl+C") + "."), true);
   });
@@ -1349,7 +1387,7 @@ function showDone(tracker, r) {
   $("cancel").textContent = EMBED ? "Done" : "Close";
   $("cancel").disabled = false;
   syncFooter();
-  $("cancel").focus();
+  quietFocus($("cancel"));
 }
 
 // ── Copy / Download screenshot, Download recording (panel, GitHub) ─────────
@@ -1481,12 +1519,6 @@ function connectPanelPort(tries) {
   });
 }
 
-function watchSize() {
-  const report = () => postParent({ type: "tb-panel-size", height: Math.ceil(document.documentElement.scrollHeight) });
-  try { new ResizeObserver(report).observe(document.body); } catch {}
-  report();
-}
-
 /** Create arms only after the frame has been fully visible for ARM_MS. With
  *  IntersectionObserver v2 (Chrome) "visible" also means not covered,
  *  faded or transformed by the page; elsewhere it means fully on screen. */
@@ -1596,7 +1628,7 @@ window.addEventListener("focus", () => { if (EMBED) focusSendIfWanted(); });
 
 function focusFirst(hint) {
   if (hint === "picker") { $("tracker").focus(); return; }
-  if (!$("connectBox").hidden && !$("connect").hidden) { $("connect").focus(); return; }
+  if (!$("connectBox").hidden && !$("connect").hidden) { quietFocus($("connect")); return; }
   focusWanted = "send";
   focusSendIfWanted();
 }
@@ -1609,7 +1641,7 @@ function focusSendIfWanted() {
   const a = document.activeElement;
   if (a && a !== document.body) { focusWanted = ""; return; }
   focusWanted = "";
-  $("send").focus();
+  quietFocus($("send"));
 }
 
 function tabStops() {
@@ -1639,7 +1671,8 @@ function loadEmbedded() {
     if (d.type !== "tb-panel-init" || typeof d.id !== "string" || !d.id || d.id.length > 200) return;
     if (typeof d.nonce !== "string" || !NONCE_RE.test(d.nonce)) return;
     if (d.theme !== "auto" && d.theme !== "light" && d.theme !== "dark") return;
-    if (d.focus !== "create" && d.focus !== "picker") return;
+    // "pointer": Create was clicked (not keyed) on the ticket.
+    if (d.focus !== "create" && d.focus !== "picker" && d.focus !== "pointer") return;
     embedStarting = true;
     const res = await send("tb:panel:hello", { id: d.id, nonce: d.nonce, parentOrigin: e.origin });
     embedStarting = false;
@@ -1652,12 +1685,12 @@ function loadEmbedded() {
     if (d.theme !== "auto") document.documentElement.dataset.theme = d.theme;
     connectPanelPort(0);
     postParent({ type: "tb-panel-ready" });
-    watchSize();
     watchVisibility();
     $("send").disabled = true;
     loadShot();
+    if (d.focus === "pointer") lastInput = "pointer";
     await startPanel(res.request.target);
-    focusFirst(d.focus);
+    focusFirst(d.focus === "picker" ? "picker" : "create");
   };
   window.addEventListener("message", onInit);
 }

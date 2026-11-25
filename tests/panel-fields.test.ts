@@ -63,4 +63,11 @@ describe('Create panel field picks (B6: prefilled → sent)', () => {
     expect(shown(p)).toEqual(['bug']);
     expect(plain(PF.choiceFields(SPECS, p))).toEqual({ labels: ['bug'] });
   });
+
+  it('Assignee "—" sends no assignee, even with one remembered and then cleared', () => {
+    const p = PF.initialPicks(SPECS, { labels: ['bug'], assignee: 'octo' });
+    p.assignee = '';
+    expect(plain(PF.choiceFields(SPECS, p))).toEqual({ labels: ['bug'] });
+    expect('assignee' in PF.choiceFields(SPECS, PF.initialPicks(SPECS, null))).toBe(false);
+  });
 });

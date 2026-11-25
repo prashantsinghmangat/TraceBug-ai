@@ -181,11 +181,52 @@ window.addEventListener("hashchange", () => {
   followIntegrationsLink();
 });
 
-// The popup's theme choice (same extension origin), as signin.html does.
-try {
-  const theme = localStorage.getItem("tracebug_popup_theme");
-  if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme);
-} catch {}
+// Theme: the popup's choice (same extension origin, as signin.html reads it),
+// and the sidebar's Auto / Light / Dark writes the same key, so the two stay
+// in step — a change in either reaches the other (the storage event).
+const THEME_KEY = "tracebug_popup_theme";
+
+function readTheme() {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return v === "light" || v === "dark" ? v : "auto";
+  } catch { return "auto"; }
+}
+
+function applyTheme(v) {
+  if (v === "light" || v === "dark") document.documentElement.setAttribute("data-theme", v);
+  else document.documentElement.removeAttribute("data-theme");
+  document.querySelectorAll("#themeSeg [data-theme-choice]").forEach((b) => {
+    const on = b.dataset.themeChoice === v;
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+  });
+}
+
+function setTheme(v) {
+  try { localStorage.setItem(THEME_KEY, v); } catch {}
+  applyTheme(v);
+}
+
+applyTheme(readTheme());
+window.addEventListener("storage", (e) => { if (e.key === THEME_KEY) applyTheme(readTheme()); });
+if ($("themeSeg")) {
+  const choices = () => [...$("themeSeg").querySelectorAll("[data-theme-choice]")];
+  $("themeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-theme-choice]");
+    if (b) setTheme(b.dataset.themeChoice);
+  });
+  // A radio group: arrows move and choose.
+  $("themeSeg").addEventListener("keydown", (e) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const list = choices();
+    const i = list.findIndex((b) => b.dataset.themeChoice === readTheme());
+    const next = list[(i + (e.key === "ArrowLeft" || e.key === "ArrowUp" ? list.length - 1 : 1)) % list.length];
+    setTheme(next.dataset.themeChoice);
+    next.focus();
+  });
+}
 
 // ── Status pills ────────────────────────────────────────────────────────────
 // Reflects what is stored WITHOUT reading the secret back into the DOM.
@@ -815,6 +856,7 @@ document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap"))
 
 const dlg = $("connectDialog");
 let dlgOpener = null;
+let installTimer = 0;
 const PANE_TEXT = {
   "github-choose": ["Connect GitHub", "Choose how to connect"],
   "github-signin": ["Connect GitHub", "Sign in with GitHub"],
@@ -841,8 +883,10 @@ function showPane(name, opts) {
 
 function resetSignInPane() {
   const pane = paneOf("github-signin");
+  clearTimeout(installTimer);
   pane.querySelector(".acct-confirm").hidden = true;
   pane.querySelector(".device").hidden = true;
+  pane.querySelector(".device-step2").hidden = true;
   pane.querySelector(".acct-connect").hidden = true;
   pane.querySelector(".connect-status").textContent = "";
 }
@@ -908,6 +952,22 @@ function startSignIn(t, opts) {
   }
 }
 
+/** Step 2 in the same GitHub window: wait until the worker closes it (GitHub
+ *  reported the install) or the user does; then carry on as connected. */
+function waitForInstall(pane, then) {
+  const box = pane.querySelector(".device-step2");
+  if (box) box.hidden = false;
+  say(pane.querySelector(".connect-status"), "Waiting for GitHub…", "ok", " ");
+  const started = Date.now();
+  const tick = async () => {
+    const st = await TraceBugTrackerConnect.msg("tb:tracker:install-state", { tracker: "github" });
+    if ((st && st.open === false) || Date.now() - started > 10 * 60 * 1000) { if (box) box.hidden = true; then(); return; }
+    installTimer = setTimeout(tick, 1500);
+  };
+  clearTimeout(installTimer);
+  installTimer = setTimeout(tick, 1500);
+}
+
 function connectFromOptions(t, pane) {
   const status = pane.querySelector(".connect-status");
   const dev = pane.querySelector(".device");
@@ -937,14 +997,24 @@ function connectFromOptions(t, pane) {
       connectBtn.textContent = code === "expired_token" ? "Get a new code" : "Connect " + t.label;
       connectBtn.hidden = false;
     },
-    done: async (account) => {
-      closeConnect();
-      say($("intStatus"), "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
-      await renderTrackerAccounts();
-      const pick = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"] .acct-default');
-      if (pick && !pick.closest("[hidden]")) pick.focus();
+    done: async (account, res) => {
+      // The app is on no repository yet: GitHub's window moved on to Install.
+      if (res && res.installing && t.id === "github" && dlg.open) {
+        if (dev) dev.hidden = true;
+        waitForInstall(pane, () => finishConnected(t, account));
+        return;
+      }
+      await finishConnected(t, account);
     },
   });
+}
+
+async function finishConnected(t, account) {
+  closeConnect();
+  say($("intStatus"), "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
+  await renderTrackerAccounts();
+  const pick = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"] .acct-default');
+  if (pick && !pick.closest("[hidden]")) pick.focus();
 }
 
 // ── Disconnect confirm ──────────────────────────────────────────────────────

@@ -65,6 +65,9 @@ export interface TrackerAdapter {
   connect(): ConnectSpec | null;
   whoAmI(auth: ResolvedAuth, signal?: AbortSignal): Promise<string>;
   listContainers(auth: ResolvedAuth, signal?: AbortSignal): Promise<Container[]>;
+  /** A GitHub App sign-in: is the app installed anywhere this user can see?
+   *  Decides whether the sign-in window goes on to the install page. */
+  hasInstallation?(auth: ResolvedAuth, signal?: AbortSignal): Promise<boolean>;
   listFields(auth: ResolvedAuth, container: string, signal?: AbortSignal): Promise<FieldSpec[]>;
   createIssue(
     auth: ResolvedAuth,
@@ -236,6 +239,11 @@ export const github: TrackerAdapter = {
     const res = await ghFetch(auth, `${GH_API}/user`, signal);
     const d = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { login?: string };
     return d.login || "";
+  },
+  async hasInstallation(auth, signal) {
+    const res = await ghFetch(auth, `${GH_API}/user/installations?per_page=1`, signal);
+    const d = (await parseJsonOrThrow(res, "GitHub", "tracker")) as { total_count?: number; installations?: unknown[] };
+    return (typeof d.total_count === "number" ? d.total_count : (d.installations || []).length) > 0;
   },
   async listContainers(auth, signal) {
     const notes: SsoNotes = { orgIds: new Set() };

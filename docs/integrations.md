@@ -57,14 +57,18 @@ The plug/logo icon in the popup's header opens the same connections as a compact
 - **Send button in the ticket (Chrome):** one button, **Send to GitHub**. It opens the Create panel with **Create
   issue** focused (it takes a click or Enter there: the site you're testing can never file an issue on its own); the
   tracker is chosen in the panel's **Create a [GitHub ▾] issue** select, and Alt+↓ on the button opens the panel on
-  that select. The panel drops down from the button — up when there's no room below — and **Manage integrations** in
-  it opens Settings → Integrations. Esc, or Tab past the last control, closes it and puts focus back on the button;
-  closing the ticket closes the panel first. Nothing connected yet: the button reads **Connect a tracker** and the
-  panel offers Connect. The button's tooltip names only the tracker ("GitHub · connected", with a dot when a
+  that select. The panel opens as a **GitHub** tab (with ✕) in the ticket's right column, next to Info, Actions,
+  Console, Network and AI, and fills that column; another tab hides it and keeps what you picked, and the GitHub tab
+  brings it back. On a narrow window it takes the column's place, above the footer buttons. **Manage integrations**
+  in its ⋯ menu opens Settings → Integrations. Esc, the tab's ✕, or Tab past the last control closes it and puts
+  focus back on the button; closing the ticket closes the panel first. Nothing connected yet: the button reads
+  **Connect a tracker** and the panel offers Connect. The button changes by itself once you connect (here, in
+  Settings or in another tab). The button's tooltip names only the tracker ("GitHub · connected", with a dot when a
   connection needs attention), because the site can read the ticket. Firefox: the same button, with the Create window
   instead of the panel.
-- **The panel shows what the moment needs:** the app installed nowhere → **Install TraceBug on GitHub** and
-  **Refresh** only (the list refreshes by itself once GitHub reports the install, and that window closes); then the
+- **The panel shows what the moment needs:** signing in → the code with **1 Sign in · 2 Choose repositories**; the
+  app installed nowhere → step 2 in the same GitHub window (or, if you closed it, **Install on GitHub** and
+  **Refresh**; the list refreshes by itself once GitHub reports the install, and that window closes); then the
   repository, then its labels and assignee. The repository suggestions are the panel's own list under the field.
   After **Create**: "Created #N" with **Copy screenshot**, **Download screenshot** and **Download recording**.
 - **Keyboard:** Tab reaches the grid, then arrow keys, Home/End (Ctrl+Home/End for the first/last tile) and Enter or
@@ -79,11 +83,14 @@ GitHub is the integration TraceBug supports end to end. **GitHub Enterprise Serv
 1. **Connect.** Capture a bug and click **Send to GitHub** (or **Connect a tracker** the first time). The Create panel
    opens inside the ticket. Click **Connect GitHub**: Chrome asks once for access to github.com and api.github.com,
    then TraceBug copies a short code and opens GitHub's sign-in page in a small window. Press **Ctrl+V** (⌘V on a
-   Mac), **Continue**, **Authorize**. The window closes itself and the panel says "as <your login>". No token to
-   create. (Closed the window too early? **Reopen GitHub** — the code works until it expires.)
+   Mac), **Continue**, **Authorize**. If the app is already installed, the window closes itself and the panel says
+   "as <your login>". No token to create. (Closed the window too early? **Reopen GitHub** — the code works until it
+   expires.)
 2. **Install on repositories.** TraceBug files only into repositories you install its GitHub App on. If it's on none
-   yet, the panel shows **Install TraceBug on GitHub**: pick repositories in GitHub's window and come back — the
-   list refreshes by itself (or press **Refresh**).
+   yet, the same GitHub window goes on to **choose repositories** (the panel shows step 2); pick them, click
+   Install, and the window closes and the list appears. Closed the window before installing? The panel shows
+   **Install TraceBug on GitHub**: it opens the install page again, and the list refreshes by itself (or press
+   **Refresh**).
    - In an organisation where you aren't an owner, GitHub turns the install into a **request**. The panel then says
      **Waiting for your organisation owner to approve TraceBug**; once they do, **Refresh** shows the repositories.
    - Organisations with **single sign-on (SAML)** hide their repositories until you authorise TraceBug for them. The
@@ -152,9 +159,10 @@ extension's own panel and kept in the extension's storage — the site you're te
 shows it masked ("with a token ghp_…abcd") with **Disconnect**, which removes it. In a build without TraceBug's
 GitHub App (store builds until it's registered) this is the way in: Connect is hidden and the box starts open.
 
-**GitHub App on no repositories yet?** After **Connect GitHub**, if the app isn't installed anywhere the panel shows
-**Install TraceBug on GitHub**. It opens GitHub's install page in a small window; when you close it (or come back),
-the repository list refreshes by itself, and **Refresh** does it by hand. A repository you type that the app isn't
+**GitHub App on no repositories yet?** After **Connect GitHub**, if the app isn't installed anywhere the sign-in
+window goes on to GitHub's install page, and Settings' Connect dialog waits for it (step 2). If that window was closed
+first, the panel shows **Install TraceBug on GitHub**: it opens the install page in a small window; when you close it
+(or come back), the repository list refreshes by itself, and **Refresh** does it by hand. A repository you type that the app isn't
 on gets a **Configure repository access on GitHub** link.
 
 ### Remembered choices, per site

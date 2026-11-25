@@ -62,6 +62,8 @@ let issuePosts = 0;
 // While true, GitHub refuses the access token and the refresh token alike —
 // a revoked sign-in. Cleared when a new device-flow token is issued.
 let revoked = false;
+// Is the GitHub App installed anywhere (leg 12 turns this off)?
+let installedApp = true;
 // What GitHub's token endpoint answers a device-code poll:
 //   "pending" | "approve" | "deny" | "expire" | "slow" (once) | "offline" (once)
 let tokenMode = "pending";
@@ -103,7 +105,7 @@ await ctx.route("https://api.github.com/**", async (route) => {
   if (revoked || (req.headers()["authorization"] || "") !== `Bearer ${ACCESS}`) return json(route, { message: "Bad credentials" }, 401);
   const p = url.pathname;
   if (p === "/user") return json(route, { login: "octo" });
-  if (p === "/user/installations") return json(route, { total_count: 1, installations: [{ id: 7 }] });
+  if (p === "/user/installations") return json(route, installedApp ? { total_count: 1, installations: [{ id: 7 }] } : { total_count: 0, installations: [] });
   if (p === "/user/installations/7/repositories") return json(route, { total_count: 1, repositories: [{ full_name: REPO, private: true }] });
   if (p === `/repos/${REPO}/labels`) return json(route, [{ name: "bug" }, { name: "ui" }]);
   if (p === `/repos/${REPO}/assignees`) return json(route, [{ login: "octo" }]);
@@ -436,6 +438,32 @@ try {
   await welcome.waitForFunction(() => /Saved/.test(document.getElementById("trStatus").textContent || ""), null, { timeout: 5000 }).catch(() => {});
   const pref2 = await sw.evaluate(async () => (await chrome.storage.local.get("tb_tracker_prefs_v1")).tb_tracker_prefs_v1);
   check("welcome page: the pick is saved as the default", !!(pref2 && pref2.github && pref2.github.container === REPO), JSON.stringify(pref2));
+
+  // 12. Settings, the app on no repository (pass 2 #2): one GitHub window —
+  // Authorize, then Install — and the dialog waits for it.
+  installedApp = false;
+  tokenMode = "pending";
+  await opt.bringToFront();
+  await opt.evaluate(() => startSignIn(trackerRows.github));
+  await opt.waitForSelector(pane + " .device:not([hidden])", { timeout: 8000 }).catch(() => {});
+  check("12. Settings: the code shows with the two steps", await opt.isVisible(pane + " .device-steps"));
+  const pops12 = (await popups()).length;
+  tokenMode = "approve";
+  await opt.waitForSelector(pane + " .device-step2:not([hidden])", { timeout: 15000 }).catch(() => {});
+  const win12 = await sw.evaluate(async () => {
+    const ws = (await chrome.windows.getAll({ populate: true })).filter((w) => w.type === "popup");
+    const t = ws.length ? ws[ws.length - 1].tabs[0] : null;
+    return t ? { id: t.id, url: t.pendingUrl || t.url } : null;
+  });
+  check("…app on no repository: step 2 in the dialog, the same window sent on to the install page",
+    await opt.isVisible(pane + " .device-step2") && !!win12 && /\/installations\/new$/.test(win12.url) && (await popups()).length === pops12,
+    JSON.stringify(win12));
+  installedApp = true;
+  if (win12) await sw.evaluate((id) => chrome.tabs.update(id, { url: "https://github.com/apps/tracebug-dev?setup_action=install&installation_id=7" }), win12.id);
+  await opt.waitForFunction(() => !document.getElementById("connectDialog").open, null, { timeout: 10000 }).catch(() => {});
+  check("…GitHub reports the install: the window closes and the dialog finishes, connected",
+    !(await opt.evaluate(() => document.getElementById("connectDialog").open)) && /Connected as octo/.test(await opt.textContent("#intStatus")) &&
+    !!win12 && !(await tabExists(win12.id)), await opt.textContent("#intStatus"));
 } finally {
   await ctx.close();
   server.close();

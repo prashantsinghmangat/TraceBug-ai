@@ -73,7 +73,10 @@ the same step.
   **One GitHub connection (B11):** `auth-store.ts` `extraGitHubConnection`; worker `enforceOneGitHub` (every
   tracker UI call), `dropGitHubToken`, `disconnectGitHub` (→ `removed: "signin"|"token"`, `revokeUrl` =
   settings/apps/authorizations, `tokenUrl`). Device flow: `tb:tracker:connect` with `open:false` → page copies the
-  code → `tb:tracker:connect-show` opens GitHub's window. Install window closes on `setup_action` (`onInstallTabUrl`).
+  code → `tb:tracker:connect-show` opens GitHub's window. App installed nowhere → `continueToInstall` sends that window
+  to the install page (`installing` on the poll answer). Install window closes on `setup_action` (`onInstallTabUrl`).
+  **Docked panel (pass 2):** `content-script.js` `mountCreatePanel`/`dockCreatePanel` (tab in `.tb-qb-tabstrip`, frame
+  over `.tb-qb-right`, `data-tb-docked` on the modal); ticket button redraw `_refreshPrimarySend` (quick-bug.ts).
   Issue text: GitHub `issueTitle(report, true)`/`issueBody` (one footer, `issueFooterMarkdown`); Linear passes
   `legacyText` (frozen) — tests `tests/github-issue-text.test.ts`.
   **Integrations hub (step 5):** status model `src/providers/integration-status.ts` (`summarizeIntegrations`,

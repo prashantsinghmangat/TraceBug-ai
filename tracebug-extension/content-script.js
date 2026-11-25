@@ -631,14 +631,14 @@ window.addEventListener("tracebug-provider-request", (e) => safeRun(() => {
 }));
 
 // ── In-page Create panel (Phase 13 Step 3) ─────────────────────────────────
-// create-issue.html, framed inside the ticket's footer. Cross-origin to the
+// create-issue.html, docked in the ticket's right column. Cross-origin to the
 // page, so the page can't read the repo names, labels or people in it, and it
 // never gets the one-time nonce: the worker hands it to THIS script, which
 // posts it into its own frame only. Messages from the frame are accepted only
 // from that frame's window, with the extension's origin, in an exact shape;
-// they carry layout and nothing else. If the frame doesn't say "ready" in
-// time (a CSP that blocks it, a page that tampers with it), the extension
-// window opens instead.
+// they carry layout and the tracker's id (the tab's name), nothing else. If
+// the frame doesn't say "ready" in time (a CSP that blocks it, a page that
+// tampers with it), the extension window opens instead.
 var PANEL_PAGE = "create-issue.html";
 var PANEL_READY_MS = 3500;
 var activePanel = null;
@@ -657,6 +657,40 @@ function ticketTheme() {
   return t === "dark" || t === "light" ? t : "auto";
 }
 
+// The panel docks in the ticket's right column as its own tab ("GitHub" or
+// "Linear", with a ✕), next to Info · Actions · Console · Network · AI. The
+// frame lies over the column's panel area, under the tab strip and down to
+// the footer; the form scrolls inside it. Another tab hides the frame (its
+// state stays); the tab shows it again. Only the tracker's id reaches the
+// page (the tab's name), never a repository, label or account.
+var PANEL_TABS = {
+  github: { label: "GitHub", fill: "currentColor", d: "M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" },
+  linear: { label: "Linear", fill: "#5E6AD2", d: "M1.2 13.9a11 11 0 0 0 8.9 8.9L1.2 13.9Zm-.2-3 12.1 12.1c.9-.1 1.8-.3 2.6-.6L1.6 8.3c-.3.8-.5 1.7-.6 2.6Zm1.4-4.3 15 15c.7-.4 1.3-.9 1.9-1.4L3.8 4.7c-.5.6-1 1.2-1.4 1.9ZM5.3 3.4A11 11 0 1 1 20.6 18.7L5.3 3.4Z" },
+};
+var SVG_NS = "http://www.w3.org/2000/svg";
+
+/** A small inline SVG, built with DOM calls (no markup strings). */
+function svgIcon(size, paths, attrs) {
+  var svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  Object.keys(attrs || {}).forEach(function (k) { svg.setAttribute(k, attrs[k]); });
+  paths.forEach(function (pa) {
+    var el = document.createElementNS(SVG_NS, "path");
+    Object.keys(pa).forEach(function (k) { el.setAttribute(k, pa[k]); });
+    svg.appendChild(el);
+  });
+  return svg;
+}
+
+// Whether the last thing the user did on the page was a pointer action: the
+// panel then focuses its first control without a ring (keyboard users keep it).
+var lastPageInput = "keyboard";
+window.addEventListener("pointerdown", function () { lastPageInput = "pointer"; }, true);
+window.addEventListener("keydown", function () { lastPageInput = "keyboard"; }, true);
+
 function unmountCreatePanel() {
   if (!activePanel) return;
   var p = activePanel;
@@ -665,48 +699,63 @@ function unmountCreatePanel() {
   window.removeEventListener("message", p.onMessage);
   window.removeEventListener("resize", p.onResize);
   if (p.observer) p.observer.disconnect();
-  // Focus was in the panel (or nowhere): give it back to the button that opened it.
+  if (p.tabObserver) p.tabObserver.disconnect();
+  if (p.sizeObserver) p.sizeObserver.disconnect();
+  // Focus was in the panel, on its tab (or nowhere): give it back to the send button.
   var a = document.activeElement;
-  var refocus = p.opener && p.opener.isConnected && (!a || a === document.body || a === p.frame);
-  if (p.slot && p.slot.parentNode) p.slot.parentNode.removeChild(p.slot);
+  var refocus = !a || a === document.body || a === p.frame || p.tabWrap.contains(a);
+  var wasShown = p.tab.classList.contains("tb-qb-tab-active");
+  if (p.slot.parentNode) p.slot.parentNode.removeChild(p.slot);
+  if (p.tabWrap.parentNode) p.tabWrap.parentNode.removeChild(p.tabWrap);
+  p.modal.removeAttribute("data-tb-docked");
+  if (p.restorePosition !== null) p.right.style.position = p.restorePosition;
+  // Back to the tab that was open before (else the first one).
+  if (wasShown) {
+    var back = p.prevTab && p.prevTab.isConnected ? p.prevTab : p.strip.querySelector("[data-tab]");
+    if (back) back.click();
+  }
   setSplitExpanded(p, false);
-  if (refocus) { try { p.opener.focus(); } catch (e) {} }
+  var opener = p.opener && p.opener.isConnected ? p.opener : p.modal.querySelector("[data-tb-split-main]");
+  if (refocus && opener) { try { opener.focus(); } catch (e) {} }
 }
 
-/** aria-expanded on the ticket's split button follows the panel. */
+/** aria-expanded on the ticket's send button follows the panel. Looked up
+ *  each time: the ticket redraws the button when a tracker connects. */
 function setSplitExpanded(p, open) {
-  if (!p.split) return;
-  var btns = p.split.querySelectorAll("[aria-haspopup]");
+  var btns = p.modal.querySelectorAll("[data-tb-send-split] [aria-haspopup]");
   for (var i = 0; i < btns.length; i++) btns[i].setAttribute("aria-expanded", open ? "true" : "false");
 }
 
+/** Name the tab after the tracker the panel is on. */
+function setPanelTab(p, tracker) {
+  var t = PANEL_TABS[tracker] || PANEL_TABS.github;
+  var name = document.createElement("span");
+  name.textContent = t.label;
+  p.tab.replaceChildren(svgIcon(14, [{ fill: t.fill, d: t.d }]), name);
+  p.close.setAttribute("aria-label", "Close " + t.label);
+  p.close.title = "Close " + t.label;
+}
+
 /**
- * The panel as the split button's dropdown, inside the ticket: under the
- * button when it fits, else above it (the usual case: the button is in the
- * footer), pinned by its bottom edge so the Create row stays put as the panel
- * grows; on a short window it's kept inside the ticket, over the button if it
- * must be, and no taller than the ticket: the panel then scrolls inside, with
- * its Create row pinned to its bottom edge. Only styles change: moving an
- * iframe in the DOM would reload it.
+ * The frame over the right column's panel area: from under the tab strip to
+ * the column's foot (the ticket's footer is outside the column, so it is never
+ * covered). Shown only while its tab is the active one. CSS keeps it in place
+ * on scroll and resize; the strip's height is the one thing measured. Only
+ * styles change: moving an iframe in the DOM would reload it.
  */
-function placeCreatePanel(p) {
-  if (!p.split || !p.split.isConnected) return;
-  var btn = p.split.getBoundingClientRect();
-  var shell = p.modal.querySelector(".tb-qb-shell");
-  var sr = shell ? shell.getBoundingClientRect() : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
-  var top = Math.max(sr.top, 0) + 8, bottom = Math.min(sr.bottom, window.innerHeight) - 8;
-  var h = Math.max(80, Math.min(p.wantH || p.frame.getBoundingClientRect().height, bottom - top));
-  p.frame.style.setProperty("height", Math.round(h) + "px", "important");
-  var fp = p.footer.getBoundingClientRect();
-  var width = Math.min(560, sr.right - sr.left - 24);
-  var left = Math.max(sr.left + 12, Math.min(btn.left, sr.right - 12 - width)) - fp.left;
-  var place, edge;
-  if (btn.bottom + 6 + h <= bottom) { place = "down"; edge = "top:" + Math.round(btn.bottom + 6 - fp.top) + "px;"; }
-  else if (btn.top - 6 - h >= top) { place = "up"; edge = "bottom:" + Math.round(fp.bottom - (btn.top - 6)) + "px;"; }
-  else { place = "over"; edge = "bottom:" + Math.round(fp.bottom - Math.min(bottom, top + h)) + "px;"; }
-  p.slot.setAttribute("data-place", place);
-  p.slot.style.cssText = "position:absolute;margin:0;z-index:30;left:" + Math.round(left) + "px;" + edge +
-    "width:" + Math.round(width) + "px;border-radius:14px;box-shadow:0 12px 32px rgba(17,24,39,0.10);";
+function dockCreatePanel(p) {
+  if (!p.strip.isConnected) return;
+  var on = p.tab.classList.contains("tb-qb-tab-active");
+  p.tab.setAttribute("aria-selected", on ? "true" : "false");
+  p.slot.style.cssText = "position:absolute;left:0;right:0;bottom:0;margin:0;padding:0;z-index:4;" +
+    "top:" + Math.round(p.strip.offsetTop + p.strip.offsetHeight) + "px;" +
+    "display:" + (on ? "block" : "none") + " !important;";
+  // Its tab stays in view in a strip that scrolls sideways.
+  if (on) {
+    var sr = p.strip.getBoundingClientRect(), tr = p.tabWrap.getBoundingClientRect();
+    if (tr.right > sr.right) p.strip.scrollLeft += Math.ceil(tr.right - sr.right);
+    else if (tr.left < sr.left) p.strip.scrollLeft -= Math.ceil(sr.left - tr.left);
+  }
 }
 
 function panelFallback(id, nonce) {
@@ -717,16 +766,18 @@ function panelFallback(id, nonce) {
 function mountCreatePanel(id, nonce) {
   unmountCreatePanel();
   var modal = document.getElementById("tracebug-quick-bug-modal");
-  var anchor = modal && modal.querySelector(".tb-qb-footer .tb-qb-actions");
-  if (!anchor) { panelFallback(id, nonce); return; }
-  // The send button (if the ticket has one) anchors the panel as its
-  // dropdown and gets focus back when it closes. The page's hint picks what
-  // the frame focuses first; it can't do anything else.
+  var right = modal && modal.querySelector(".tb-qb-right");
+  var strip = right && right.querySelector(".tb-qb-tabstrip");
+  if (!strip) { panelFallback(id, nonce); return; }
+  // The send button gets focus back when the panel closes. The page's hint
+  // picks what the frame focuses first; it can't do anything else.
   var split = modal.querySelector("[data-tb-send-split]");
-  var focusHint = modal.getAttribute("data-tb-panel-focus") === "picker" ? "picker" : "create";
+  var focusHint = modal.getAttribute("data-tb-panel-focus") === "picker" ? "picker"
+    : lastPageInput === "pointer" ? "pointer" : "create";
   var active = document.activeElement;
-  var opener = split && active && split.contains(active) ? active
-    : split ? split.querySelector("[data-tb-split-main]") : null;
+  var main = split ? split.querySelector("[data-tb-split-main]") : null;
+  var opener = split && active && split.contains(active) ? active : main;
+  var first = main && PANEL_TABS.hasOwnProperty(main.getAttribute("data-target")) ? main.getAttribute("data-target") : "github";
 
   // getURL gives the per-session dynamic URL (use_dynamic_url); the loaded
   // document's origin is the extension's own. Both are ours, nothing else is.
@@ -737,9 +788,27 @@ function mountCreatePanel(id, nonce) {
     extOrigins = [extOrigin, "chrome-extension://" + chrome.runtime.id];
   } catch (e) { panelFallback(id, nonce); return; }
 
+  // The tab: a button the ticket's own tab switching handles (data-tab), and
+  // a ✕ beside it.
+  var tabWrap = document.createElement("span");
+  tabWrap.className = "tb-qb-tab-tracker";
+  tabWrap.setAttribute("data-tb-tracker-tab", "");
+  tabWrap.setAttribute("role", "presentation");
+  var tab = document.createElement("button");
+  tab.type = "button";
+  tab.className = "tb-qb-tab";
+  tab.setAttribute("role", "tab");
+  tab.setAttribute("data-tab", "tracker");
+  var closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "tb-qb-tab-x";
+  closeBtn.appendChild(svgIcon(12, [{ d: "M18 6 6 18M6 6l12 12" }],
+    { fill: "none", stroke: "currentColor", "stroke-width": "2.4", "stroke-linecap": "round" }));
+  tabWrap.appendChild(tab);
+  tabWrap.appendChild(closeBtn);
+
   var slot = document.createElement("div");
   slot.setAttribute("data-tb-create-panel", "");
-  slot.style.cssText = "margin:0 0 12px;";
   var frame = document.createElement("iframe");
   frame.src = src;
   frame.title = "Create an issue";
@@ -752,18 +821,39 @@ function mountCreatePanel(id, nonce) {
   // Permissions-Policy (clipboard-write=()) still wins.
   frame.setAttribute("allow", "clipboard-write *");
   // !important on every box property: a page's own `iframe { … !important }`
-  // rules (height caps are common) would otherwise squeeze the panel into a
-  // scroll box, and its Create button might never be fully on screen.
+  // rules (height caps are common) would otherwise squeeze the panel.
   frame.style.cssText = "display:block !important;width:100% !important;max-width:none !important;" +
-    "height:150px !important;min-height:0 !important;max-height:none !important;border:0 !important;" +
-    "border-radius:14px;background:transparent;color-scheme:normal;";
+    "height:100% !important;min-height:0 !important;max-height:none !important;border:0 !important;" +
+    "border-radius:0 !important;background:transparent;color-scheme:normal;";
   slot.appendChild(frame);
-  anchor.parentNode.insertBefore(slot, anchor);
 
   var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null,
-    modal: modal, footer: anchor.parentNode, split: split, opener: opener, onResize: null };
-  p.onResize = function () { if (activePanel === p) placeCreatePanel(p); };
+    modal: modal, right: right, strip: strip, tab: tab, tabWrap: tabWrap, close: closeBtn, opener: opener,
+    prevTab: strip.querySelector(".tb-qb-tab-active"), onResize: null, tabObserver: null, sizeObserver: null,
+    restorePosition: null };
+  setPanelTab(p, first);
+  if (getComputedStyle(right).position === "static") {
+    p.restorePosition = right.style.position;
+    right.style.position = "relative";
+  }
+  strip.appendChild(tabWrap);
+  right.appendChild(slot);
+  // Narrow tickets stack the columns: the right one takes the body (CSS).
+  modal.setAttribute("data-tb-docked", "");
+  closeBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (activePanel === p) unmountCreatePanel();
+  });
+
+  p.onResize = function () { if (activePanel === p) dockCreatePanel(p); };
   window.addEventListener("resize", p.onResize);
+  p.tabObserver = new MutationObserver(p.onResize);
+  p.tabObserver.observe(tab, { attributes: true, attributeFilter: ["class"] });
+  try {
+    p.sizeObserver = new ResizeObserver(p.onResize);
+    p.sizeObserver.observe(strip);
+    p.sizeObserver.observe(right);
+  } catch (e) {}
   setSplitExpanded(p, true);
   p.onMessage = function (e) {
     // Only our frame, from the extension's origin, in an exact shape.
@@ -775,11 +865,8 @@ function mountCreatePanel(id, nonce) {
       clearTimeout(p.timer);
       // Keyboard users land in the panel (the frame focuses its own control).
       try { frame.focus(); } catch (e) {}
-    } else if (d.type === "tb-panel-size" && Object.keys(d).length === 2 &&
-      typeof d.height === "number" && isFinite(d.height) && d.height >= 40 && d.height <= 1400) {
-      p.wantH = Math.ceil(d.height);
-      if (p.split) placeCreatePanel(p);
-      else frame.style.setProperty("height", p.wantH + "px", "important");
+    } else if (d.type === "tb-panel-tracker" && Object.keys(d).length === 2 && PANEL_TABS.hasOwnProperty(d.tracker)) {
+      setPanelTab(p, d.tracker);
     } else if (d.type === "tb-panel-close" && Object.keys(d).length === 1) {
       unmountCreatePanel();
     }
@@ -803,7 +890,13 @@ function mountCreatePanel(id, nonce) {
   });
   p.observer.observe(document.documentElement, { childList: true, subtree: true });
   activePanel = p;
-  placeCreatePanel(p);
+  // Open on its tab: the ticket's own switching hides the other panels.
+  tab.click();
+  dockCreatePanel(p);
+  // A narrow ticket scrolls (the panel's column under its header): bring it up.
+  if (right.getBoundingClientRect().top > window.innerHeight / 2) {
+    try { strip.scrollIntoView({ block: "start" }); } catch (e) {}
+  }
 }
 
 // ── Is the panel really what the user sees? (second opinion) ──────────────

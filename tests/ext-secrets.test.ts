@@ -488,11 +488,12 @@ describe('panel token entry: checked before saving, never echoed', () => {
 
   it('the panel frame posts only layout messages to the page — never the token', () => {
     const src = readFileSync(join(__dirname, '..', 'tracebug-extension', 'confirm-send.js'), 'utf8');
-    // Every postParent(...) call sends a literal of a known type and no field values.
+    // Every postParent(...) call sends a literal of a known type and no field
+    // values; the one exception is the tracker's id, which names the ticket's tab.
     const calls = [...src.matchAll(/(?<!function )postParent\(([^;]*?)\);/g)].map((m) => m[1]);
     expect(calls.length).toBeGreaterThan(0);
     for (const c of calls) {
-      expect(c).toMatch(/^\{ type: "tb-panel-(ready|size|close)"(, height: [^}]+)? \}$/);
+      expect(c).toMatch(/^\{ type: "tb-panel-(ready|close)" \}$|^\{ type: "tb-panel-tracker", tracker: t\.id \}$/);
     }
     // The token input is read in one place, and goes only to the worker.
     const reads = [...src.matchAll(/\$\("tokenInput"\)\.value/g)];

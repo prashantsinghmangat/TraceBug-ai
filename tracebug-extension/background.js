@@ -2955,7 +2955,7 @@ async function pollTrackerConnect(api, adapter) {
   if (!pending) return { error: "This sign-in code is no longer valid. Click Connect again.", code: "no_flow" };
   if (pending.done) {
     return Date.now() - pending.doneAt < DEVICE_DONE_TTL_MS
-      ? { status: "done", connected: true, account: pending.account || "" }
+      ? { status: "done", connected: true, account: pending.account || "", installing: !!pending.installing }
       : { error: "This sign-in code is no longer valid. Click Connect again.", code: "no_flow" };
   }
   if (devicePolling.has(adapter.id)) return { status: "pending", interval: pending.interval, popupClosed: !!pending.popupClosed };
@@ -2987,10 +2987,53 @@ async function pollTrackerConnect(api, adapter) {
   }
   // The token: the one and only "signed in".
   const done = await finishConnect(api, adapter, r.tokens);
-  again[adapter.id] = { done: true, doneAt: Date.now(), account: done.account || "" };
+  // Signed in, but the GitHub App is on no repository yet: the same window
+  // goes on to the install page (step 2) instead of closing.
+  const installing = await continueToInstall(adapter, r.tokens, cur);
+  again[adapter.id] = { done: true, doneAt: Date.now(), account: done.account || "", installing };
   await sessionSet({ [DEVICE_FLOW_KEY]: again });
-  closeDevicePage(cur, true);
-  return Object.assign({ status: "done" }, done);
+  if (!installing) closeDevicePage(cur, true);
+  return Object.assign({ status: "done", installing }, done);
+}
+
+/** The tab of the sign-in window, whichever way it was opened. */
+async function deviceTabId(st) {
+  if (st.popupTabId != null) return st.popupTabId;
+  if (st.popupWinTabId != null) return st.popupWinTabId;
+  if (st.popupWindowId == null) return null;
+  try {
+    const tabs = await chrome.tabs.query({ windowId: st.popupWindowId });
+    return tabs && tabs[0] && tabs[0].id != null ? tabs[0].id : null;
+  } catch { return null; }
+}
+
+/**
+ * One GitHub window for both steps: Authorize (who you are), then Install
+ * (which repositories). When the app is installed nowhere this user can see,
+ * the sign-in window is sent on to the install page and becomes the install
+ * window: onInstallTabUrl closes it when GitHub reports the install (or an
+ * owner request), as it does for the panel's own Install button. Already
+ * installed, or the window was closed early, or anything fails → false, and
+ * the window closes as before (the panel then offers Install itself).
+ */
+async function continueToInstall(adapter, tokens, st) {
+  if (adapter.id !== "github" || !adapter.manageUrl || typeof adapter.hasInstallation !== "function") return false;
+  if (!st || st.popupClosed) return false;
+  try {
+    if (await adapter.hasInstallation({ via: "oauth", token: tokens.accessToken })) return false;
+  } catch { return false; }
+  const tabId = await deviceTabId(st);
+  if (tabId == null) return false;
+  try { await chrome.tabs.update(tabId, { url: adapter.manageUrl, active: true }); } catch { return false; }
+  const rec = { tabId };
+  if (st.popupWindowId != null) rec.windowId = st.popupWindowId;
+  if (st.returnTabId != null) rec.returnTabId = st.returnTabId;
+  if (st.returnWindowId != null) rec.returnWindowId = st.returnWindowId;
+  await sessionSet({ [INSTALL_KEY]: rec });
+  if (rec.windowId != null) {
+    try { chrome.windows.update(rec.windowId, { focused: true }, () => void chrome.runtime.lastError); } catch {}
+  }
+  return true;
 }
 
 /** The user closed GitHub's window. Only a flag: polling goes on. */

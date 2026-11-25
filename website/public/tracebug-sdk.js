@@ -26441,9 +26441,16 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
   function isExtensionMode() {
     return _mode2 === "extension";
   }
+  function onIntegrationStatusChange(cb) {
+    _statusListeners.add(cb);
+    return () => {
+      _statusListeners.delete(cb);
+    };
+  }
   function setIntegrationStatus(status) {
     if (!status || typeof status !== "object") {
       _status = { ...EMPTY };
+      _notifyStatus();
       return;
     }
     _status = {
@@ -26456,6 +26463,15 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       trackerAttention: status.trackerAttention === true,
       trackerConnected: status.trackerConnected === true
     };
+    _notifyStatus();
+  }
+  function _notifyStatus() {
+    _statusListeners.forEach((cb) => {
+      try {
+        cb();
+      } catch (e2) {
+      }
+    });
   }
   function getIntegrationStatus() {
     return { ..._status };
@@ -26488,7 +26504,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const parts = shortcutParts(_boundShortcut);
     return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
   }
-  var _mode2, EMPTY, DEFAULT_TRACKERS, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
+  var _mode2, EMPTY, DEFAULT_TRACKERS, _status, _statusListeners, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
   var init_ext_transport = __esm({
     "src/ext-transport.ts"() {
       "use strict";
@@ -26496,6 +26512,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       EMPTY = { github: false, linear: false, slack: false, ai: false, defaultTracker: null, trackerAttention: false, trackerConnected: false };
       DEFAULT_TRACKERS = ["github", "linear", "slack"];
       _status = { ...EMPTY };
+      _statusListeners = /* @__PURE__ */ new Set();
       _hostAccess = void 0;
       _pageOnlyNoticeShown = false;
       _boundShortcut = "";
@@ -33362,7 +33379,7 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     if (target === "github") {
       const action = _githubConfigured() ? "open-github" : "github";
       const title = _githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue";
-      return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${(_a2 = extra.inner) != null ? _a2 : `${brandLogo("github", primary ? 15 : 14)} ${_githubButtonLabel()}`}</button>`;
+      return `<button data-action="${action}" class="${cls}"${role}${attrs} title="${title}">${(_a2 = extra.inner) != null ? _a2 : `${brandLogo("github", 14)} ${_githubButtonLabel()}`}</button>`;
     }
     if (target === "linear") return `<button data-action="linear" class="${cls}"${role}${attrs}>${(_b = extra.inner) != null ? _b : `${brandLogo("linear", 14)} ${_linearButtonLabel()}`}</button>`;
     return `<button data-action="slack" class="${cls}"${role}${attrs}>${(_c = extra.inner) != null ? _c : `${brandLogo("slack", 14)} ${_slackButtonLabel()}`}</button>`;
@@ -33374,6 +33391,10 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     return null;
   }
   function _primarySendHtml() {
+    const html = _primarySendInner();
+    return html.replace(/^<(\w+) /, `<$1 data-tb-primary-send data-tb-sig="${_sendSig(html)}" `);
+  }
+  function _primarySendInner() {
     const target = _primaryTarget();
     const panel = isExtensionMode() ? _panelTarget(target) : null;
     if (!panel) return _sendButtonHtml(target, true);
@@ -33383,7 +33404,7 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     const attrs = `data-tb-split-main data-target="${panel}" aria-keyshortcuts="Alt+ArrowDown"` + (target === "github" || target === "linear" || !s2.trackerConnected ? ` aria-haspopup="dialog" aria-expanded="false"` : "");
     const main = s2.trackerConnected ? _sendButtonHtml(target, true, { attrs }) : _sendButtonHtml(panel, true, {
       attrs,
-      inner: "Connect a tracker"
+      inner: `${_ic("plug")} Connect a tracker`
     });
     const withTip = main.replace(/ title="[^"]*"/, "").replace(/^<button /, `<button title="${escapeHtml(tip + " (Alt+\u2193: choose where to send)")}" `).replace(/<\/button>$/, `${dot}</button>`);
     return `<div class="tb-qb-split" data-tb-send-split>${withTip}</div>`;
@@ -33641,7 +33662,7 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s2, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s2, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L, _M;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -34223,34 +34244,31 @@ ${issueFooterMarkdown(report.session.sessionId)}`;
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
     _wireSendSplit(modal);
-    const openGhBtn = modal.querySelector('[data-action="open-github"]');
-    if (openGhBtn && _githubConfigured()) {
-      openGhBtn.addEventListener("click", async () => {
-        const { title, description } = getFilingDraft();
-        const report = _reportFromDraft(title, description);
-        if (!report) {
-          showToast("Nothing captured yet \u2014 take a screenshot or record first", root2);
-          return;
-        }
-        if (hasIntegration("github") && await _fileViaTracker("github", report, root2, screenshots2, close)) return;
-        if (!_githubRepo) {
-          showToast("Failed to send to GitHub \u2014 use Copy instead", root2);
-          return;
-        }
-        const repo = _githubRepo;
-        const ok = openGitHubIssue(repo, report);
-        if (ok) {
-          const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
-          showToast(`\u2713 GitHub issue page opened${tail}`, root2);
-          if (screenshots2.length) _downloadAllScreenshots(screenshots2);
-          _downloadVideoIfPresent();
-          _clearDraft();
-          setTimeout(close, 300);
-        } else {
-          showToast("Failed to open GitHub \u2014 use Copy instead", root2);
-        }
-      });
-    }
+    const openGhHandler = async () => {
+      const { title, description } = getFilingDraft();
+      const report = _reportFromDraft(title, description);
+      if (!report) {
+        showToast("Nothing captured yet \u2014 take a screenshot or record first", root2);
+        return;
+      }
+      if (hasIntegration("github") && await _fileViaTracker("github", report, root2, screenshots2, close)) return;
+      if (!_githubRepo) {
+        showToast("Failed to send to GitHub \u2014 use Copy instead", root2);
+        return;
+      }
+      const repo = _githubRepo;
+      const ok = openGitHubIssue(repo, report);
+      if (ok) {
+        const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
+        showToast(`\u2713 GitHub issue page opened${tail}`, root2);
+        if (screenshots2.length) _downloadAllScreenshots(screenshots2);
+        _downloadVideoIfPresent();
+        _clearDraft();
+        setTimeout(close, 300);
+      } else {
+        showToast("Failed to open GitHub \u2014 use Copy instead", root2);
+      }
+    };
     const copyGhBtnHandler = async () => {
       const { title, description } = getFilingDraft();
       if (hasIntegration("github")) {
@@ -34629,21 +34647,19 @@ ${report.steps}` : userDesc : void 0,
         showToast("Couldn't build the AI prompt \u2014 try again", root2);
       }
     });
-    const tabButtons = modal.querySelectorAll("[data-tab]");
-    const tabPanels = modal.querySelectorAll("[data-panel]");
-    tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        var _a3;
-        const which = btn.dataset.tab;
-        tabButtons.forEach((b) => b.classList.toggle("tb-qb-tab-active", b === btn));
-        tabPanels.forEach((p) => {
-          const active = p.dataset.panel === which;
-          p.classList.toggle("tb-qb-panel-active", active);
-          if (active) p.removeAttribute("hidden");
-          else p.setAttribute("hidden", "");
-        });
-        (_a3 = btn.querySelector(".tb-qb-tab-dot")) == null ? void 0 : _a3.remove();
+    (_J = modal.querySelector(".tb-qb-tabstrip")) == null ? void 0 : _J.addEventListener("click", (e2) => {
+      var _a3, _b2, _c2;
+      const btn = (_b2 = (_a3 = e2.target).closest) == null ? void 0 : _b2.call(_a3, "[data-tab]");
+      if (!btn) return;
+      const which = btn.dataset.tab;
+      modal.querySelectorAll(".tb-qb-tabstrip [data-tab]").forEach((b) => b.classList.toggle("tb-qb-tab-active", b === btn));
+      modal.querySelectorAll("[data-panel]").forEach((p) => {
+        const active = p.dataset.panel === which;
+        p.classList.toggle("tb-qb-panel-active", active);
+        if (active) p.removeAttribute("hidden");
+        else p.setAttribute("hidden", "");
       });
+      (_c2 = btn.querySelector(".tb-qb-tab-dot")) == null ? void 0 : _c2.remove();
     });
     const netPanel = modal.querySelector('[data-panel="network"]');
     if (netPanel) {
@@ -34694,7 +34710,7 @@ ${report.steps}` : userDesc : void 0,
       conSearch == null ? void 0 : conSearch.addEventListener("input", applyFeedFilter);
       conErrOnly == null ? void 0 : conErrOnly.addEventListener("change", applyFeedFilter);
     }
-    modal.querySelector('[data-action="linear"]').addEventListener("click", async () => {
+    const linearHandler = async () => {
       const { title, description } = getFilingDraft();
       const r2 = _reportFromDraft(title, description);
       if (!r2) {
@@ -34713,8 +34729,8 @@ ${report.steps}` : userDesc : void 0,
       } else {
         showToast("Failed to open Linear", root2);
       }
-    });
-    modal.querySelector('[data-action="slack"]').addEventListener("click", async () => {
+    };
+    const slackHandler = async () => {
       const { title, description } = getFilingDraft();
       const r2 = _reportFromDraft(title, description);
       if (!r2) {
@@ -34726,6 +34742,25 @@ ${report.steps}` : userDesc : void 0,
       const ok = await _copyToClipboard(text);
       showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root2);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
+    };
+    modal.addEventListener("click", (e2) => {
+      var _a3, _b2;
+      const btn = (_b2 = (_a3 = e2.target).closest) == null ? void 0 : _b2.call(_a3, '[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
+      if (!btn || !modal.contains(btn)) return;
+      const action = btn.getAttribute("data-action");
+      if (action !== "slack" && _showDockedPanel()) return;
+      if (action === "open-github") {
+        if (_githubConfigured()) void openGhHandler();
+      } else if (action === "linear") void linearHandler();
+      else void slackHandler();
+    });
+    const offStatus = onIntegrationStatusChange(() => {
+      if (!modal.isConnected) {
+        offStatus();
+        return;
+      }
+      const fresh = _refreshPrimarySend(modal);
+      if ((fresh == null ? void 0 : fresh.getAttribute("data-action")) === "github") fresh.addEventListener("click", copyGhBtnHandler);
     });
     modal.addEventListener("click", (e2) => {
       var _a3, _b2, _c2;
@@ -34756,7 +34791,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_J = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _J.addEventListener("click", () => {
+    (_K = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _K.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -34787,7 +34822,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_K = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _K.addEventListener("click", async () => {
+    (_L = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _L.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -34811,7 +34846,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_L = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _L.addEventListener("click", async () => {
+    (_M = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _M.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -35267,22 +35302,56 @@ ${report.steps}`;
       const btn = (_b = (_a2 = e2.target).closest) == null ? void 0 : _b.call(_a2, '[data-action="open-github"], [data-action="linear"], [data-action="slack"]');
       if (btn && e2.isTrusted) _panelHintHost(modal).dataset.tbPanelFocus = "create";
     }, true);
-    modal.querySelectorAll("[data-tb-split-main]").forEach((b) => {
-      b.addEventListener("keydown", (e2) => {
-        if (e2.key === "ArrowDown" && e2.altKey) {
-          e2.preventDefault();
-          _openSendPanel(modal, "picker");
-        }
-      });
+    modal.addEventListener("keydown", (e2) => {
+      var _a2, _b;
+      if (e2.key === "ArrowDown" && e2.altKey && ((_b = (_a2 = e2.target).closest) == null ? void 0 : _b.call(_a2, "[data-tb-split-main]"))) {
+        e2.preventDefault();
+        _openSendPanel(modal, "picker");
+      }
     });
+  }
+  function _showDockedPanel() {
+    var _a2;
+    const frame = document.querySelector("[data-tb-create-panel] iframe");
+    if (!frame) return false;
+    (_a2 = document.querySelector("[data-tb-tracker-tab] [data-tab]")) == null ? void 0 : _a2.click();
+    try {
+      frame.focus();
+    } catch (e2) {
+    }
+    return true;
+  }
+  function _refreshPrimarySend(modal) {
+    const old = modal.querySelector("[data-tb-primary-send]");
+    if (!old) return null;
+    if (old.dataset.tbSig === _sendSig(_primarySendInner())) return null;
+    const html = _primarySendHtml();
+    const hadFocus = old.contains(document.activeElement);
+    const tmp = document.createElement("div");
+    setInnerHTML(tmp, html);
+    const fresh = tmp.firstElementChild;
+    if (!fresh) return null;
+    old.replaceWith(fresh);
+    if (document.querySelector("[data-tb-create-panel]")) {
+      fresh.querySelectorAll("[aria-haspopup]").forEach((b) => b.setAttribute("aria-expanded", "true"));
+    }
+    const main = fresh.matches("button") ? fresh : fresh.querySelector("button");
+    if (hadFocus && main) {
+      try {
+        main.focus();
+      } catch (e2) {
+      }
+    }
+    return main;
+  }
+  function _sendSig(html) {
+    let h = 0;
+    for (let i2 = 0; i2 < html.length; i2++) h = h * 31 + html.charCodeAt(i2) | 0;
+    return String(h);
   }
   function _openSendPanel(modal, focus) {
     var _a2;
-    const open = document.querySelector("[data-tb-create-panel] iframe");
-    if (open) {
-      open.focus();
-      return;
-    }
+    if (_showDockedPanel()) return;
     const target = (_a2 = modal.querySelector("[data-tb-split-main]")) == null ? void 0 : _a2.dataset.target;
     const btn = target === "github" ? modal.querySelector('[data-action="open-github"]') : target === "linear" ? modal.querySelector('[data-action="linear"]') : null;
     if (!btn) return;
@@ -36202,7 +36271,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     /* The dim + blur sit on a layer BEHIND the dialog, not on the overlay
        itself: a filter on an ancestor makes IntersectionObserver v2 report the
-       in-page Create panel (an extension frame in the footer) as "not
+       in-page Create panel (an extension frame in the ticket) as "not
        visible", and its Create button only arms when visible. Same look. */
     #${MODAL_ID}.tb-qb-overlay::before {
       content: ""; position: absolute; inset: 0; z-index: 0;
@@ -36470,6 +36539,25 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-net-detail-url { font-size:11px; color:var(--tb-text-secondary); word-break:break-all; padding-bottom:6px; }
     #${MODAL_ID} .tb-qb-net-snippet pre { margin:0; padding:8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); font-size:10px; color:var(--tb-code-text); max-height:120px; overflow:auto; white-space:pre-wrap; }
     /* Tab notification dots */
+    /* The extension's Create panel, docked as a tab of the right column. */
+    #${MODAL_ID} .tb-qb-tab-tracker { display:inline-flex; align-items:center; flex:none; }
+    #${MODAL_ID} .tb-qb-tab-tracker .tb-qb-tab { padding-right:6px; }
+    #${MODAL_ID} .tb-qb-tab-x { display:inline-grid; place-items:center; width:22px; height:22px; margin:0 6px 0 0; padding:0; border:0; border-radius:6px; background:transparent; color:var(--tb-text-muted); cursor:pointer; }
+    #${MODAL_ID} .tb-qb-tab-x:hover { background:var(--tb-bg-primary); color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-tab-x:focus-visible { outline:2px solid #2563EB; outline-offset:1px; }
+    /* One more tab: tighter tabs, and the strip scrolls without a scrollbar. */
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip { padding:0 6px; scrollbar-width:none; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip::-webkit-scrollbar { display:none; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tab { padding:14px 9px 12px; gap:5px; }
+    #${MODAL_ID}[data-tb-docked] .tb-qb-tab-tracker .tb-qb-tab { padding-right:4px; }
+    /* Narrow: the columns stack, so the right one takes the body while the
+       panel is open, at nearly the window's height; the ticket scrolls, and
+       its footer stays below the panel (never under it). */
+    @media (max-width: 920px) {
+      #${MODAL_ID}[data-tb-docked] .tb-qb-shell { overflow-y:auto; overscroll-behavior:contain; }
+      #${MODAL_ID}[data-tb-docked] .tb-qb-left { display:none; }
+      #${MODAL_ID}[data-tb-docked] .tb-qb-body { flex:0 0 auto; height:calc(92vh - 40px); min-height:360px; grid-template-rows:minmax(0, 1fr); }
+    }
     #${MODAL_ID} .tb-qb-tab-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--tb-accent); margin-left:4px; vertical-align:middle; }
     #${MODAL_ID} .tb-qb-net-time { font-size:11px; color:var(--tb-text-muted); margin-left:auto; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-net-url { font-size:12px; color:var(--tb-text-secondary); font-family:var(--tb-font-mono); word-break:break-all; line-height:1.5; }

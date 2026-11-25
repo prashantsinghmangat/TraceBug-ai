@@ -19,7 +19,7 @@
       --border: #E5E7EB; --divider: #F1F2F4; --footer: #FCFCFD;
       --primary: #111827; --primary-hover: #000000; --on-primary: #FFFFFF;
       --danger: #DC2626; --ring: #2563EB; --link: #1D4ED8;
-      --ok: #16A34A; --ok-soft: #DCFCE7; --wait: #F59E0B;
+      --ok: #16A34A; --ok-soft: #DCFCE7; --wait: #F59E0B; --dot-ring: rgba(0, 0, 0, .15);
       color-scheme: light;
     }
     /* Dark: the ticket's dark theme, same contrast steps. */
@@ -30,7 +30,7 @@
         --border: #2A2F3D; --divider: #1F2430; --footer: #10131B;
         --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
         --danger: #F87171; --ring: #60A5FA; --link: #93C5FD;
-        --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24;
+        --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24; --dot-ring: rgba(255, 255, 255, .28);
         color-scheme: dark;
       }
     }
@@ -40,11 +40,13 @@
       --border: #2A2F3D; --divider: #1F2430; --footer: #10131B;
       --primary: #F3F4F6; --primary-hover: #FFFFFF; --on-primary: #111827;
       --danger: #F87171; --ring: #60A5FA; --link: #93C5FD;
-      --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24;
+      --ok: #4ADE80; --ok-soft: #14532D; --wait: #FBBF24; --dot-ring: rgba(255, 255, 255, .28);
       color-scheme: dark;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: transparent; }
+    /* Docked in the ticket's right column: the frame fills it, and only the
+       body scrolls — the header and the Create row stay put. */
+    html, body { margin: 0; background: transparent; height: 100%; }
     body {
       color: var(--text);
       font: 13px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -53,9 +55,13 @@
     [hidden] { display: none !important; }
     :focus { outline: none; }
     :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    /* Focus moved for a pointer user (a click opened this screen): no ring
+       until they press a key (confirm-send.js quietFocus). */
+    html.quiet :focus-visible { outline: none; }
     svg { flex: none; }
 
-    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: clip; }
+    .panel { background: var(--panel); height: 100%; display: flex; flex-direction: column; overflow: clip; }
+    .phead, .actions { flex: none; }
 
     /* Header */
     .phead { display: flex; align-items: center; gap: 12px; padding: 14px 12px 14px 20px; border-bottom: 1px solid var(--divider); position: relative; }
@@ -91,7 +97,7 @@
     .menu hr { border: 0; border-top: 1px solid var(--divider); margin: 6px 0; }
 
     /* Body */
-    .pbody { padding: 20px; }
+    .pbody { padding: 20px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
     .pbody > * + * { margin-top: 16px; }
     .pbody > [hidden] + * { margin-top: 0; }
     .center { text-align: center; display: flex; flex-direction: column; align-items: center; }
@@ -155,9 +161,12 @@
       background: var(--panel); color: var(--label); border: 1px solid var(--border);
     }
     button.chip:hover:not(:disabled) { background: var(--hover); border-color: var(--border); }
-    button.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-    button.chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-    button.chip[aria-pressed="true"] .dot { box-shadow: 0 0 0 1.5px var(--on-primary); }
+    /* The ring keeps a white (or very light) label colour visible. */
+    button.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); box-shadow: inset 0 0 0 1px var(--dot-ring); }
+    /* Selected wins over hover: same specificity as the hover rule, and later. */
+    button.chip[aria-pressed="true"], button.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+    button.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+    button.chip[aria-pressed="true"] .dot { box-shadow: inset 0 0 0 1px var(--dot-ring), 0 0 0 1.5px var(--on-primary); }
     .field-note { margin-top: 6px; }
 
     /* Token form (expands in place) */
@@ -181,6 +190,13 @@
     }
     .waiting { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
     .waiting .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--wait); }
+    /* Sign in, then choose repositories: one GitHub window for both. */
+    .steps { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+    .steps .step { display: inline-flex; align-items: center; gap: 5px; }
+    .steps .n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--tile); font-size: 11px; font-weight: 600; }
+    .steps .cur { color: var(--text); font-weight: 600; }
+    .steps .cur .n { background: var(--primary); color: var(--on-primary); }
+    .steps .done .n { background: var(--ok-soft); color: var(--ok); }
 
     /* Created */
     .okmark { width: 48px; height: 48px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; margin-bottom: 12px; }
@@ -284,6 +300,7 @@
       </div>
 
       <div class="center" id="deviceBox" hidden>
+        <p class="steps" id="deviceSteps" hidden><span class="step cur"><span class="n">1</span>Sign in</span><span aria-hidden="true">·</span><span class="step"><span class="n">2</span>Choose repositories</span></p>
         <h2>Enter this code on GitHub</h2>
         <p class="sub" id="deviceHint"></p>
         <div class="codebox">
@@ -293,6 +310,15 @@
         <div class="waiting"><span class="pulse" aria-hidden="true"></span><span id="deviceWait">Waiting for GitHub…</span>
           <button type="button" class="secondary small" id="openDevice" hidden>Reopen GitHub</button></div>
         <div class="stack"><button type="button" class="ghost full" id="cancelDevice">Cancel</button></div>
+      </div>
+
+      <!-- Step 2 in the same GitHub window: the worker sent it on to the
+           install page. Closes by itself when GitHub reports the install. -->
+      <div class="center" id="installingBox" hidden>
+        <p class="steps"><span class="step done"><span class="n" aria-label="done">✓</span>Sign in</span><span aria-hidden="true">·</span><span class="step cur"><span class="n">2</span>Choose repositories</span></p>
+        <h2>Choose repositories on GitHub</h2>
+        <p class="sub">In the GitHub window, pick the repositories TraceBug can file issues in, then Install.</p>
+        <div class="waiting"><span class="pulse" aria-hidden="true"></span><span>Waiting for GitHub…</span></div>
       </div>
 
       <div class="notice" id="accessBox" hidden>

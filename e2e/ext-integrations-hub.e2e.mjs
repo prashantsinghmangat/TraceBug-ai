@@ -469,6 +469,14 @@ try {
   };
   const sLight = await cardBg("light"), sDark = await cardBg("dark");
   check("…settings follows light and dark", sLight !== sDark, `${sLight} / ${sDark}`);
+  // Pass 2: Settings' own Auto / Light / Dark writes the popup's key.
+  await set.click('#themeSeg [data-theme-choice="dark"]');
+  const th = await set.evaluate(() => ({ key: localStorage.getItem("tracebug_popup_theme"), attr: document.documentElement.getAttribute("data-theme"),
+    checked: document.querySelector('#themeSeg [aria-checked="true"]').dataset.themeChoice }));
+  await set.click('#themeSeg [data-theme-choice="auto"]');
+  const th2 = await set.evaluate(() => ({ key: localStorage.getItem("tracebug_popup_theme"), attr: document.documentElement.getAttribute("data-theme") }));
+  check("…Settings' theme control (Auto / Light / Dark) writes the popup's theme key and applies it",
+    th.key === "dark" && th.attr === "dark" && th.checked === "dark" && th2.key === "auto" && th2.attr === null, JSON.stringify([th, th2]));
   const bg = async (theme) => {
     await hub.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
     return hub.evaluate(() => getComputedStyle(document.querySelector("#hubView .tbh-row, #hubView .tbh-tile")).backgroundColor);

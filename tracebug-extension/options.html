@@ -84,6 +84,20 @@
       background: var(--tile); color: var(--label); font-size: 12px; font-weight: 600; line-height: 20px; text-align: center;
     }
     .side-note { margin: 20px 0 0; padding: 16px 10px 0; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; line-height: 1.5; }
+    /* Theme: the same choice as the popup's theme button (tracebug_popup_theme). */
+    .theme { margin: 16px 0 0 10px; display: flex; align-items: center; gap: 10px; }
+    .theme-label { font-size: 12px; color: var(--muted); }
+    .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--tile); border-radius: 8px; }
+    .seg button {
+      height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--label);
+      font: 500 12px/1 inherit; font-family: inherit; cursor: pointer; box-shadow: none;
+    }
+    .seg button:hover:not(:disabled) { background: transparent; color: var(--text); border: 0; }
+    .seg button[aria-checked="true"], .seg button[aria-checked="true"]:hover:not(:disabled) {
+      background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(17, 24, 39, .06);
+    }
+    .steps { display: flex; justify-content: center; gap: 8px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+    .steps .cur { color: var(--text); font-weight: 600; }
     @media (max-width: 863px) {
       .page { padding: 16px 16px 48px; gap: 16px; }
       .side { position: static; max-width: none; flex-basis: 100%; min-width: 0; }
@@ -92,6 +106,7 @@
       .nav::-webkit-scrollbar { display: none; }
       .nav-item { flex: none; }
       .side-note { margin-top: 8px; padding: 0; border: 0; }
+      .theme { margin: 8px 0 0; }
     }
 
     /* Sections */
@@ -272,7 +287,7 @@
     .confirm-box { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--hover); }
     .confirm-box p { margin: 0 0 10px; font-size: 13px; color: var(--label); }
     .confirm-box .dlg-actions { justify-content: flex-start; }
-    .device { padding: 16px; border: 1px solid var(--border); border-radius: 10px; text-align: center; }
+    .device, .device-step2 { padding: 16px; border: 1px solid var(--border); border-radius: 10px; text-align: center; }
     .device .hint { margin-bottom: 6px; }
     .device-code { display: block; font: 600 26px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; user-select: all; }
     .device .dlg-actions { justify-content: center; margin-top: 12px; }
@@ -306,6 +321,14 @@
         <a class="nav-item" href="#help" data-section="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a>
       </nav>
       <p class="side-note">Everything here stays in this browser. Nothing is sent to TraceBug.</p>
+      <div class="theme">
+        <span class="theme-label" id="themeLabel">Theme</span>
+        <div class="seg" role="radiogroup" aria-labelledby="themeLabel" id="themeSeg">
+          <button type="button" role="radio" data-theme-choice="auto" aria-checked="true">Auto</button>
+          <button type="button" role="radio" data-theme-choice="light" aria-checked="false" tabindex="-1">Light</button>
+          <button type="button" role="radio" data-theme-choice="dark" aria-checked="false" tabindex="-1">Dark</button>
+        </div>
+      </div>
     </aside>
 
     <main class="content">
@@ -656,12 +679,18 @@
           </div>
         </div>
         <div class="device" hidden>
+          <p class="steps device-steps"><span class="cur">1 Sign in</span><span aria-hidden="true">·</span><span>2 Choose repositories</span></p>
           <p class="hint">Your code</p>
           <b class="device-code"></b>
           <div class="dlg-actions">
             <button class="secondary small device-copy" type="button">Copy code</button>
             <button class="secondary small device-reopen" type="button" hidden>Reopen GitHub</button>
           </div>
+        </div>
+        <!-- Step 2, same GitHub window: the worker sent it on to the install page. -->
+        <div class="device-step2" hidden>
+          <p class="steps"><span>✓ Sign in</span><span aria-hidden="true">·</span><span class="cur">2 Choose repositories</span></p>
+          <p class="hint">In the GitHub window, pick the repositories TraceBug can file issues in, then Install. This dialog closes by itself.</p>
         </div>
         <p class="status connect-status" role="status" aria-live="polite"></p>
         <div class="dlg-actions">

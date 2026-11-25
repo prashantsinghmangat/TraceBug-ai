@@ -207,7 +207,9 @@ describe('copying a ticket does not destroy it', () => {
 
   /** The handler body for one action, up to the next listener registration. */
   function handler(action: string): string {
-    const i = SRC.indexOf(`'[data-action="${action}"]'`);
+    // A per-button listener, or a named handler the footer's delegated click calls.
+    const own = SRC.indexOf(`'[data-action="${action}"]'`);
+    const i = own > -1 ? own : SRC.indexOf(`const ${action}Handler = `);
     expect(i, `no handler for ${action}`).toBeGreaterThan(-1);
     // Without the paren: the next registration may be
     // `modal.querySelector<HTMLButtonElement>(`, and the generic breaks a
