@@ -174,7 +174,8 @@ function quietFocus(el) {
 
 function show(id, on) {
   const el = $(id);
-  if (el) el.hidden = !on;
+  // The attribute, not .hidden: SVG elements have no such property.
+  if (el) el.toggleAttribute("hidden", !on);
 }
 
 function panelMsg(text, isErr) {
@@ -229,6 +230,15 @@ function statusText(t) {
 
 function setStatus(t) {
   put("account", EMBED ? statusText(t) : accountText(t));
+  // A pasted GitHub token is marked as such: "Using a [personal token] ghp_…".
+  const el = $("account");
+  const text = el ? el.textContent : "";
+  const at = text.indexOf("personal token");
+  if (!EMBED || !t || t.via !== "token" || t.id !== "github" || at < 0) return;
+  const pill = document.createElement("span");
+  pill.className = "tok";
+  pill.textContent = "personal token";
+  el.replaceChildren(text.slice(0, at), pill, text.slice(at + "personal token".length));
 }
 
 /** The tile shows the selected tracker's mark. */
@@ -726,21 +736,40 @@ function renderField(spec) {
   };
   lg.append(name, count);
   fs.appendChild(lg);
+  // Nothing to pick (a repository with no labels): no section at all.
+  if (!(spec.options || []).length) { fs.hidden = true; return fs; }
   const box = document.createElement("div");
   box.className = "chips";
   if ((spec.options || []).length > 8) {
+    // Above the list, so it doesn't scroll away with the chips.
     const filter = document.createElement("input");
     filter.type = "search";
     filter.className = "filter";
     filter.placeholder = "Search " + spec.label.toLowerCase();
     filter.setAttribute("aria-label", "Search " + spec.label.toLowerCase());
+    // The search only narrows this repository's own list (labels aren't made here).
+    const none = document.createElement("p");
+    none.className = "muted chips-none";
+    none.hidden = true;
     filter.addEventListener("input", () => {
       const q = filter.value.trim().toLowerCase();
-      box.querySelectorAll("button.chip").forEach((c) => { c.hidden = !!q && !c.textContent.toLowerCase().includes(q); });
+      let shown = 0;
+      box.querySelectorAll("button.chip").forEach((c) => {
+        // What's picked stays in sight, whatever the search.
+        const match = !q || c.textContent.toLowerCase().includes(q);
+        c.hidden = !match && c.getAttribute("aria-pressed") !== "true";
+        if (match) shown++;
+      });
+      none.textContent = "No " + spec.label.toLowerCase() + " match “" + filter.value.trim() + "” in this repository.";
+      none.hidden = shown > 0;
     });
-    box.appendChild(filter);
+    fs.appendChild(filter);
+    fs.appendChild(none);
   }
-  (spec.options || []).forEach((op) => {
+  // Picked ones first, so "N selected" is always the top of the list.
+  const opts = (spec.options || []).slice().sort((a, b) =>
+    Number(PF.isPicked(panel.picks, spec.key, String(b.id))) - Number(PF.isPicked(panel.picks, spec.key, String(a.id))));
+  opts.forEach((op) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip";
@@ -762,12 +791,6 @@ function renderField(spec) {
     box.appendChild(chip);
   });
   recount();
-  if (!(spec.options || []).length) {
-    const none = document.createElement("span");
-    none.className = "muted";
-    none.textContent = "None in this " + (panel.current ? panel.current.containerNoun.toLowerCase() : "place") + ".";
-    box.appendChild(none);
-  }
   fs.appendChild(box);
   if (spec.note) fs.appendChild(noteEl(spec.note));
   return fs;
@@ -940,7 +963,11 @@ async function onTokenSave(e, replaceOk) {
   $("tokenInput").value = "";
   tokenMsg("");
   await refreshAfterAuthChange(t.id);
-  panelMsg("Connected" + (res.account ? " as " + res.account : "") + " with " + (t.id === "linear" ? "an API key" : "a token") + ".");
+  // Said only once the fresh status agrees (never over a "Not connected" screen).
+  const now = panel.current;
+  if (now && now.id === t.id && now.connected && now.via === "token") {
+    panelMsg("Connected" + (res.account ? " as " + res.account : "") + " with " + (t.id === "linear" ? "an API key" : "a personal token") + ".");
+  } else panelMsg("The " + secretNoun(t) + " was checked but didn't stay connected. Paste it again.", true);
 }
 
 // ── SAML single sign-on (panel only) ───────────────────────────────────────
@@ -1555,7 +1582,21 @@ function watchVisibility() {
   let io;
   try { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1], trackVisibility: true, delay: 100 }); }
   catch { io = new IntersectionObserver(onEntries, { threshold: [0, 0.99, 1] }); }
-  io.observe($("send").parentElement);
+  const row = $("send").parentElement;
+  io.observe(row);
+  // The observer reports changes only, and a reading taken while the page
+  // was covered (GitHub's sign-in windows) or redrawing can go stale. While
+  // Create isn't armed, take a fresh reading — same check, nothing relaxed —
+  // when the user comes back to the panel, and every couple of seconds.
+  const recheck = () => {
+    if (panel.armed || decided || row.hidden) return;
+    io.unobserve(row);
+    io.observe(row);
+  };
+  window.addEventListener("focus", recheck);
+  document.addEventListener("pointerdown", recheck, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) recheck(); });
+  setInterval(recheck, 2000);
 }
 
 // ── Second opinion (IntersectionObserver v2 said "hidden") ──────────────────

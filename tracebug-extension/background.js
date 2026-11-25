@@ -3107,14 +3107,16 @@ async function saveTrackerToken(api, adapter, message) {
   const r = await api.checkTrackerSecret(adapter.id, secret, container);
   if (!r.ok) return { error: r.error, code: r.code };
   const field = adapter.id === "github" ? "token" : "apiKey";
+  // One GitHub connection: a saved token replaces the sign-in (the page asked
+  // "This replaces your GitHub sign-in" first). The sign-in goes first: with
+  // both stored for a moment, any status call in between (enforceOneGitHub)
+  // would keep the sign-in and drop the new token, leaving neither.
+  if (adapter.id === "github") await api.forgetOAuth(trackerAuthStore, "github");
   const all = (await localGet([INT_KEY], {}))[INT_KEY] || {};
   all[adapter.id] = Object.assign({}, all[adapter.id] || {}, { [field]: secret });
   await localSet({ [INT_KEY]: all });
   const back = (((await localGet([INT_KEY], {}))[INT_KEY] || {})[adapter.id] || {})[field];
   if (back !== secret) return { error: "TraceBug couldn't save it. Try again." };
-  // One GitHub connection: a saved token replaces the sign-in (the page asked
-  // "This replaces your GitHub sign-in" first).
-  if (adapter.id === "github") await api.forgetOAuth(trackerAuthStore, "github");
   return { ok: true, account: r.account || "" };
 }
 

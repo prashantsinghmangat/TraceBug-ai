@@ -1014,7 +1014,9 @@ async function finishConnected(t, account) {
   say($("intStatus"), "Connected" + (account ? " as " + account : "") + ". Now pick where new issues go.", "ok", " ");
   await renderTrackerAccounts();
   const pick = document.querySelector('.tracker-acct[data-tracker="' + t.id + '"] .acct-default');
-  if (pick && !pick.closest("[hidden]")) pick.focus();
+  // A long list is typed into (tracker-connect.js comboBox): focus that field.
+  const field = pick && pick.hidden && pick._tbCombo ? pick._tbCombo.input : pick;
+  if (field && !field.closest("[hidden]")) field.focus();
 }
 
 // ── Disconnect confirm ──────────────────────────────────────────────────────

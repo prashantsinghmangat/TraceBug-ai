@@ -750,6 +750,9 @@ function dockCreatePanel(p) {
   p.slot.style.cssText = "position:absolute;left:0;right:0;bottom:0;margin:0;padding:0;z-index:4;" +
     "top:" + Math.round(p.strip.offsetTop + p.strip.offsetHeight) + "px;" +
     "display:" + (on ? "block" : "none") + " !important;";
+  // Shown (again): make sure all of it is in view.
+  if (on && !p.wasShown) revealDockedPanel(p);
+  p.wasShown = on;
   // Its tab stays in view in a strip that scrolls sideways.
   if (on) {
     var sr = p.strip.getBoundingClientRect(), tr = p.tabWrap.getBoundingClientRect();
@@ -893,10 +896,20 @@ function mountCreatePanel(id, nonce) {
   // Open on its tab: the ticket's own switching hides the other panels.
   tab.click();
   dockCreatePanel(p);
-  // A narrow ticket scrolls (the panel's column under its header): bring it up.
-  if (right.getBoundingClientRect().top > window.innerHeight / 2) {
-    try { strip.scrollIntoView({ block: "start" }); } catch (e) {}
-  }
+  revealDockedPanel(p);
+}
+
+/**
+ * A narrow ticket (or a zoomed-in one) stacks and scrolls: bring the panel's
+ * column fully into view, or its Create row sits below the visible part and
+ * Create never arms. A wide ticket doesn't scroll, so this changes nothing there.
+ */
+function revealDockedPanel(p) {
+  var shell = p.modal.querySelector(".tb-qb-shell");
+  if (!shell || shell.scrollHeight <= shell.clientHeight + 1) return;
+  var sr = shell.getBoundingClientRect(), fr = p.slot.getBoundingClientRect();
+  if (fr.top >= sr.top - 1 && fr.bottom <= sr.bottom + 1) return;
+  shell.scrollTop += Math.round(p.strip.getBoundingClientRect().top - sr.top);
 }
 
 // ── Is the panel really what the user sees? (second opinion) ──────────────

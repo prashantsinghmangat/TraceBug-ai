@@ -685,8 +685,16 @@ try {
   const panelBg = async (theme) => {
     await page.evaluate((t) => { const r = document.getElementById("tracebug-root"); if (r) r.setAttribute("data-tb-theme", t); }, theme);
     const { frame: f } = await sendToGitHub(page);
+    // The theme is applied once the frame has its request; the panel shows after.
+    if (f) await f.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {});
     const bg = f ? await f.$eval("#panel", (e) => getComputedStyle(e).backgroundColor) : "none";
-    if (f) { await f.click("#cancel"); await sleep(400); }
+    if (f) {
+      await f.click("#cancel");
+      const gone = () => page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).then(() => true, () => false);
+      // A lost click would leave this panel open, and the next Send reuses an
+      // open panel (by design) — with this theme. Close it for sure.
+      if (!(await gone())) { await f.evaluate(() => document.getElementById("cancel").click()).catch(() => {}); await gone(); }
+    }
     return bg;
   };
   const dark = await panelBg("dark");
@@ -889,6 +897,22 @@ try {
   } else check("8d. at 400 px tall the panel stays inside the window", false, "no panel");
   await page.setViewportSize({ width: 1280, height: 800 });
   await sleep(300);
+
+  // ══ 8e. Browser zoom 150 %: the ticket stacks; the panel is brought into view and Create arms ═
+  const setZoom = (z) => sw.evaluate(async ({ glob, z }) => { const [t] = await chrome.tabs.query({ url: glob }); await chrome.tabs.setZoom(t.id, z); }, { glob: GLOB, z });
+  await setZoom(1.5);
+  await sleep(500);
+  const { frame: fz } = await sendToGitHub(page);
+  if (fz) {
+    await fz.waitForSelector('button.chip[value="bug"]', { timeout: 8000 }).catch(() => {});
+    check("8e. at 150 % zoom Create arms (the whole panel scrolled into view)",
+      await fz.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 6000 }).then(() => true, () => false),
+      JSON.stringify(await page.evaluate(dockGeometry)));
+    await fz.click("#cancel");
+    await sleep(400);
+  } else check("8e. at 150 % zoom Create arms", false, "no panel");
+  await setZoom(1);
+  await sleep(400);
 
   // ══ 9. Small viewport ════════════════════════════════════════════════════
   await page.setViewportSize({ width: 360, height: 640 });

@@ -110,7 +110,9 @@ async function launch(ext, label) {
     }
     if (p === "/organizations/4242") return json(route, { login: "acme" });
     if (p === "/user/installations/9/repositories") return json(route, { total_count: 1, repositories: [{ full_name: REPO, private: true }].concat(state.extraRepos) });
-    if (p === `/repos/${REPO}/labels`) return json(route, [{ name: "bug" }]);
+    if (p === `/repos/${REPO}/labels`) return json(route, state.manyLabels
+      ? ["bug", "ui", "docs", "triage", "p1", "p2", "p3", "infra", "wontfix", "help"].map((name) => ({ name }))
+      : [{ name: "bug" }]);
     if (p === `/repos/${REPO}/assignees`) return json(route, [{ login: "octo" }]);
     if (p === `/repos/${REPO}/milestones`) return json(route, []);
     if (p === `/repos/${REPO}`) return json(route, { permissions: { push: true } });
@@ -378,6 +380,7 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });
     state.installed = false;
+    state.manyLabels = true; // for A8's label search
     await frame.click("#connect");
     await frame.waitForSelector("#deviceBox:not([hidden])", { timeout: 8000 });
     state.approve = true;
@@ -396,6 +399,49 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
       !left && !(await frame.isVisible("#installingBox")) &&
       await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO));
     check("…and only one GitHub window was ever opened", (await sw.evaluate(() => self.__popups.length)) === 1);
+    // The label search only narrows the repository's labels: no match says so.
+    if ((await frame.inputValue("#container")) !== REPO) {
+      await frame.fill("#container", REPO);
+      await frame.dispatchEvent("#container", "change");
+    }
+    await frame.waitForSelector('fieldset[data-field="labels"] .filter', { timeout: 8000 }).catch(() => {});
+    await frame.fill('fieldset[data-field="labels"] .filter', "Newtest");
+    const nomatch = await frame.$eval('fieldset[data-field="labels"]', (fs) => ({
+      text: (fs.querySelector(".chips-none") || {}).textContent || "", shown: fs.querySelector(".chips-none") && !fs.querySelector(".chips-none").hidden,
+      // What's picked stays in sight; only unpicked chips are filtered out.
+      unpicked: [...fs.querySelectorAll('button.chip[aria-pressed="false"]')].filter((c) => !c.hidden).length,
+      picked: [...fs.querySelectorAll('button.chip[aria-pressed="true"]')].filter((c) => !c.hidden).length,
+      // The search box sits above the scrolling list, and the list never scrolls sideways.
+      filterOutside: !fs.querySelector(".chips .filter"),
+      sideways: (() => { const b = fs.querySelector(".chips"); return b.scrollWidth > b.clientWidth; })(),
+      pickedFirst: (() => { const cs = [...fs.querySelectorAll("button.chip")].map((c) => c.getAttribute("aria-pressed")); return cs.indexOf("false") < 0 || cs.lastIndexOf("true") < cs.indexOf("false"); })(),
+    })).catch(() => ({}));
+    check("A8. a label search with no match says \"No labels match …\"; picked labels stay shown, first, above no sideways scroll",
+      nomatch.shown && nomatch.unpicked === 0 && nomatch.picked >= 1 && nomatch.filterOutside && !nomatch.sideways && nomatch.pickedFirst &&
+      /No labels match .Newtest. in this repository/.test(nomatch.text), JSON.stringify(nomatch));
+    // Settings → Default repository: a long list gets a search box that narrows it.
+    state.extraRepos = Array.from({ length: 12 }, (_, i) => ({ full_name: `octo/repo-${i}` })).concat([{ full_name: "octo/snow" }]);
+    const opt = await ctx.newPage();
+    await opt.goto(`chrome-extension://${new URL(sw.url()).host}/options.html#integrations`);
+    const sel = '.tracker-acct[data-tracker="github"]';
+    await opt.waitForFunction((s) => (document.querySelector(s + " .acct-default") || { options: [] }).options.length > 10, sel, { timeout: 8000 }).catch(() => {});
+    // One field: typing narrows the list under it, Enter picks the only match.
+    const combo = sel + " .acct-default-combo";
+    await opt.click(combo);
+    await opt.keyboard.type("snow");
+    const narrowed = await opt.$$eval(sel + ' .tb-combo li[role="option"]', (ls) => ls.map((l) => l.textContent));
+    await opt.press(combo, "Enter");
+    await opt.waitForFunction((s) => document.querySelector(s + " .acct-default").value === "octo/snow", sel, { timeout: 5000 }).catch(() => {});
+    const after = await opt.$eval(sel, (row) => ({
+      select: row.querySelector(".acct-default").hidden, field: row.querySelector(".acct-default-combo").value,
+      list: row.querySelector(".tb-combo ul").hidden,
+    }));
+    check("A9. Settings: a long repository list is one search field; \"snow\" leaves one, Enter picks it",
+      JSON.stringify(narrowed) === '["octo/snow"]' && (await opt.inputValue(sel + " .acct-default")) === "octo/snow" &&
+      after.select && after.field === "octo/snow" && after.list, JSON.stringify({ narrowed, after }));
+    await opt.fill(combo, "zzz");
+    check("…a search with no match says so in the list",
+      /No repositories match .zzz./.test(await opt.textContent(sel + " .tb-combo ul")));
   } finally {
     await ctx.close();
   }
@@ -460,6 +506,9 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("C4. a working token: checked, saved, shown masked (\"Using a personal token\")", /Using a personal token ghp_…ABCD/.test(await frame.textContent("#account")),
       (await frame.textContent("#account")).trim());
     check("…the field is cleared", (await frame.inputValue("#tokenInput").catch(() => "")) === "");
+    check("…\"personal token\" is marked in the header, and the panel says it's connected with one",
+      (await frame.textContent("#account .tok").catch(() => "")) === "personal token" &&
+      /Connected as .* with a personal token\./.test(await frame.textContent("#panelMsg")), (await frame.textContent("#panelMsg")).trim());
     const stored = ((await sw.evaluate(() => chrome.storage.local.get("tb_integrations_v1"))).tb_integrations_v1 || {}).github || {};
     check("…saved in extension storage", stored.token === PAT);
     await frame.waitForFunction((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO, { timeout: 8000 }).catch(() => {});
@@ -483,6 +532,9 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     // ── The same disclosure for Linear: an API key ──
     await frame.selectOption("#tracker", "linear");
     await frame.waitForSelector("#tokenBox", { state: "visible", timeout: 8000 }).catch(() => {});
+    check("…the header shows Linear's mark, not GitHub's (SVG: the hidden attribute)",
+      await frame.evaluate(() => document.getElementById("markGithub").hasAttribute("hidden") && !document.getElementById("markLinear").hasAttribute("hidden") &&
+        getComputedStyle(document.getElementById("markGithub")).display === "none"));
     check("C7. Linear: \"Use an API key instead\", open (no sign-in here)",
       /Use an API key instead/.test(await frame.textContent("#tokenSummary")) && await frame.evaluate(() => document.getElementById("tokenBox").open) &&
       /Linear API key/.test(await frame.textContent("#tokenLabel")));
