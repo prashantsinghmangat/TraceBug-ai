@@ -865,12 +865,35 @@ try {
   if (fd) {
     await page.click("#tracebug-quick-bug-modal [data-tb-tracker-tab] .tb-qb-tab-x");
     await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
-    const after = await page.evaluate(() => ({
-      gone: !document.querySelector("[data-tb-create-panel]") && !document.querySelector("[data-tb-tracker-tab]"),
-      back: !!document.querySelector('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"].tb-qb-tab-active'),
-    }));
-    check("8c. the GitHub tab's ✕ closes the panel and the tab, back on the tab that was open", after.gone && after.back, JSON.stringify(after));
+    const after = await page.evaluate(() => {
+      const w = document.querySelector("[data-tb-tracker-tab]");
+      return {
+        gone: !document.querySelector("[data-tb-create-panel]"),
+        // The tab stays, idle: its name, no ✕, not selected.
+        idle: !!w && w.querySelector("[data-tab]").textContent.trim() === "GitHub" && w.querySelector(".tb-qb-tab-x").hidden &&
+          getComputedStyle(w.querySelector(".tb-qb-tab-x")).display === "none" && !w.querySelector("[data-tab]").classList.contains("tb-qb-tab-active"),
+        back: !!document.querySelector('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"].tb-qb-tab-active'),
+      };
+    });
+    check("8c. the GitHub tab's ✕ closes the panel (the tab stays, idle), back on the tab that was open",
+      after.gone && after.idle && after.back, JSON.stringify(after));
     check("…nothing was filed by closing it", await (async () => { await sleep(400); return (await pending()).length === 0; })());
+    // The idle tab opens the panel itself, like the send button.
+    await page.click('#tracebug-quick-bug-modal [data-tb-tracker-tab] [data-tab]');
+    const fe = await panelFrame();
+    const viaTab = await page.evaluate(() => {
+      const w = document.querySelector("[data-tb-tracker-tab]");
+      return { frame: !!document.querySelector("[data-tb-create-panel] iframe"), tabs: document.querySelectorAll("[data-tb-tracker-tab]").length,
+        active: w.querySelector("[data-tab]").classList.contains("tb-qb-tab-active"), x: !w.querySelector(".tb-qb-tab-x").hidden };
+    });
+    check("8c2. clicking the idle GitHub tab opens the panel on that same tab (one tab, ✕ back)",
+      !!fe && viaTab.frame && viaTab.tabs === 1 && viaTab.active && viaTab.x, JSON.stringify(viaTab));
+    if (fe) {
+      await page.click("#tracebug-quick-bug-modal [data-tb-tracker-tab] .tb-qb-tab-x");
+      await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+      check("…and its ✕ goes back to the tab that was open before it",
+        await page.evaluate(() => !!document.querySelector('#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tab="info"].tb-qb-tab-active')));
+    }
   } else check("8c. the GitHub tab's ✕ closes the panel", false, "no panel");
 
   // ══ 8d. A ~400 px tall window: the panel scrolls inside, Create stays reachable ═

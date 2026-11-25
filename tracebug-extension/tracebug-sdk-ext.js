@@ -36532,11 +36532,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-tab-x { display:inline-grid; place-items:center; width:22px; height:22px; margin:0 6px 0 0; padding:0; border:0; border-radius:6px; background:transparent; color:var(--tb-text-muted); cursor:pointer; }
     #${MODAL_ID} .tb-qb-tab-x:hover { background:var(--tb-bg-primary); color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-tab-x:focus-visible { outline:2px solid #2563EB; outline-offset:1px; }
-    /* One more tab: tighter tabs, and the strip scrolls without a scrollbar. */
-    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip { padding:0 6px; scrollbar-width:none; }
-    #${MODAL_ID}[data-tb-docked] .tb-qb-tabstrip::-webkit-scrollbar { display:none; }
-    #${MODAL_ID}[data-tb-docked] .tb-qb-tab { padding:14px 9px 12px; gap:5px; }
-    #${MODAL_ID}[data-tb-docked] .tb-qb-tab-tracker .tb-qb-tab { padding-right:4px; }
+    #${MODAL_ID} .tb-qb-tab-x[hidden] { display:none; }
+    /* Idle (no panel yet, no \u2715): an ordinary tab's padding. */
+    #${MODAL_ID} .tb-qb-tab-tracker:has(.tb-qb-tab-x[hidden]) .tb-qb-tab { padding-right:9px; }
+    /* One more tab (the extension's, always there in Chrome): tighter tabs,
+       and the strip scrolls without a scrollbar. */
+    #${MODAL_ID} .tb-qb-tabstrip:has(.tb-qb-tab-tracker) { padding:0 6px; scrollbar-width:none; }
+    #${MODAL_ID} .tb-qb-tabstrip:has(.tb-qb-tab-tracker)::-webkit-scrollbar { display:none; }
+    #${MODAL_ID} .tb-qb-tabstrip:has(.tb-qb-tab-tracker) .tb-qb-tab { padding:14px 9px 12px; gap:5px; }
+    #${MODAL_ID} .tb-qb-tab-tracker:not(:has(.tb-qb-tab-x[hidden])) .tb-qb-tab { padding-right:4px; }
     /* Narrow: the columns stack, so the right one takes the body while the
        panel is open, at nearly the window's height; the ticket scrolls, and
        its footer stays below the panel (never under it). */

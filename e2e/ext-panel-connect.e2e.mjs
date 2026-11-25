@@ -175,6 +175,11 @@ async function panelOnPage(ctx, sw) {
   await page.keyboard.press("Control+Shift+KeyB");
   await page.waitForSelector("#tracebug-quick-bug-modal", { timeout: 8000 });
   await sleep(700);
+  // The ticket's own GitHub tab, before anything is sent (or connected).
+  const tabBefore = await page.evaluate(() => {
+    const t = document.querySelector("#tracebug-quick-bug-modal .tb-qb-tabstrip [data-tb-tracker-tab] [data-tab]");
+    return t ? t.textContent.trim() : "";
+  });
   const winP = ctx.waitForEvent("page", { predicate: (p) => p.url().includes("confirm-send.html"), timeout: 4000 }).catch(() => null);
   await page.locator('#tracebug-quick-bug-modal [data-action="open-github"]').first().click();
   let frame = null;
@@ -186,7 +191,7 @@ async function panelOnPage(ctx, sw) {
     await frame.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {});
     await page.evaluate(() => document.querySelector("[data-tb-create-panel] iframe").scrollIntoView({ block: "center" }));
   }
-  return { page, frame, winP };
+  return { page, frame, winP, tabBefore };
 }
 
 /** Watch (never answer) the frame's permission requests. */
@@ -209,7 +214,8 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
 {
   const { ctx, sw, state } = await launch(withGrantedHostAccess(EXT_SRC, "panel-connect"), "a");
   try {
-    const { page, frame, winP } = await panelOnPage(ctx, sw);
+    const { page, frame, winP, tabBefore } = await panelOnPage(ctx, sw);
+    check("A0. not connected, the ticket already has a GitHub tab beside Info · Actions · Console · Network · AI", tabBefore === "GitHub", tabBefore);
     check("A1. not connected: Send to GitHub opens the in-page panel (no window)", !!frame && !(await Promise.race([winP, sleep(500).then(() => null)])));
     if (!frame) throw new Error("no panel frame");
     await frame.waitForSelector("#connect:not([hidden])", { timeout: 8000 });

@@ -659,6 +659,8 @@ function ticketTheme() {
 
 // The panel docks in the ticket's right column as its own tab ("GitHub" or
 // "Linear", with a ✕), next to Info · Actions · Console · Network · AI. The
+// tab is there whenever a ticket is open, connected or not: clicking it opens
+// the panel (which offers Connect when nothing is connected yet). The
 // frame lies over the column's panel area, under the tab strip and down to
 // the footer; the form scrolls inside it. Another tab hides the frame (its
 // state stays); the tab shows it again. Only the tracker's id reaches the
@@ -706,7 +708,9 @@ function unmountCreatePanel() {
   var refocus = !a || a === document.body || a === p.frame || p.tabWrap.contains(a);
   var wasShown = p.tab.classList.contains("tb-qb-tab-active");
   if (p.slot.parentNode) p.slot.parentNode.removeChild(p.slot);
-  if (p.tabWrap.parentNode) p.tabWrap.parentNode.removeChild(p.tabWrap);
+  // The tab stays (idle, no ✕) for the next time.
+  p.close.hidden = true;
+  p.tab.setAttribute("aria-selected", "false");
   p.modal.removeAttribute("data-tb-docked");
   if (p.restorePosition !== null) p.right.style.position = p.restorePosition;
   // Back to the tab that was open before (else the first one).
@@ -735,6 +739,104 @@ function setPanelTab(p, tracker) {
   p.close.setAttribute("aria-label", "Close " + t.label);
   p.close.title = "Close " + t.label;
 }
+
+/** The tracker the ticket's send button goes to (github unless it says linear). */
+function ticketTracker(modal) {
+  var main = modal.querySelector("[data-tb-split-main]");
+  var t = main && main.getAttribute("data-target");
+  return PANEL_TABS.hasOwnProperty(t) ? t : "github";
+}
+
+/**
+ * The tracker's tab in the ticket's strip: made once per ticket and kept, so
+ * it is there before anything is connected. Idle, a click asks the ticket for
+ * its panel (the same as its send button); with the panel open, it is that
+ * panel's tab and the ✕ closes it.
+ */
+function trackerTab(modal, strip) {
+  var wrap = strip.querySelector("[data-tb-tracker-tab]");
+  if (wrap) return { wrap: wrap, tab: wrap.querySelector("[data-tab]"), close: wrap.querySelector(".tb-qb-tab-x") };
+  wrap = document.createElement("span");
+  wrap.className = "tb-qb-tab-tracker";
+  wrap.setAttribute("data-tb-tracker-tab", "");
+  wrap.setAttribute("role", "presentation");
+  var tab = document.createElement("button");
+  tab.type = "button";
+  tab.className = "tb-qb-tab";
+  tab.setAttribute("role", "tab");
+  tab.setAttribute("aria-selected", "false");
+  tab.setAttribute("data-tab", "tracker");
+  var close = document.createElement("button");
+  close.type = "button";
+  close.className = "tb-qb-tab-x";
+  close.hidden = true;
+  close.appendChild(svgIcon(12, [{ d: "M18 6 6 18M6 6l12 12" }],
+    { fill: "none", stroke: "currentColor", "stroke-width": "2.4", "stroke-linecap": "round" }));
+  wrap.appendChild(tab);
+  wrap.appendChild(close);
+  var t = { wrap: wrap, tab: tab, close: close };
+  setPanelTab(t, ticketTracker(modal));
+  close.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (activePanel && activePanel.tabWrap === wrap) unmountCreatePanel();
+  });
+  // Runs before the ticket's own (delegated) switching, so the tab that was
+  // open is still the active one here.
+  tab.addEventListener("click", function () {
+    if (activePanel && activePanel.tabWrap === wrap) return;
+    var prev = strip.querySelector(".tb-qb-tab-active");
+    wrap._tbPrev = prev && prev !== tab ? prev : null;
+    var act = ticketTracker(modal) === "linear" ? "linear" : "open-github";
+    var main = modal.querySelector("[data-tb-split-main]");
+    var btn = main && main.getAttribute("data-action") === act ? main : modal.querySelector('[data-action="' + act + '"]');
+    var back = function () {
+      if (activePanel && activePanel.tabWrap === wrap) return;
+      var to = wrap._tbPrev && wrap._tbPrev.isConnected ? wrap._tbPrev : strip.querySelector("[data-tab]:not([data-tab=tracker])");
+      if (to && tab.classList.contains("tb-qb-tab-active")) to.click();
+    };
+    if (!btn) { setTimeout(back, 0); return; }
+    btn.click();
+    // No panel came (the window opened instead, or nothing did): don't leave
+    // an empty tab open.
+    setTimeout(back, PANEL_READY_MS + 500);
+  });
+  strip.appendChild(wrap);
+  return t;
+}
+
+/** Every open ticket gets the tab. */
+function ensureTrackerTab() {
+  var modal = document.getElementById("tracebug-quick-bug-modal");
+  var strip = modal && modal.querySelector(".tb-qb-right .tb-qb-tabstrip");
+  if (!strip) return;
+  var t = trackerTab(modal, strip);
+  // Idle, it follows the send button (GitHub, or Linear once that's the default).
+  if (!(activePanel && activePanel.tabWrap === t.wrap) && t.tab.textContent !== PANEL_TABS[ticketTracker(modal)].label) {
+    setPanelTab(t, ticketTracker(modal));
+  }
+}
+
+// Only builds that frame the panel (Chrome) get the tab; Firefox keeps its
+// send button and the window.
+(function watchTicketsForTab() {
+  if (!panelCapable() || typeof MutationObserver !== "function") return;
+  var queued = false;
+  var check = function () {
+    if (queued) return;
+    queued = true;
+    setTimeout(function () { queued = false; ensureTrackerTab(); }, 30);
+  };
+  // TraceBug's own root only (the ticket mounts there): the page's own
+  // changes aren't watched once it exists.
+  var watchRoot = function (root) { new MutationObserver(check).observe(root, { childList: true, subtree: true }); check(); };
+  var root = document.getElementById("tracebug-root");
+  if (root) { watchRoot(root); return; }
+  var mo = new MutationObserver(function () {
+    var r = document.getElementById("tracebug-root");
+    if (r) { mo.disconnect(); watchRoot(r); }
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+})();
 
 /**
  * The frame over the right column's panel area: from under the tab strip to
@@ -792,23 +894,13 @@ function mountCreatePanel(id, nonce) {
   } catch (e) { panelFallback(id, nonce); return; }
 
   // The tab: a button the ticket's own tab switching handles (data-tab), and
-  // a ✕ beside it.
-  var tabWrap = document.createElement("span");
-  tabWrap.className = "tb-qb-tab-tracker";
-  tabWrap.setAttribute("data-tb-tracker-tab", "");
-  tabWrap.setAttribute("role", "presentation");
-  var tab = document.createElement("button");
-  tab.type = "button";
-  tab.className = "tb-qb-tab";
-  tab.setAttribute("role", "tab");
-  tab.setAttribute("data-tab", "tracker");
-  var closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.className = "tb-qb-tab-x";
-  closeBtn.appendChild(svgIcon(12, [{ d: "M18 6 6 18M6 6l12 12" }],
-    { fill: "none", stroke: "currentColor", "stroke-width": "2.4", "stroke-linecap": "round" }));
-  tabWrap.appendChild(tab);
-  tabWrap.appendChild(closeBtn);
+  // a ✕ beside it (already there when the ticket opened; made now if not).
+  var tt = trackerTab(modal, strip);
+  var tabWrap = tt.wrap, tab = tt.tab, closeBtn = tt.close;
+  closeBtn.hidden = false;
+  // Opened from the tab itself: go back to the tab that was open before it.
+  var prevTab = tab.classList.contains("tb-qb-tab-active") ? tabWrap._tbPrev || null : strip.querySelector(".tb-qb-tab-active");
+  tabWrap._tbPrev = null;
 
   var slot = document.createElement("div");
   slot.setAttribute("data-tb-create-panel", "");
@@ -832,21 +924,16 @@ function mountCreatePanel(id, nonce) {
 
   var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null,
     modal: modal, right: right, strip: strip, tab: tab, tabWrap: tabWrap, close: closeBtn, opener: opener,
-    prevTab: strip.querySelector(".tb-qb-tab-active"), onResize: null, tabObserver: null, sizeObserver: null,
+    prevTab: prevTab, onResize: null, tabObserver: null, sizeObserver: null,
     restorePosition: null };
   setPanelTab(p, first);
   if (getComputedStyle(right).position === "static") {
     p.restorePosition = right.style.position;
     right.style.position = "relative";
   }
-  strip.appendChild(tabWrap);
   right.appendChild(slot);
   // Narrow tickets stack the columns: the right one takes the body (CSS).
   modal.setAttribute("data-tb-docked", "");
-  closeBtn.addEventListener("click", function (e) {
-    e.stopPropagation();
-    if (activePanel === p) unmountCreatePanel();
-  });
 
   p.onResize = function () { if (activePanel === p) dockCreatePanel(p); };
   window.addEventListener("resize", p.onResize);
