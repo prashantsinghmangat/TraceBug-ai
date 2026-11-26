@@ -37,6 +37,15 @@ describe('GitHub', () => {
     expect((spy.mock.calls[0][1] as RequestInit).headers).toMatchObject({ authorization: 'Bearer ghp_PAT' });
   });
 
+  it('asks GitHub every time (no-store): a list from before an install is never reused', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json({ total_count: 1, installations: [{ id: 7 }] }))
+      .mockResolvedValueOnce(json({ total_count: 1, repositories: [{ full_name: 'a/one' }] }));
+    await github.listContainers(OAUTH);
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mock.calls.forEach((c) => expect((c[1] as RequestInit).cache).toBe('no-store'));
+  });
+
   it('never follows a Link header off the API host', async () => {
     const spy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json([{ full_name: 'a/one' }], 200, { link: '<https://evil.test/steal>; rel="next"' }));

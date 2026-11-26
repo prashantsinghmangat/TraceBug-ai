@@ -1082,6 +1082,29 @@ try {
   check("…and opens the issue in a new tab", !!tab13 && tab13.url().includes(`/acme/api/issues/${nextNumber - 1}`), tab13 ? tab13.url() : "no tab");
   check("…and no panel frame appeared", !sdkPage.frames().some((f) => f.url().includes("/create-issue.html")));
   if (tab13) await tab13.close().catch(() => {});
+
+  // ══ 14. Chrome's visibility check never answers → the second opinion arms ═
+  // (Owner, 2026-11-26: Create stayed grey in real Chrome after the install
+  // window, with no note.) Silence IntersectionObserver in the panel frame only.
+  await ctx.addInitScript(() => {
+    if (location.pathname.endsWith("/create-issue.html")) IntersectionObserver.prototype.observe = function () {};
+  });
+  const p14 = await ctx.newPage();
+  // inject() takes the first tab on the site: this one only.
+  for (const pg of ctx.pages()) if (pg !== p14) await pg.close().catch(() => {});
+  await p14.goto(SITE, { waitUntil: "load" });
+  await sleep(300);
+  await inject(p14, GLOB);
+  await openTicket(p14, "#orderBtn", "Silent observer");
+  const r14 = await sendToGitHub(p14);
+  if (r14.frame) {
+    await r14.frame.waitForFunction((r) => document.getElementById("container").value === r, REPO, { timeout: 8000 }).catch(() => {});
+    const t14 = Date.now();
+    const armed14 = await r14.frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 12000 }).then(() => true, () => false);
+    check("14. no answer from Chrome's visibility check: Create still arms (content-script check), within ~8 s",
+      armed14 && !(await r14.frame.isVisible("#toWindowBox")), `${Date.now() - t14} ms`);
+  } else check("14. no answer from Chrome's visibility check: Create still arms", false, "no panel");
+  await p14.close();
 } finally {
   await ctx.close();
   server.close();

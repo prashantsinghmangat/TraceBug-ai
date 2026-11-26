@@ -290,6 +290,14 @@ const watchPermissionRequests = (frame) => frame.evaluate(() => {
     check("…and when it closes the repository list refreshes by itself",
       await frame.evaluate((r) => [...document.querySelectorAll("#containerList option")].some((o) => o.value === r), REPO) &&
       !(await frame.isVisible("#installBox")));
+    // The owner's path (2026-11-26): after Install, the one repository is
+    // filled in and Create turns on by itself — no extra click.
+    await page.bringToFront();
+    const armedAfterInstall = await frame.waitForFunction(() => !document.getElementById("send").disabled, null, { timeout: 5000 }).then(() => true, () => false);
+    const why = await frame.evaluate(() => ({ container: document.getElementById("container").value,
+      footer: !document.getElementById("footer").hidden, disabled: document.getElementById("send").disabled,
+      note: (document.getElementById("toWindowBox") || {}).hidden === false }));
+    check("A3d. …the repository is filled in and Create turns on, with no other click", armedAfterInstall && !!why.container, JSON.stringify(why));
     await frame.fill("#container", "octo/not-installed");
     await frame.dispatchEvent("#container", "input");
     check("…a repository the app isn't on gets a configure-access link",

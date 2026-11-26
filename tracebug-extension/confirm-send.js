@@ -1589,14 +1589,24 @@ function watchVisibility() {
   // Create isn't armed, take a fresh reading — same check, nothing relaxed —
   // when the user comes back to the panel, and every couple of seconds.
   const recheck = () => {
-    if (panel.armed || decided || row.hidden) return;
+    if (panel.armed || decided || row.hidden || probeActive) return;
     io.unobserve(row);
     io.observe(row);
   };
   window.addEventListener("focus", recheck);
   document.addEventListener("pointerdown", recheck, true);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) recheck(); });
-  setInterval(recheck, 2000);
+  // Still not armed after a few fresh readings (Chrome's reading can stay off
+  // in ways the test pages don't show — owner, 2026-11-26): ask the content
+  // script, the same second opinion as for a filtered page. It arms only if
+  // the row really is our frame, uncovered; else the panel says why and
+  // offers the window — never a silently grey Create.
+  let misses = 0;
+  setInterval(() => {
+    if (panel.armed || decided || row.hidden || probeActive) { misses = 0; return; }
+    if (++misses >= 2) { misses = 0; startProbing(); return; }
+    recheck();
+  }, 2000);
 }
 
 // ── Second opinion (IntersectionObserver v2 said "hidden") ──────────────────
@@ -1616,6 +1626,7 @@ const PROBE_WHY = {
 
 let probeTimer = 0;
 let probeRun = 0;
+let probeActive = false;
 
 function rowRect() {
   const r = $("send").parentElement.getBoundingClientRect();
@@ -1630,10 +1641,12 @@ async function probeOnce() {
 function stopProbing() {
   clearTimeout(probeTimer);
   probeRun++;
+  probeActive = false;
 }
 
 function startProbing() {
   const run = ++probeRun;
+  probeActive = true;
   let clean = 0;
   const tick = async () => {
     if (decided || panel.busy) { if (!decided) probeTimer = setTimeout(tick, ARM_MS); return; }
@@ -1643,7 +1656,7 @@ function startProbing() {
       clean++;
       show("toWindowBox", false);
       // Armed: stop here. The click checks once more.
-      if (clean >= 2) { panel.armed = true; panel.armedBy = "probe"; syncCreateButton(); return; }
+      if (clean >= 2) { probeActive = false; panel.armed = true; panel.armedBy = "probe"; syncCreateButton(); return; }
     } else {
       clean = 0;
       if (panel.armed) { panel.armed = false; panel.armedBy = ""; syncCreateButton(); }

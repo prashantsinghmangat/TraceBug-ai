@@ -870,7 +870,7 @@ var TraceBugProviderAPI = (() => {
     return null;
   }
   async function ghFetch(auth, url, signal, notes) {
-    const res = await fetch(url, { headers: ghHeaders(auth), signal });
+    const res = await fetch(url, { headers: ghHeaders(auth), signal, cache: "no-store" });
     await throwIfGitHubSpecial(res);
     const sso = res.headers.get("x-github-sso") || "";
     if (notes && /^\s*partial-results/i.test(sso)) {
@@ -1283,7 +1283,7 @@ var TraceBugProviderAPI = (() => {
     const auth = { via: "token", token: secret };
     try {
       if (tracker === "github") {
-        const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+        const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal, cache: "no-store" });
         await throwIfGitHubSpecial(res);
         if (res.status === 401) {
           return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };

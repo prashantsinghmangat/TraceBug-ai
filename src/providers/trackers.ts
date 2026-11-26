@@ -131,7 +131,10 @@ export interface SsoNotes { orgIds: Set<number> }
  * organizations=1,2" on a list is noted rather than lost.
  */
 async function ghFetch(auth: ResolvedAuth, url: string, signal?: AbortSignal, notes?: SsoNotes): Promise<Response> {
-  const res = await fetch(url, { headers: ghHeaders(auth), signal });
+  // no-store: GitHub marks its answers cacheable for 60 s, so the browser
+  // would hand back the "no installations" list from just before an install
+  // (and Refresh would change nothing for a minute).
+  const res = await fetch(url, { headers: ghHeaders(auth), signal, cache: "no-store" });
   await throwIfGitHubSpecial(res);
   const sso = res.headers.get("x-github-sso") || "";
   if (notes && /^\s*partial-results/i.test(sso)) {
@@ -622,7 +625,7 @@ export async function checkTrackerSecret(
   const auth: ResolvedAuth = { via: "token", token: secret };
   try {
     if (tracker === "github") {
-      const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal });
+      const res = await fetch(`${GH_API}/user`, { headers: ghHeaders(auth), signal, cache: "no-store" });
       await throwIfGitHubSpecial(res);
       if (res.status === 401) {
         return { ok: false, code: "bad_token", error: "GitHub didn't accept this token. Check it was copied whole and hasn't expired or been revoked." };
