@@ -8,7 +8,7 @@ import { isExtensionMode } from "./ext-transport";
 import { deactivateDrawMode } from "./draw-mode";
 import { captureScreenshot } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
-import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes, QUOTA_ESTIMATE_BYTES } from "./storage";
+import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getTrackedSessionId, setTrackedSessionId, getStorageUsageBytes, QUOTA_ESTIMATE_BYTES } from "./storage";
 import { buildReport } from "./report-builder";
 import { generateBugTitle } from "./title-generator";
 import { exportSessionAsHtml } from "./exporters/html-replay";
@@ -235,7 +235,8 @@ export function mountCompactToolbar(
   // stop-square so the button reflects reality and a click stops correctly.
   // Video sessions are excluded — the record button owns those.
   try {
-    if (!_isTracking && getActiveSessionId() && getActiveCaptureMode() === "events") {
+    const activeId = getActiveSessionId();
+    if (!_isTracking && activeId && getActiveCaptureMode() === "events" && getTrackedSessionId() === activeId) {
       _isTracking = true;
       setInnerHTML(trackBtn, _trackIconSvg(true));
       trackBtn.classList.add("tb-active");
@@ -501,6 +502,7 @@ async function _toggleSessionTracking(
     // ticket is valid with events alone; screenshots can be added from the
     // modal ("Add page shot") if wanted.
     _isTracking = false;
+    setTrackedSessionId(null);
     setInnerHTML(btn, _trackIconSvg(false));
     btn.classList.remove("tb-active");
     btn.style.color = "var(--tb-btn-text, #aaa)";
@@ -521,6 +523,7 @@ async function _toggleSessionTracking(
 
   _isTracking = true;
   try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+  setTrackedSessionId(getActiveSessionId());
   setInnerHTML(btn, _trackIconSvg(true));
   btn.classList.add("tb-active");
   btn.style.color = "var(--tb-success, #22c55e)";

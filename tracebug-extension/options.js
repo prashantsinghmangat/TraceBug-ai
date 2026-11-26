@@ -476,6 +476,8 @@ $("ghSave").addEventListener("click", () => {
   // One GitHub connection: a token replaces the sign-in — ask first.
   const gh = trackerRows.github;
   if (gh && (gh.via === "oauth" || gh.needsReconnect) && $("ghToken").value.trim()) {
+    // The last try's error is about the last token, not this one.
+    $("ghStatus").textContent = "";
     askReplace($("ghReplace"), "This replaces your GitHub sign-in" + (gh.account ? " (" + gh.account + ")" : "") + " with this token.",
       saveGitHubToken);
     return;

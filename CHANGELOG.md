@@ -59,6 +59,10 @@ All notable changes to TraceBug are documented here.
 - **Create issue never stays grey without a reason.** If Chrome's visibility check doesn't confirm the panel within a few seconds, TraceBug checks itself that nothing covers the Create row and turns Create on — or says why it's paused and offers the window.
 - **The panel shows Linear's mark for Linear.** The header (and the Connect button) kept GitHub's mark after switching to Linear.
 - **Saving a personal token while signed in no longer leaves you disconnected.** The token was saved before the sign-in was removed; a status check in between could drop the new token. The sign-in is now removed first, the panel says "Connected … with a personal token" only once it is, and the header marks **personal token**.
+- **Picking another repository after a failed Create resets the button to Create issue** (it stayed on Retry), and a new **Replace** question in Settings no longer shows the last token's error under it.
+- **Disconnecting in Settings while a ticket's GitHub panel is open:** Create now switches the panel to **Connect GitHub** instead of erroring under the old connection.
+- **A screenshot ticket (Alt+B, the popup or the toolbar) no longer leaves the toolbar showing ■ tracking**, so ✕ closes TraceBug in one click instead of warning about a recording in progress.
+- **No error card for "ResizeObserver loop completed with undelivered notifications."** It's a browser notice, not a bug in the page; it still appears in Console.
 - **No focus ring after a click.** Connect GitHub, Create issue and Done take focus without the blue ring when their screen opened from a click; keyboard users keep the ring.
 
 ### Changed

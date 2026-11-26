@@ -2098,6 +2098,9 @@ class TraceBugSDK {
   private maybePromptErrorCapture(errorMessage?: string, errorStack?: string): void {
     if (!this.config?.enableDashboard) return;
     if (!errorMessage) return;
+    // The browser's ResizeObserver notice isn't a bug in the page (resizing
+    // panels, ours included, set it off). It stays in Console; no card.
+    if (/^(Uncaught )?ResizeObserver loop/.test(errorMessage)) return;
 
     const now = Date.now();
     // Throttle: 5s minimum between any error prompts

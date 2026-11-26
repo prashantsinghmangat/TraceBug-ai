@@ -1307,6 +1307,8 @@ function wirePanel() {
     // U9: a note about the repository that was there before goes with it;
     // then what applies to this one (archived, Issues off, not allowed).
     panelMsg("");
+    // The failure was about the old repository; this is a fresh Create.
+    $("send").textContent = "Create issue";
     checkRepoAllowed();
     syncCreateButton();
     // Picking from the list fires `input` with an exact match: load at once.

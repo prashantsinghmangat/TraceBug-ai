@@ -51,6 +51,24 @@ var TraceBugExtensionModule = (() => {
       localStorage.removeItem(EVENTS_CAPTURE_START_KEY);
     } catch (e2) {
     }
+    try {
+      localStorage.removeItem(TRACKED_SESSION_KEY);
+    } catch (e2) {
+    }
+  }
+  function getTrackedSessionId() {
+    try {
+      return localStorage.getItem(TRACKED_SESSION_KEY);
+    } catch (e2) {
+      return null;
+    }
+  }
+  function setTrackedSessionId(id) {
+    try {
+      if (id) localStorage.setItem(TRACKED_SESSION_KEY, id);
+      else localStorage.removeItem(TRACKED_SESSION_KEY);
+    } catch (e2) {
+    }
   }
   function getEventsCaptureStartedAt() {
     try {
@@ -391,7 +409,7 @@ var TraceBugExtensionModule = (() => {
     } catch (e2) {
     }
   }
-  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, EVENTS_CAPTURE_START_KEY, WARNING_THROTTLE_MS, _lastWarnAt, STATS_KEY, QUOTA_ESTIMATE_BYTES, REFUSAL_BACKOFF_MS, _refusedUntil, _nearFullWarned, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
+  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, EVENTS_CAPTURE_START_KEY, TRACKED_SESSION_KEY, WARNING_THROTTLE_MS, _lastWarnAt, STATS_KEY, QUOTA_ESTIMATE_BYTES, REFUSAL_BACKOFF_MS, _refusedUntil, _nearFullWarned, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
   var init_storage = __esm({
     "src/storage.ts"() {
       "use strict";
@@ -399,6 +417,7 @@ var TraceBugExtensionModule = (() => {
       ACTIVE_SESSION_KEY = "tracebug_active_session";
       ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
       EVENTS_CAPTURE_START_KEY = "tracebug_events_capture_started";
+      TRACKED_SESSION_KEY = "tracebug_tracked_session";
       WARNING_THROTTLE_MS = 3e4;
       _lastWarnAt = {};
       STATS_KEY = "tracebug_storage_stats";
@@ -42432,7 +42451,8 @@ Response: ${match.response.slice(0, 160)}` : "";
     _trackBtn = trackBtn;
     toolbar.appendChild(trackBtn);
     try {
-      if (!_isTracking && getActiveSessionId() && getActiveCaptureMode() === "events") {
+      const activeId = getActiveSessionId();
+      if (!_isTracking && activeId && getActiveCaptureMode() === "events" && getTrackedSessionId() === activeId) {
         _isTracking = true;
         setInnerHTML(trackBtn, _trackIconSvg(true));
         trackBtn.classList.add("tb-active");
@@ -42639,6 +42659,7 @@ Response: ${match.response.slice(0, 160)}` : "";
   async function _toggleSessionTracking(root2, btn, showToast3) {
     if (_isTracking) {
       _isTracking = false;
+      setTrackedSessionId(null);
       setInnerHTML(btn, _trackIconSvg(false));
       btn.classList.remove("tb-active");
       btn.style.color = "var(--tb-btn-text, #aaa)";
@@ -42665,6 +42686,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     } catch (err) {
       console.warn("[TraceBug] Session start hook failed:", err);
     }
+    setTrackedSessionId(getActiveSessionId());
     setInnerHTML(btn, _trackIconSvg(true));
     btn.classList.add("tb-active");
     btn.style.color = "var(--tb-success, #22c55e)";
@@ -48424,6 +48446,7 @@ ${summary}`;
       var _a2;
       if (!((_a2 = this.config) == null ? void 0 : _a2.enableDashboard)) return;
       if (!errorMessage) return;
+      if (/^(Uncaught )?ResizeObserver loop/.test(errorMessage)) return;
       const now = Date.now();
       if (now - this._lastErrorPromptAt < 5e3) return;
       if (this._lastErrorMsgPrompted === errorMessage && now - this._lastErrorPromptAt < 3e4) return;

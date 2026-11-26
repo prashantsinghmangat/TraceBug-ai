@@ -14,6 +14,8 @@ const ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
 // Start time of a HUD-driven events-only capture — see
 // getEventsCaptureStartedAt() for why this is a timestamp and not a boolean.
 const EVENTS_CAPTURE_START_KEY = "tracebug_events_capture_started";
+// The session the toolbar's ■ track button started — see getTrackedSessionId().
+const TRACKED_SESSION_KEY = "tracebug_tracked_session";
 export type ActiveCaptureMode = "events" | "video";
 
 // ── Session ID — record-driven lifecycle ────────────────────────────────
@@ -47,6 +49,24 @@ export function clearActiveSessionId(): void {
   // a stale "video"/"events" flag can't leak into the next session.
   try { localStorage.removeItem(ACTIVE_CAPTURE_MODE_KEY); } catch {}
   try { localStorage.removeItem(EVENTS_CAPTURE_START_KEY); } catch {}
+  try { localStorage.removeItem(TRACKED_SESSION_KEY); } catch {}
+}
+
+/**
+ * The session id the toolbar's ■ track button armed, or null. A screenshot
+ * (toolbar, popup or Alt+B) also arms an "events" session, so the mode alone
+ * can't say whether tracking is running — without this the toolbar came back
+ * showing ■ after a screenshot ticket, and ✕ asked to end a "recording".
+ */
+export function getTrackedSessionId(): string | null {
+  try { return localStorage.getItem(TRACKED_SESSION_KEY); } catch { return null; }
+}
+
+export function setTrackedSessionId(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(TRACKED_SESSION_KEY, id);
+    else localStorage.removeItem(TRACKED_SESSION_KEY);
+  } catch {}
 }
 
 /**

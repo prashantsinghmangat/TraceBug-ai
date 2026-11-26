@@ -2209,7 +2209,7 @@ async function runPanelCreate(api, id, req, choice, opts) {
     return {
       ok: false,
       error: api.mapProviderError(err, run.providerLabel),
-      reconnect: !!(err && err.name === "ReconnectNeededError"),
+      reconnect: authGone(err),
       unclear,
       sso: ssoOf(api, err),
     };
@@ -3315,10 +3315,19 @@ async function handleTrackerUi(message, sender) {
   } catch (err) {
     return {
       error: api.mapProviderError(err, adapter.label),
-      reconnect: !!(err && err.name === "ReconnectNeededError"),
+      reconnect: authGone(err),
       sso: ssoOf(api, err),
     };
   }
+}
+
+/**
+ * The connection expired or is gone (disconnected in Settings while a panel
+ * was open): the panel re-reads status and shows Connect / Reconnect instead
+ * of a form that can't send.
+ */
+function authGone(err) {
+  return !!(err && (err.name === "ReconnectNeededError" || err.name === "NotConnectedError"));
 }
 
 /** { url, org } for a GitHub SSO error with a GitHub link, else undefined. */
