@@ -44,6 +44,14 @@ const perms = manifest.permissions || [];
 const prevPerms = prevManifest ? prevManifest.permissions || [] : null;
 const addedPerms = prevPerms ? perms.filter((p) => !prevPerms.includes(p)) : [];
 const removedPerms = prevPerms ? prevPerms.filter((p) => !perms.includes(p)) : [];
+// Optional permissions and hosts: never prompt at install or update, but CWS still asks for a
+// justification of each optional permission, and reviewers see new hosts.
+const optPerms = manifest.optional_permissions || [];
+const prevOptPerms = prevManifest ? prevManifest.optional_permissions || [] : null;
+const addedOptPerms = prevOptPerms ? optPerms.filter((p) => !prevOptPerms.includes(p)) : [];
+const optHosts = manifest.optional_host_permissions || [];
+const prevOptHosts = prevManifest ? prevManifest.optional_host_permissions || [] : null;
+const addedOptHosts = prevOptHosts ? optHosts.filter((h) => !prevOptHosts.includes(h)) : [];
 // The Firefox build drops the Chrome-only permissions (scripts/build-ext.mjs).
 const firefoxPerms = perms.filter((p) => p !== "offscreen" && p !== "tabCapture");
 
@@ -73,9 +81,13 @@ const amoDescription = blockAfter("**Description** (AMO Markdown)");
 const amoReleaseNotes = blockAfter("**Release notes**");
 const reviewerNotes = blockAfter("**Notes to reviewer**").replaceAll("<x.y.z>", V);
 const justifications = Object.fromEntries(
-  [...listings.matchAll(/^\| `([A-Za-z]+)` \| (.+) \|$/gm)].map((m) => [m[1], m[2]]),
+  [...listings.matchAll(/^\| (?:Optional )?`([A-Za-z]+)`[^|]*\| (.+) \|$/gm)].map((m) => [m[1], m[2]]),
 );
 const optionalHosts = (listings.match(/^\| Optional host permissions \| (.+) \|$/m) || [])[1] || "";
+// Rows for specific hosts, e.g. "| `https://api.github.com/*`, `https://github.com/*` (optional) | … |".
+const hostRows = [...listings.matchAll(/^\| (`https:\/\/[^|]+) \| (.+) \|$/gm)].map((m) => ({ hosts: m[1].trim(), text: m[2] }));
+// A release-specific Chrome reviewer note: "**Chrome reviewer note for x.y.z**" followed by a fenced block.
+const chromeReviewerNote = listings.includes(`**Chrome reviewer note for ${V}**`) ? blockAfter(`**Chrome reviewer note for ${V}**`) : "";
 const captions = [...listings.matchAll(/^\| `(\d-[a-z-]+\.jpg)` \| (.+) \|$/gm)].map((m) => ({ file: m[1], caption: m[2] }));
 const newIn = chromeDescription.split("\n")[0];
 if (!newIn.startsWith(`New in ${V}`)) {
@@ -120,7 +132,7 @@ p(`# Release sheet — TraceBug ${V}`, "",
   `| Extension summary | ${manifest.description} (${manifest.description.length} chars; limit 132) |`,
   `| Chrome permissions | ${perms.map((x) => "`" + x + "`").join(", ")} |`,
   `| Firefox permissions | ${firefoxPerms.map((x) => "`" + x + "`").join(", ")} |`,
-  `| Permission changes since ${prevTag || "previous"} | ${addedPerms.length || removedPerms.length ? `added: ${addedPerms.join(", ") || "none"}; removed: ${removedPerms.join(", ") || "none"}` : "none — existing users are not asked to re-approve"} |`,
+  `| Permission changes since ${prevTag || "previous"} | ${addedPerms.length || removedPerms.length ? `added: ${addedPerms.join(", ") || "none"}; removed: ${removedPerms.join(", ") || "none"}` : "none — existing users are not asked to re-approve"}${addedOptPerms.length || addedOptHosts.length ? `; optional (no prompt on update) added: ${[...addedOptPerms, ...addedOptHosts].map((x) => "`" + x + "`").join(", ")}` : ""} |`,
   `| npm \`tracebug-sdk\` | ${pkg.version} |`,
   `| npm \`tracebug\` (MCP CLI) | ${cliPkg.version} |`,
   `| MCP registry | \`${server.name}\` ${server.version} |`, "");
@@ -174,17 +186,24 @@ p("## 1. Chrome Web Store", "",
   "### Privacy tab", "",
   "**Single purpose:**", fence("text", singlePurpose),
   "**Permission justifications** — one box per permission:", "");
-for (const perm of perms) {
-  p(`\`${perm}\`${addedPerms.includes(perm) ? " — **NEW in this release**" : ""}`,
+for (const perm of [...perms, ...optPerms]) {
+  const isNew = addedPerms.includes(perm) || addedOptPerms.includes(perm);
+  p(`\`${perm}\`${optPerms.includes(perm) ? " (optional)" : ""}${isNew ? " — **NEW in this release**" : ""}`,
     fence("text", justifications[perm] || `MISSING — add a row for ${perm} to docs/STORE-LISTINGS.md`));
 }
 if (optionalHosts) p("Host permissions (optional):", fence("text", optionalHosts));
+for (const r of hostRows) {
+  const isNew = addedOptHosts.some((h) => r.hosts.includes(h));
+  p(`${r.hosts}${isNew ? " — **NEW in this release**" : ""} (if the dashboard asks about these hosts):`, fence("text", r.text));
+}
 p("**Remote code:** No, I am not using remote code.", "",
   "**Data usage:** tick Authentication information, Web history, User activity, Website content. Leave the rest unticked. Tick all three certifications.", "",
   "### Note to the reviewer", "");
-if (addedPerms.length) {
-  p(`This release adds ${addedPerms.map((x) => "`" + x + "`").join(", ")}. Fill in and paste:`,
-    fence("text", `${V} adds the ${addedPerms.join(", ")} permission so <user-visible feature>. It is used only on user action, for <scope>. No data is sent to the developer; there is no backend.`));
+if (chromeReviewerNote) {
+  p("Paste:", fence("text", chromeReviewerNote));
+} else if (addedPerms.length || addedOptPerms.length) {
+  p(`This release adds ${[...addedPerms, ...addedOptPerms].map((x) => "`" + x + "`").join(", ")}. Fill in and paste:`,
+    fence("text", `${V} adds the ${[...addedPerms, ...addedOptPerms].join(", ")} permission so <user-visible feature>. It is used only on user action, for <scope>. No data is sent to the developer; there is no backend.`));
 } else {
   p("None needed: no new permission in this release.", "");
 }
