@@ -127,6 +127,10 @@ the extension is public.
   read & write + Metadata read, installable on any account. No client secret or private key was generated.
   The app must stay **public** (Advanced → Make public): a private app installs only on `tracebugdev`.
   Public page: `https://github.com/apps/tracebug-dev`.
+- **Production app registered 2026-11-27:** GitHub App **TraceBug App** (the name "TraceBug" was taken), owned by
+  `tracebugdev`, client ID `Iv23liDj0Ffnybzm226q`, slug `tracebug-app`, the same settings as TraceBug Dev (Device
+  Flow on, expiring user tokens, webhook off, Issues read & write + Metadata read, any account, no secret or private
+  key). Setup URL `https://github.com/apps/tracebug-app`. Store builds use it (`build/github-apps.json`).
 - **Why a GitHub App rather than an OAuth App:** the user picks which repos it can see, and its permissions are narrow.
   - We need Issues: read & write and Metadata: read ([permissions][gh-perms]).
   - Repos come from `GET /user/installations` → `/user/installations/{id}/repositories`.
