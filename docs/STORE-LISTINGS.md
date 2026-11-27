@@ -1,6 +1,6 @@
 # Store listings — Chrome Web Store and Firefox Add-ons
 
-The one place for every word and image the two stores show. Current for **1.13.0**. When a release
+The one place for every word and image the two stores show. Current for **1.14.0**. When a release
 changes what a listing says, update this file in the same commit. How to upload a release is in
 [RELEASING.md](RELEASING.md); images live in `assets/` (gitignored, see `assets/README.md`).
 
@@ -47,9 +47,7 @@ Dashboard → TraceBug → **Store listing**, **Privacy**, **Package**.
 short "New in x.y.z" block at the top (from the CHANGELOG), then take it out.
 
 ```text
-New in 1.13.0: draw on the page while you record (pen, boxes, arrows, text, highlighter, eraser), trim the video in the ticket, and a rebuilt screenshot editor with numbered steps, pixelate and full-resolution saves. Site Audit now remembers its last result, shows the old and new score after a re-scan, and hands the findings to your coding agent with Fix with AI or Open in Claude. After 3 free audits it asks for a free account (just your email and a code). Bug capture still needs no account.
-
-Also new: the welcome page shows the one-line command to connect Claude Code, Cursor or Windsurf, the popup leads with Capture Bug, and personal data hidden inside stored values (an analytics visitor's name and email) is masked in every report.
+New in 1.14.0: send a bug straight to GitHub. Connect GitHub once — sign in on GitHub's own page with a short code, no token to create — then pick the repository, labels and assignee in a GitHub tab inside the ticket, and Create files the issue and opens it. TraceBug remembers your choices per site, so the next bug is two clicks. Your GitHub sign-in stays in the extension on your device; the site you're testing never sees it. Prefer a token? Paste one instead. Linear and Slack keep working as before. Also new: a cleaner Settings page with a light/dark switch.
 
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
@@ -104,7 +102,7 @@ EXPORT AND SHARE
 ━━━━━━━━━━━━━━━━━━━━
 
 • One self-contained .html replay anyone on your team can open offline
-• GitHub, Linear and Slack, with your own token (TraceBug asks before each send)
+• GitHub (sign in once, or use a token), Linear and Slack (with your own token); you confirm every send
 • Jira markup, Markdown, .zip, HAR, and a failing Playwright test (.spec.ts)
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -151,7 +149,7 @@ permission the manifest doesn't ask for.
 | `unlimitedStorage` | TraceBug stores bug-capture sessions (screen recordings, DOM replay events and screenshots) locally in the user's browser until the user exports or deletes them. A single capture can be several megabytes, so the default storage quota would cut recordings off mid-session. The data stays on the user's device and is never sent to TraceBug; it leaves the device only when the user exports it or sends it to a service they chose. |
 | `scripting` | Injects TraceBug's capture script and its stylesheet into the current tab, only after the user starts a capture or a screenshot, and the packaged accessibility checker (axe-core, part of the extension package) only when the user runs a Site Audit. Nothing is injected automatically or in the background, and no code is loaded from outside the package. |
 | `alarms` | Closes an unanswered "Send this report to your AI provider?" confirmation window after two minutes, so a send the user never approved can't be confirmed later. A Manifest V3 service worker can't hold a timer that long on its own. (Issue-tracker sends have no timer: they wait for the user's Create or Cancel.) |
-| Optional `identity` (Chrome only) | Requested only when the user clicks **Connect** for an issue tracker that signs in through a browser window (Linear today), to open that tracker's own sign-in page with `chrome.identity.launchWebAuthFlow` and receive the sign-in on the extension's own redirect address. Never requested at install; GitHub's sign-in doesn't need it (GitHub uses a device code). The Firefox build doesn't declare it. |
+| Optional `identity` (Chrome only) | Requested only when the user clicks **Connect** for an issue tracker that signs in through a browser window (Linear; not switched on in 1.14.0, so not requested in this version), to open that tracker's own sign-in page with `chrome.identity.launchWebAuthFlow` and receive the sign-in on the extension's own redirect address. Never requested at install; GitHub's sign-in doesn't need it (GitHub uses a device code). The Firefox build doesn't declare it. |
 | `offscreen` | Hosts the MediaRecorder for the optional screen recording the user starts ("Events + Video"). A service worker has no media APIs, and the recording must keep running while the user navigates the recorded tab. The document is created when the recording starts and closed when it stops. |
 | `tabCapture` | Records the tab the user opened TraceBug on when they start a recording in Tab mode (the default), without Chrome's "Choose what to share" dialog. Used only after the user clicks Start, and only for that tab; nothing is recorded in the background. The recording stays on the user's device unless they export or share it. Desktop mode does not use this permission and still shows Chrome's share dialog. Required rather than optional because Chrome only issues a tab stream ID for a tab the extension was invoked on while it already held this permission, so a runtime grant could never record the tab it was granted on. |
 | Optional host permissions | Requested when the user saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration (one fixed address each, or `localhost`/`127.0.0.1` for Ollama), so TraceBug can send the report to that service. Declared optional so TraceBug can request access to one specific address you enter for a self-hosted AI provider, only at the moment you save it, and never for all sites. |
@@ -216,14 +214,9 @@ arguably wrong already.
   `src/ui/quick-bug.ts`) but is disabled in the shipped extension. If it ever ships, this listing, the
   data-use answers and the privacy policy must say so **before** that release.
 
-**Listing text for the GitHub release (draft — put it in the "New in" block when it ships):**
+**Chrome reviewer note for 1.14.0** (paste in the Privacy tab's note; the release sheet only has a generic template):
 ```text
-New: send a bug straight to GitHub. Connect GitHub once — sign in on GitHub's own page with a short code, no token to create — pick the repository, labels and assignee in a panel inside the ticket, and Create files the issue and opens it. TraceBug remembers your choices per site, so the next bug is two clicks. Your GitHub sign-in stays in the extension on your device; the site you're testing never sees it. Prefer a token? Paste one instead. Linear and Slack keep working as before.
-```
-
-**Reviewer note for the GitHub release:**
-```text
-<x.y.z> adds GitHub issue creation. Connect GitHub uses GitHub's device flow (a public GitHub App, no client secret, no backend). It requests the optional hosts https://github.com/* and https://api.github.com/* only when the user clicks Connect GitHub; the optional `identity` permission is requested only for Linear's sign-in (Chrome). The GitHub sign-in token is kept in chrome.storage.local and used only by the service worker; web pages never see it. Test: Settings → Integrations → GitHub → Connect → "Personal access token" works without an account on our side.
+1.14.0 adds GitHub issue creation. Connect GitHub uses GitHub's device flow (a public GitHub App, "TraceBug App", no client secret, no backend). It requests the optional hosts https://github.com/* and https://api.github.com/* only when the user clicks Connect GitHub (or saves a GitHub token). The optional `identity` permission is for a tracker sign-in that opens a browser window (Linear); that sign-in is not switched on in 1.14.0, so this version never requests it. The GitHub sign-in token is kept in chrome.storage.local and used only by the service worker; web pages never see it. The Create panel is the extension's own page (create-issue.html, web-accessible with use_dynamic_url) shown inside the ticket so the user can pick the repository; the host page cannot read it. Test: capture a bug on any page, open the ticket, GitHub tab → Connect GitHub (or ⋯ → Use a personal token instead, which needs no account on our side).
 ```
 
 ### Note to the reviewer (when a release adds a permission)
@@ -276,7 +269,7 @@ Click **Audit this page** for a 0–100 score and real problems with fixes: acce
 - **AI-native** — Claude Code, Cursor and any MCP client can read every report; TraceBug can also generate a *failing Playwright test* that goes green when the bug is fixed.
 - **Complete evidence** — screen recording with mic narration, interactive DOM replay, console, network, environment, annotated screenshots.
 - **Private by default** — passwords, tokens, card numbers and secret URL parameters are masked as they're captured.
-- **One-click hand-off** — GitHub, Linear and Slack (with your own token; TraceBug asks before each send), plus Jira markup, Markdown, HAR, .zip and the .html replay.
+- **One-click hand-off** — GitHub, Linear and Slack (with your own token; you confirm every send), plus Jira markup, Markdown, HAR, .zip and the .html replay.
 
 **Firefox notes (honest ones)**
 - Screen recording goes through Firefox's own "Share screen" prompt each time. The Chrome-only "Tab" mode (no prompt) isn't available, because Firefox has no tab-capture API.
@@ -291,19 +284,15 @@ Privacy policy: https://tracebug.dev/privacy
 **Release notes** (per version): the CHANGELOG section, minus Chrome-only items (Tab mode, `tabCapture`).
 Current:
 ```text
-- New: draw on the page while you record. The pencil on the recording bar opens a toolbar: pen, box, ellipse, arrow, line, text, highlighter, eraser, six colours, undo/redo. Drawings stay anchored to the page and are never part of the replay.
-- New: trim the recording in the ticket. Pick the part to keep and Cut re-records it, also on sites like GitHub whose security policy blocks in-page video.
-- New: a rebuilt screenshot editor: select and move, arrows, boxes, text, marker, numbered steps, pixelate, eraser, undo/redo, copy; saves at full resolution.
-- Site Audit remembers its last result for the page, and Re-scan shows the old and new score with what was fixed, still there, new or regressed.
-- Site Audit: Fix with AI (downloads the audit and copies a one-line prompt for your coding agent) and Open in Claude.
-- Site Audit asks for a free account after 3 audits: your email and a 6-digit code on an extension page, no password. Bug capture, exports, tickets and the MCP server never need an account. If sign-in can't be reached, the audit runs anyway.
-- Optional: after your 2nd saved ticket or export the popup asks once if you want product updates by email (confirm email first, at most one a month).
-- The welcome page shows the one-line command to connect Claude Code, Cursor or Windsurf to TraceBug's local MCP server.
-- A ticket under review no longer closes on a stray click outside it; closing an unsaved one asks first, and it can be reopened from Saved tickets until the next capture.
-- The popup leads with Capture Bug.
-- Video is now off by default on Firefox (each recording would open the screen-share prompt). If you never changed it, it is turned off once; your own choice is kept.
-- Personal data inside stored values (an analytics visitor's name and email) is masked in every report and export.
-- Data collection (Firefox 140+): nothing is required. Your email, and usage counts only if you tick that box, are asked for at the moment you send them.
+- New: send a bug straight to GitHub with a personal access token. Settings → Integrations → GitHub → Connect checks the token with GitHub before saving it. Send to GitHub opens TraceBug's Create window: pick the repository, labels, assignee and milestone, and Create files the issue and opens it. (GitHub sign-in without a token is Chrome-only for now.)
+- Your repository and labels are remembered per site, so the next bug is two clicks. Forget them in Settings.
+- GitHub's API can't attach files, so after Create you can copy or download the screenshot (and download the recording) to add to the issue.
+- Plain messages for the awkward cases: single sign-on organisations, archived repositories, Issues turned off, rate limits, a revoked token. Your ticket is never lost; Retry checks first so an issue is never filed twice.
+- A cleaner Settings page: Integrations, AI Debugger, Recording, Privacy, Account and Help in a sidebar, and an Auto / Light / Dark theme switch shared with the popup.
+- Cleaner GitHub issue text: no severity prefix in the title, one footer.
+- A screenshot ticket no longer leaves the toolbar showing it's tracking, so ✕ closes TraceBug in one click.
+- Captured text also hides GitHub App and Linear sign-in tokens.
+- The manifest lists a new optional host permission, https://github.com/*, for GitHub's sign-in pages (Chrome-only for now); it's never asked for at install. Linear and Slack work as before.
 ```
 
 **Notes to reviewer** (fill in the version):

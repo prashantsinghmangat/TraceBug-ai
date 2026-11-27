@@ -2,7 +2,7 @@
 
 How to ship a version to every surface: Chrome Web Store, Firefox Add-ons (AMO), npm (`tracebug-sdk`
 and the `tracebug` MCP CLI), the official MCP Registry, the website, and the git tag. Last used for
-**1.12.0** (all surfaces, 2026-11-13). Next: **1.13.0**, sheet in `docs/release-sheets/1.13.0.md`.
+**1.13.0**. Next: **1.14.0**, sheet in `docs/release-sheets/1.14.0.md`.
 
 This file is the mechanics. The other release documents, one job each:
 
