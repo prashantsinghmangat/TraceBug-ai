@@ -1739,6 +1739,7 @@ function loadEmbedded() {
     NONCE = d.nonce;
     PARENT_ORIGIN = e.origin;
     if (d.theme !== "auto") document.documentElement.dataset.theme = d.theme;
+    window.addEventListener("message", onTheme);
     connectPanelPort(0);
     postParent({ type: "tb-panel-ready" });
     watchVisibility();
@@ -1747,6 +1748,15 @@ function loadEmbedded() {
     if (d.focus === "pointer") lastInput = "pointer";
     await startPanel(res.request.target);
     focusFirst(d.focus === "picker" ? "picker" : "create");
+  };
+  // The ticket's theme changed after init. Only from our parent, with our nonce.
+  const onTheme = (e) => {
+    if (e.source !== window.parent || e.origin !== PARENT_ORIGIN) return;
+    const d = e.data;
+    if (!d || typeof d !== "object" || Array.isArray(d) || Object.keys(d).length !== 3) return;
+    if (d.type !== "tb-panel-theme" || d.nonce !== NONCE) return;
+    if (d.theme === "light" || d.theme === "dark") document.documentElement.dataset.theme = d.theme;
+    else if (d.theme === "auto") delete document.documentElement.dataset.theme;
   };
   window.addEventListener("message", onInit);
 }

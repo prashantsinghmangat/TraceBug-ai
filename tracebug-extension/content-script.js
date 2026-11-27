@@ -702,6 +702,7 @@ function unmountCreatePanel() {
   window.removeEventListener("resize", p.onResize);
   if (p.observer) p.observer.disconnect();
   if (p.tabObserver) p.tabObserver.disconnect();
+  if (p.themeObserver) p.themeObserver.disconnect();
   if (p.sizeObserver) p.sizeObserver.disconnect();
   // Focus was in the panel, on its tab (or nowhere): give it back to the send button.
   var a = document.activeElement;
@@ -924,7 +925,7 @@ function mountCreatePanel(id, nonce) {
 
   var p = { id: id, slot: slot, frame: frame, ready: false, timer: 0, observer: null, onMessage: null,
     modal: modal, right: right, strip: strip, tab: tab, tabWrap: tabWrap, close: closeBtn, opener: opener,
-    prevTab: prevTab, onResize: null, tabObserver: null, sizeObserver: null,
+    prevTab: prevTab, onResize: null, tabObserver: null, themeObserver: null, sizeObserver: null,
     restorePosition: null };
   setPanelTab(p, first);
   if (getComputedStyle(right).position === "static") {
@@ -945,6 +946,21 @@ function mountCreatePanel(id, nonce) {
     p.sizeObserver.observe(right);
   } catch (e) {}
   setSplitExpanded(p, true);
+  // The ticket's theme toggle (or T) after the panel opened: tell the frame,
+  // which only had the theme from init. Same nonce, so the page can't forge it.
+  var themeRoot = document.getElementById("tracebug-root");
+  if (themeRoot) {
+    p.themeObserver = new MutationObserver(function () {
+      if (activePanel !== p || !p.ready) return;
+      var t = ticketTheme();
+      var win = frame.contentWindow;
+      if (!win) return;
+      extOrigins.forEach(function (o) {
+        try { win.postMessage({ type: "tb-panel-theme", nonce: nonce, theme: t }, o); } catch (e) {}
+      });
+    });
+    p.themeObserver.observe(themeRoot, { attributes: true, attributeFilter: ["data-tb-theme"] });
+  }
   p.onMessage = function (e) {
     // Only our frame, from the extension's origin, in an exact shape.
     if (!activePanel || activePanel !== p || e.source !== frame.contentWindow || extOrigins.indexOf(e.origin) === -1) return;

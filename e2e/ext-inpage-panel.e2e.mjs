@@ -700,6 +700,22 @@ try {
   const dark = await panelBg("dark");
   const light = await panelBg("light");
   check("8. the panel follows the ticket's dark and light themes", dark === "rgb(20, 24, 35)" && light === "rgb(255, 255, 255)", `${dark} / ${light}`);
+  {
+    // B21: switching the ticket's theme while the panel is open restyles it.
+    await page.evaluate(() => document.getElementById("tracebug-root")?.setAttribute("data-tb-theme", "light"));
+    const { frame: f } = await sendToGitHub(page);
+    let live = "none";
+    if (f) {
+      await f.waitForSelector("#panel:not([hidden])", { timeout: 8000 }).catch(() => {});
+      await page.evaluate(() => document.getElementById("tracebug-root")?.setAttribute("data-tb-theme", "dark"));
+      live = await f.waitForFunction(() => getComputedStyle(document.getElementById("panel")).backgroundColor === "rgb(20, 24, 35)", null, { timeout: 3000 })
+        .then(() => "rgb(20, 24, 35)", () => f.$eval("#panel", (e) => getComputedStyle(e).backgroundColor).catch(() => "none"));
+      await f.evaluate(() => document.getElementById("cancel").click()).catch(() => {});
+      await page.waitForFunction(() => !document.querySelector("[data-tb-create-panel]"), null, { timeout: 5000 }).catch(() => {});
+    }
+    check("8. …and turns dark when the ticket switches theme with the panel open (B21)", live === "rgb(20, 24, 35)", live);
+    await page.evaluate(() => document.getElementById("tracebug-root")?.setAttribute("data-tb-theme", "light"));
+  }
 
   // ══ 8b. One "Send to GitHub" button (U1/U2), the panel as its dropdown ═══
   const SPLIT = "#tracebug-quick-bug-modal [data-tb-send-split]";

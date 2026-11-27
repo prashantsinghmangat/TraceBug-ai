@@ -38,6 +38,7 @@ All notable changes to TraceBug are documented here.
 
 ### Fixed
 
+- **The GitHub panel follows the ticket's theme.** Switching the ticket to dark or light while the panel was open left the panel in the old theme; it now changes with the ticket.
 - **Copying from the in-page panel works.** The device code's **Copy** and **Copy screenshot** failed on every site: the panel frame was allowed the clipboard for the wrong origin. The code is now copied before GitHub's window opens (and stays selectable), and "This site blocks copying" appears only on a site whose policy really blocks it.
 - **Prefilled labels are the labels sent.** A panel that opened with remembered labels could file different ones; what the chips show is now exactly what Create sends. Labels and assignee also load as soon as a repository becomes valid — after installing the app, no reopening.
 - **Settings checks a token the way the panel does.** A fine-grained token no longer gets the classic "needs the repo scope" message, and a token that fails the check is never saved. The default-repository list no longer shows every option twice.
