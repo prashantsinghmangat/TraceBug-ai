@@ -309,8 +309,7 @@ Third-party library: vendor/axe.min.js is axe-core 4.11.4 (https://github.com/de
 MPL-2.0), the package's own published axe.min.js, unmodified. build-ext.mjs copies it from
 node_modules/axe-core/axe.min.js. sha256:
 fb83a4378d978ecb7d2dae48a3a3778a84c971ac692f3afd45d714fba89c0f0d
-It is injected only when the user runs a Site Audit (from the popup or the on-page toolbar's
-Audit button), only into that tab, never on page load. The audit's only network requests are the
+It is injected only when the user runs a Site Audit, only into that tab, never on page load. The audit's only network requests are the
 audited site's own /robots.txt and sitemap, fetched from the page itself.
 
 Build (Node 18+, npm; bsdtar or zip on PATH):
@@ -337,11 +336,9 @@ How to test:
    Stop on the on-page bar. The report opens with the replay, console errors and the failing request.
 3. For video: popup -> Capture Bug options -> "Events + Video". Firefox shows its normal screen-share
    prompt (Tab mode is hidden in Firefox, which has no tab-capture API).
-4. GitHub (needs a GitHub account and a personal access token with Issues write): Settings ->
-   Integrations -> GitHub -> Connect, paste the token (checked with api.github.com before it's saved).
-   Capture a bug, open the ticket -> Send to GitHub: TraceBug's Create window lists the repositories;
-   Create files the issue. The token stays in browser.storage.local, used only by the background
-   script; the page never sees it.
+4. GitHub: Settings -> Integrations -> GitHub -> Connect, paste a personal access token (checked
+   with api.github.com first). In a ticket, Send to GitHub opens TraceBug's Create window; Create files
+   the issue. The token stays in browser.storage.local; the page never sees it.
 ```
 
 ## 4. Regenerating the images
