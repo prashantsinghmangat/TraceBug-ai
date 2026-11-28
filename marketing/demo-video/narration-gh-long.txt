@@ -1,0 +1,13 @@
+You found a bug. Now you have to file it: take a screenshot, open GitHub, pick the repo, and try to remember what you clicked.
+TraceBug turns the bug you just saw into a GitHub issue, in two clicks.
+First, connect GitHub once. Open the GitHub tab in the ticket, and click Connect GitHub.
+TraceBug copies a short code and opens GitHub's own page. Paste it, and authorize.
+There's no token to create, and no TraceBug server in the middle. Your browser talks to GitHub directly.
+Now, the bug. Click Capture, and reproduce it. Every click, console error and failed request is recorded.
+You get one ticket, with the steps, the error, and a video of what happened.
+Open the GitHub tab. Your repository is already picked. Choose the labels, and create the issue.
+And there it is: a real GitHub issue, with the repro steps, the console error, and the environment.
+GitHub's API can't take attachments, so TraceBug lets you download the recording. Drop it into the issue, and GitHub plays it right there.
+The same capture is also a report your AI agent can read. Export it, and Claude Code or Cursor picks it up over MCP.
+A few honest limits: GitHub sign-in is Chrome only for now. On Firefox, you use a personal access token. Linear and Slack work with your own key.
+Capture it. File it. Done. TraceBug is free and open source, at tracebug dot dev.
