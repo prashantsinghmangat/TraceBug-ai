@@ -33,6 +33,74 @@ export interface BlogPost {
 
 const POSTS: BlogPost[] = [
   {
+    slug: "browser-bug-to-github-issue",
+    title: "From a browser bug to a GitHub issue in two clicks, with no token and no backend",
+    description:
+      "TraceBug 1.14 files GitHub issues from the bug ticket: sign in once with a code on GitHub's own page, pick a repository, Create. Your picks are remembered per site. Nothing goes through a TraceBug server.",
+    date: "2026-11-27",
+    readMinutes: 4,
+    tag: "GitHub",
+    seoTitle: "Browser bug to GitHub issue in two clicks — TraceBug 1.14",
+    seoDescription:
+      "File a GitHub issue with console errors, failed requests and repro steps straight from your browser. One-time sign-in, no token, no backend. Free Chrome extension.",
+    content: `
+Most bug reports die between "I saw it" and "it's in the tracker". You take a screenshot, open GitHub, pick the repo, try to remember what you clicked, paste the console error if you thought to open DevTools. By then half the evidence is gone.
+
+TraceBug already captured that evidence: the replay, console errors, failed requests and your steps, in one local file your AI agent can read. **1.14 adds the last step: file it on GitHub without leaving the page.**
+
+## How it works
+
+- **Capture.** Install the extension for [Chrome](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) (free) and capture a bug as usual.
+- **Connect once.** Open the ticket's **GitHub** tab and press **Connect GitHub**. TraceBug copies a short code and opens GitHub's own page: paste it, **Authorize**, choose the repositories TraceBug may use. The window closes itself.
+- **File it.** Pick the repository, labels (**bug** is ticked by default), assignee and milestone, then **Create issue**.
+
+**Issue #N created** links the new issue. Next time on the same site your repository and labels are already filled in, so it's two clicks.
+
+## No token, and no server in the middle
+
+TraceBug signs in with a GitHub App using GitHub's device flow, which needs no client secret. That means there is no TraceBug backend holding your sign-in: the extension talks to GitHub directly from your browser. The sign-in renews itself (GitHub's tokens last 8 hours) and stays in the extension, out of reach of the site you're testing. You choose which repositories the app can see, and **Disconnect** links GitHub's page to revoke it there too.
+
+The page you're testing can't read the panel or your sign-in, and **Create issue** only arms once the panel is really visible.
+
+## What lands in the issue
+
+A clean title, the steps you took, the console errors and failed requests, the environment, and the last action in words. No severity prefix, no filler.
+
+## Honest limits
+
+- **Sign-in is Chrome-only for now.** On Firefox, use a GitHub personal access token: TraceBug checks it with GitHub before saving and tells you what's wrong if it can't file issues.
+- **GitHub's API can't attach files.** After Create you get **Copy screenshot** (paste it into a comment) and **Download recording**. The issue body says what was captured instead of promising attachments.
+- **GitHub Enterprise Server isn't supported.**
+- **Linear and Slack** still work with your own API key or webhook.
+
+## And your AI agent still gets everything
+
+Export the report and Claude Code, Cursor or Windsurf read it through the local MCP server:
+
+\`\`\`
+claude mcp add -s user tracebug -- npx -y tracebug mcp
+\`\`\`
+
+The issue is for your team, the report is for your agent. Both come from the same capture.
+
+[Integrations guide →](/docs)
+`.trim(),
+    faq: [
+      {
+        q: "Do I need a GitHub personal access token?",
+        a: "Not in Chrome. You connect once with a short code on GitHub's own page and choose which repositories TraceBug may use. In Firefox, or if you prefer, a personal access token works too.",
+      },
+      {
+        q: "Does TraceBug see my GitHub account or code?",
+        a: "No. There is no TraceBug server. The extension talks to GitHub directly from your browser, only to the repositories you chose, and only to list labels and create the issue you confirm.",
+      },
+      {
+        q: "Can it attach the screenshot or recording to the issue?",
+        a: "GitHub's API doesn't allow file attachments, so after creating the issue TraceBug offers Copy screenshot to paste into a comment, and downloads for the screenshot and recording.",
+      },
+    ],
+  },
+  {
     slug: "site-audit-for-ai-coding-agents",
     title: "Audit any page, then let your AI agent fix what it found",
     description:

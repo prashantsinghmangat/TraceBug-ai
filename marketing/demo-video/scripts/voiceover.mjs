@@ -3,17 +3,20 @@
 // (`python -m pip install edge-tts`; only the narration text leaves the machine).
 //   node scripts/voiceover.mjs
 //   VOICE=en-US-AvaNeural RATE=+0% node scripts/voiceover.mjs
+//   NARRATION=narration-gh-short.txt node scripts/voiceover.mjs   (-> out/vo-gh-short/)
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
 const HERE = fileURLToPath(new URL("..", import.meta.url));
-const OUT = fileURLToPath(new URL("../out/vo/", import.meta.url));
+const NARRATION = process.env.NARRATION || "narration.txt";
+const NAME = NARRATION === "narration.txt" ? "vo" : "vo-" + NARRATION.replace(/^narration-|\.txt$/g, "");
+const OUT = fileURLToPath(new URL(`../out/${NAME}/`, import.meta.url));
 const VOICE = process.env.VOICE || "en-US-AndrewNeural";
 const RATE = process.env.RATE || "+6%";
 
 fs.mkdirSync(OUT, { recursive: true });
-const lines = fs.readFileSync(`${HERE}/narration.txt`, "utf8").trim().split(/\r?\n/);
+const lines = fs.readFileSync(`${HERE}/${NARRATION}`, "utf8").trim().split(/\r?\n/);
 lines.forEach((line, i) => {
   const file = `${OUT}l${i + 1}.mp3`;
   const r = spawnSync("python", ["-m", "edge_tts", "--voice", VOICE, `--rate=${RATE}`, "--text", line, "--write-media", file], { stdio: "inherit" });

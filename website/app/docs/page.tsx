@@ -100,7 +100,8 @@ const AUDIT_ROWS: [string, string][] = [
 const SHARE_ROWS: [string, string][] = [
   ["Export replay (.html)", "One self-contained file: replay, console, network, steps. Opens offline in any browser and is what the MCP server reads."],
   ["Fix with AI", "Copies a prompt that points your agent at the report."],
-  ["GitHub, Linear, Slack", "Files a real issue or message with your own token, sent straight from your browser. Without a token it opens a prefilled issue or copies the text."],
+  ["GitHub", "Files a real issue from the ticket's GitHub tab. In Chrome you sign in once, no token to paste; in Firefox you use your own token. Sent straight from your browser, and every send asks first."],
+  ["Linear, Slack", "Files an issue or posts a message with your own API key or webhook. Without one it opens a prefilled issue or copies the text."],
   ["Jira", "Copies Jira-formatted ticket text to paste."],
   ["More", "AI report (small text-only .html for chat), Markdown, HAR."],
 ];

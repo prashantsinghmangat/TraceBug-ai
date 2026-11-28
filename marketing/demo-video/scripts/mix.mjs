@@ -3,16 +3,20 @@
 // with a rendered video. Both formats share one timeline, so one mix fits both.
 //   node scripts/mix.mjs          -> out/TraceBug-demo-16x9.mp4
 //   node scripts/mix.mjs 9x16     -> out/TraceBug-demo-9x16.mp4
+// Other edits: TL=<timeline.json> VODIR=<vo folder> VIDEO=<video.mp4> OUT=<final.mp4> (paths under out/).
+//   Scene ids "brand" (beat drops), "cta" (outro) and "proof" (+chime) are optional.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
 const ROOT = fileURLToPath(new URL("../out", import.meta.url)).replace(/\\/g, "/");
 const FORMAT = process.argv[2] === "9x16" ? "9x16" : "16x9";
-const { total, scenes } = JSON.parse(fs.readFileSync(`${ROOT}/timeline.json`, "utf8"));
+const TL = process.env.TL || "timeline.json", VODIR = process.env.VODIR || "vo";
+const VIDEO = process.env.VIDEO || `parts/video-${FORMAT}.mp4`, OUTF = process.env.OUT || `TraceBug-demo-${FORMAT}.mp4`;
+const { total, scenes } = JSON.parse(fs.readFileSync(`${ROOT}/${TL}`, "utf8"));
 const D = Math.ceil(total * 10) / 10;
-const brand = scenes.find((s) => s.id === "brand").start; // beat drops on "Meet TraceBug"
-const outro = scenes.find((s) => s.id === "cta").start;
+const brand = scenes.find((s) => s.id === "brand")?.start ?? 0; // beat drops on "Meet TraceBug"
+const outro = scenes.find((s) => s.id === "cta")?.start ?? total;
 const proof = scenes.find((s) => s.id === "proof");
 const VO_LEAD = 0.15;
 
@@ -34,7 +38,7 @@ const bq = "mod(t,1.25)";
 const bass = `gte(t,${brand})*0.15*exp(-2.5*${bq})*min(1,${bq}/0.01)*(sin(2*PI*${BASS}*t)+0.35*sin(2*PI*2*${BASS}*t))`;
 const hq = "mod(t+0.3125,0.625)";
 const hat = `gte(t,${brand + 2.5})*lt(t,${outro + 2})*0.045*exp(-45*${hq})*(2*random(0)-1)`;
-const c0 = (proof.start + proof.chime).toFixed(2);
+const c0 = proof ? (proof.start + proof.chime).toFixed(2) : String(total + 10);
 const chime = [[1046.5, 0], [1568.0, 0.12], [2093.0, 0.24]]
   .map(([f, d]) => `gte(t,${c0}+${d})*0.13*exp(-5*(t-${c0}-${d}))*sin(2*PI*${f}*(t-${c0}-${d}))`).join("+");
 // whoosh: noise swelling into each scene change
@@ -44,7 +48,7 @@ const whoosh = scenes.slice(1).map((s) => {
 }).join("+");
 
 const src = (expr) => ["-f", "lavfi", "-i", `aevalsrc='${expr}':s=48000:d=${D}`];
-const vo = scenes.flatMap((s) => ["-i", `${ROOT}/vo/l${s.vo}.mp3`]);
+const vo = scenes.flatMap((s) => ["-i", `${ROOT}/${VODIR}/l${s.vo}.mp3`]);
 const nIn = 7;
 const voChains = scenes.map((s, i) => {
   const ms = Math.round((s.start + VO_LEAD) * 1000);
@@ -71,6 +75,6 @@ const run = (args) => {
 };
 run([...src(pad), ...src(arp), ...src(kick), ...src(bass), ...src(hat), ...src(chime), ...src(whoosh), ...vo,
   "-filter_complex", fc, "-map", "[a]", "-ar", "48000", "-t", String(D), `${ROOT}/parts/mix.wav`]);
-run(["-i", `${ROOT}/parts/video-${FORMAT}.mp4`, "-i", `${ROOT}/parts/mix.wav`, "-map", "0:v", "-map", "1:a",
-  "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", `${ROOT}/TraceBug-demo-${FORMAT}.mp4`]);
+run(["-i", `${ROOT}/${VIDEO}`, "-i", `${ROOT}/parts/mix.wav`, "-map", "0:v", "-map", "1:a",
+  "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", `${ROOT}/${OUTF}`]);
 console.log("done", D, "chime", c0);

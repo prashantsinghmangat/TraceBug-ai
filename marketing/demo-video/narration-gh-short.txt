@@ -1,0 +1,5 @@
+Filing a bug on GitHub takes five minutes. Watch this.
+Click Capture, and reproduce the bug. TraceBug records your clicks, the console error, and the failed request.
+Open the GitHub tab. Pick the repository and labels. Create issue.
+That's a real GitHub issue, with the steps, the error, and the environment. No token to paste, and no server in the middle.
+TraceBug. Free on Chrome, at tracebug dot dev.

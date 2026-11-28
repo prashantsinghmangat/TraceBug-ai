@@ -17,7 +17,7 @@ const GROUPS: Record<Group, { label: string; note: string; dot: string; line: st
   },
   send: {
     label: "Files it for you",
-    note: "GitHub issues, Linear and Slack with your own token, sent from your browser. Every send asks first.",
+    note: "GitHub issues after a one-time sign-in in Chrome (no token to paste), Linear and Slack with your own key, sent from your browser. Every send asks first.",
     dot: "bg-text-primary",
     line: "rgb(var(--text-primary))",
   },

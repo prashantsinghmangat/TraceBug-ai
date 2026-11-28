@@ -93,6 +93,10 @@ const newIn = chromeDescription.split("\n")[0];
 if (!newIn.startsWith(`New in ${V}`)) {
   console.warn(`release-sheet: WARNING — the Chrome description starts "${newIn.slice(0, 40)}…", not "New in ${V}". Update docs/STORE-LISTINGS.md §2.`);
 }
+// The popup's "New in x.y.z" card for people who update (WHATS_NEW in popup.js). Missed in 1.14.0.
+if (!readFileSync(join(ROOT, "tracebug-extension/popup.js"), "utf8").includes(`"${V}": {`)) {
+  console.warn(`release-sheet: WARNING — no WHATS_NEW entry for "${V}" in tracebug-extension/popup.js; updated users won't see a "New in ${V}" card.`);
+}
 
 // ── CHANGELOG section ────────────────────────────────────────────────────
 const changelog = read("CHANGELOG.md");

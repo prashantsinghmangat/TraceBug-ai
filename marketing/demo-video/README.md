@@ -96,3 +96,21 @@ frame with any image viewer before re-rendering everything.
 
 `out/` (frames, footage, renders: several GB while building) can be deleted at
 any time; it is all regenerated. Keep `clips/` until the video is final.
+
+## GitHub demo (1.14)
+
+A second edit about filing GitHub issues, built from two OBS takes in `clips/`:
+`rec-a.mp4` (Connect GitHub, device code, Authorize) and `rec-b.mp4` (SAVE20
+capture → GitHub tab → issue → recording dropped into the issue). Narration is in
+`narration-gh-long.txt` (16:9, ~91 s) and `narration-gh-short.txt` (Short, ~30 s).
+`scripts/gh.mjs` blurs the device code and the IP address on GitHub's Authorize page
+into `clips/rec-a-clean.mp4` (delete it after changing the blur boxes) and never uses
+the parts of `rec-b` that show File Explorer or OBS. Scenes, crops and on-screen text
+are the `LONG` / `SHORT` arrays at the top.
+
+```
+NARRATION=narration-gh-long.txt node scripts/voiceover.mjs    # -> out/vo-gh-long/
+NARRATION=narration-gh-short.txt node scripts/voiceover.mjs   # -> out/vo-gh-short/
+node scripts/gh.mjs        && TL=gh/timeline-16x9.json VODIR=vo-gh-long  VIDEO=gh/video-16x9.mp4 OUT=TraceBug-github-16x9.mp4 node scripts/mix.mjs
+node scripts/gh.mjs 9x16   && TL=gh/timeline-9x16.json VODIR=vo-gh-short VIDEO=gh/video-9x16.mp4 OUT=TraceBug-github-9x16.mp4 node scripts/mix.mjs
+```
