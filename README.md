@@ -25,6 +25,7 @@
   <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/dm/tracebug-sdk?color=818CF8" alt="npm downloads"></a>
   <a href="https://github.com/prashantsinghmangat/tracebug-ai"><img src="https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24" alt="GitHub stars"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+  <a href="https://glama.ai/mcp/servers/prashantsinghmangat/tracebug-ai"><img src="https://glama.ai/mcp/servers/prashantsinghmangat/tracebug-ai/badges/score.svg" alt="TraceBug MCP server on Glama" height="20"></a>
 </p>
 
 ---
